@@ -1,11 +1,12 @@
 <template>
-  <div class="easemob-chat-callkit">
+  <!-- <div class="easemob-chat-callkit">
     <h2>Easemob Chat CallKit</h2>
     <p>这是一个Vue3插件示例组件</p>
     <div class="controls">
       <button @click="handleTestAction">测试插件功能</button>
     </div>
-  </div>
+  </div> -->
+  <slot></slot>
 </template>
 
 <script setup lang="ts">

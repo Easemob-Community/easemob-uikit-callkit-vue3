@@ -1,19 +1,18 @@
 <template>
   <div id="app">
-    <h1>Easemob Chat CallKit Vue3 插件测试</h1>
-    <p>这是一个测试插件功能的演示页面</p>
-    
     <!-- 使用插件组件 -->
-    <EasemobChatCallKit />
-    
-    <div class="test-section">
-      <h3>测试说明</h3>
-      <ul>
-        <li>✅ 插件已成功安装</li>
-        <li>✅ 全局组件已注册</li>
-        <li>✅ 配置已正确注入</li>
-      </ul>
-    </div>
+    <EasemobChatCallKit>
+      <h1>Easemob Chat CallKit Vue3 插件测试</h1>
+      <p>这是一个测试插件功能的演示页面</p>
+      <div class="test-section">
+        <h3>测试说明</h3>
+        <ul>
+          <li>✅ 插件已成功安装</li>
+          <li>✅ 全局组件已注册</li>
+          <li>✅ 配置已正确注入</li>
+        </ul>
+      </div>
+    </EasemobChatCallKit>
   </div>
 </template>
 
