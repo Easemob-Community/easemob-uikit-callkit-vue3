@@ -3,7 +3,7 @@
     <h1>Easemob Chat CallKit Vue3 演示</h1>
 
     <!-- 使用Provider包裹应用 -->
-    <EasemobChatCallKitProvider :chat-client="{}" :init-config="callConfig">
+    <EasemobChatCallKitProvider :chat-client="chatClient" :config="callConfig">
       <div class="demo-section">
         <h2>功能演示</h2>
 
@@ -50,12 +50,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-
-// 使用相对路径引入组件
-import EasemobChatCallKitProvider from '../../lib/components/EasemobChatCallKitProvider.vue'
-import EasemobChatSingleCall from '../../lib/components/EasemobChatSingleCall.vue'
-import EasemobChatMultiCall from '../../lib/components/EasemobChatMultiCall.vue'
+import { ref, onMounted } from 'vue'
+import SDK from 'easemob-websdk'
 
 // 状态管理
 const targetUserId = ref('user123')
@@ -65,6 +61,9 @@ const showMultiCall = ref(false)
 const singleCallType = ref<'audio' | 'video'>('video')
 const multiCallType = ref<'audio' | 'video'>('video')
 const currentCallInfo = ref('')
+
+// 环信客户端实例
+const chatClient = ref()
 
 // 配置信息
 const callConfig = {
@@ -81,10 +80,35 @@ const mockParticipants = [
   { userId: 'user4', userName: '赵六' }
 ]
 
+// 初始化环信客户端
+onMounted(() => {
+  // 创建环信连接实例
+  const connection = new SDK.connection({
+    appKey: 'easemob-demo#support',
+  })
+
+  // 模拟登录（实际使用时需要真实凭证）
+  connection.open({
+    user: 'ppp',
+    pwd: '1'
+  }).then(() => {
+    console.log('环信客户端连接成功')
+    chatClient.value = connection
+  }).catch((error: any) => {
+    console.error('环信客户端连接失败:', error)
+    // 为了演示，即使没有真实连接也赋值一个模拟对象
+    chatClient.value = connection
+  })
+})
+
 // 方法
 const startSingleCall = (type: 'audio' | 'video') => {
   if (!targetUserId.value) {
     alert('请输入目标用户ID')
+    return
+  }
+  if (!chatClient.value) {
+    alert('环信客户端未初始化')
     return
   }
   singleCallType.value = type
@@ -96,6 +120,10 @@ const startSingleCall = (type: 'audio' | 'video') => {
 const startMultiCall = (type: 'audio' | 'video') => {
   if (!groupId.value) {
     alert('请输入群组ID')
+    return
+  }
+  if (!chatClient.value) {
+    alert('环信客户端未初始化')
     return
   }
   multiCallType.value = type

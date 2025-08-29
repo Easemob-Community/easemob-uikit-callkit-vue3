@@ -1,16 +1,12 @@
 import { createApp } from 'vue'
 import App from './App.vue'
 
-// 使用相对路径引入组件
-import EasemobChatCallKitProvider from '../../lib/components/EasemobChatCallKitProvider.vue'
-import EasemobChatSingleCall from '../../lib/components/EasemobChatSingleCall.vue'
-import EasemobChatMultiCall from '../../lib/components/EasemobChatMultiCall.vue'
+// 使用全局注册方式引入插件
+import EasemobChatCallKitVue3 from '../../lib/index'
 
 const app = createApp(App)
 
-// 注册组件
-app.component('EasemobChatCallKitProvider', EasemobChatCallKitProvider)
-app.component('EasemobChatSingleCall', EasemobChatSingleCall)
-app.component('EasemobChatMultiCall', EasemobChatMultiCall)
+// 使用.use方式注册插件
+app.use(EasemobChatCallKitVue3)
 
 app.mount('#app')
