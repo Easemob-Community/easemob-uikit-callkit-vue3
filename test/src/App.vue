@@ -1,22 +1,16 @@
 <template>
   <div id="app">
     <h1>Easemob Chat CallKit Vue3 演示</h1>
-    
+
     <!-- 使用Provider包裹应用 -->
-    <EasemobChatCallKitProvider 
-      :config="callConfig"
-    >
+    <EasemobChatCallKitProvider :chat-client="{}" :init-config="callConfig">
       <div class="demo-section">
         <h2>功能演示</h2>
-        
+
         <!-- 单人通话演示 -->
         <div class="call-demo">
           <h3>单人通话</h3>
-          <input 
-            v-model="targetUserId" 
-            placeholder="输入目标用户ID" 
-            class="input-field"
-          />
+          <input v-model="targetUserId" placeholder="输入目标用户ID" class="input-field" />
           <div class="button-group">
             <button @click="startSingleCall('audio')" class="btn audio-btn">
               语音通话
@@ -25,24 +19,15 @@
               视频通话
             </button>
           </div>
-          
-          <EasemobChatSingleCall
-            v-if="showSingleCall"
-            :target-user="targetUserId"
-            :type="singleCallType"
-            @call-started="handleSingleCallStart"
-            @call-ended="handleSingleCallEnd"
-          />
+
+          <EasemobChatSingleCall v-if="showSingleCall" :target-user="targetUserId" :type="singleCallType"
+            @call-started="handleSingleCallStart" @call-ended="handleSingleCallEnd" />
         </div>
 
         <!-- 群组通话演示 -->
         <div class="call-demo">
           <h3>群组通话</h3>
-          <input 
-            v-model="groupId" 
-            placeholder="输入群组ID" 
-            class="input-field"
-          />
+          <input v-model="groupId" placeholder="输入群组ID" class="input-field" />
           <div class="button-group">
             <button @click="startMultiCall('audio')" class="btn audio-btn">
               群组语音
@@ -51,15 +36,9 @@
               群组视频
             </button>
           </div>
-          
-          <EasemobChatMultiCall
-            v-if="showMultiCall"
-            :group-id="groupId"
-            :participants="mockParticipants"
-            :type="multiCallType"
-            @call-started="handleMultiCallStart"
-            @call-ended="handleMultiCallEnd"
-          />
+
+          <EasemobChatMultiCall v-if="showMultiCall" :group-id="groupId" :participants="mockParticipants"
+            :type="multiCallType" @call-started="handleMultiCallStart" @call-ended="handleMultiCallEnd" />
         </div>
 
         <div class="status-display" v-if="currentCallInfo">
@@ -203,9 +182,19 @@ const handleMultiCallEnd = () => {
   transition: background-color 0.3s;
 }
 
-.audio-btn { background-color: #007bff; color: white; }
-.video-btn { background-color: #28a745; color: white; }
-.btn:hover:not(:disabled) { opacity: 0.8; }
+.audio-btn {
+  background-color: #007bff;
+  color: white;
+}
+
+.video-btn {
+  background-color: #28a745;
+  color: white;
+}
+
+.btn:hover:not(:disabled) {
+  opacity: 0.8;
+}
 
 .status-display {
   margin-top: 15px;

@@ -32,8 +32,8 @@ export interface CallKitInstance {
 }
 
 export interface ProviderConfig {
+  chatClient: any;
   initConfig: {
-    chatClient: any;
     userId?: string;
     accessToken?: string;
     debug?: boolean;

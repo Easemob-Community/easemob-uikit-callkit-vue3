@@ -6,20 +6,8 @@
 import { provide, ref } from 'vue'
 import type { ProviderConfig } from '../types'
 
-interface Props {
-  initConfig: {
-    appKey: string
-    userId?: string
-    accessToken?: string
-    debug?: boolean
-  }
-  chatClient?: any
-  enableRingtone?: boolean
-  resizable?: boolean
-  draggable?: boolean
-}
 
-const props = withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<ProviderConfig>(), {
   enableRingtone: true,
   resizable: true,
   draggable: true
