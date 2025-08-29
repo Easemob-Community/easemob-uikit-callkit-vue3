@@ -1,12 +1,22 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import { resolve } from 'path'
+import dts from 'vite-plugin-dts'
+import path from 'path'
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    dts({
+      include: ['lib/**/*'],
+      exclude: ['lib/**/*.test.ts', 'lib/**/*.spec.ts'],
+      outDir: 'dist',
+      insertTypesEntry: true,
+      copyDtsFiles: true
+    })
+  ],
   build: {
     lib: {
-      entry: resolve(__dirname, 'lib/index.ts'),
+      entry: path.resolve(__dirname, 'lib/index.ts'),
       name: 'EasemobChatCallKit',
       formats: ['es', 'umd'],
       fileName: (format) => `index.${format === 'es' ? 'js' : 'umd.js'}`
@@ -22,7 +32,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': resolve(__dirname, 'lib')
+      '@': path.resolve(__dirname, 'lib')
     }
   }
 })

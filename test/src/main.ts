@@ -1,17 +1,16 @@
-import { createApp } from "vue";
-import App from "./App.vue";
+import { createApp } from 'vue'
+import App from './App.vue'
 
-// 引入插件
-import EasemobChatCallKit from "easemob-chat-callkit-vue3";
+// 使用相对路径引入组件
+import EasemobChatCallKitProvider from '../../lib/components/EasemobChatCallKitProvider.vue'
+import EasemobChatSingleCall from '../../lib/components/EasemobChatSingleCall.vue'
+import EasemobChatMultiCall from '../../lib/components/EasemobChatMultiCall.vue'
 
-const app = createApp(App);
+const app = createApp(App)
 
-// 使用插件
-app.use(EasemobChatCallKit, {
-  appKey: "test-app-key",
-  userId: "test-user",
-  accessToken: "test-token",
-  debug: true,
-});
+// 注册组件
+app.component('EasemobChatCallKitProvider', EasemobChatCallKitProvider)
+app.component('EasemobChatSingleCall', EasemobChatSingleCall)
+app.component('EasemobChatMultiCall', EasemobChatMultiCall)
 
-app.mount("#app");
+app.mount('#app')
