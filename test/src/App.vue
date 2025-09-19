@@ -3,7 +3,7 @@
     <h1>Easemob Chat CallKit Vue3 演示</h1>
 
     <!-- 使用Provider包裹应用 -->
-    <EasemobChatCallKitProvider :chat-client="chatClient" :config="callConfig">
+    <EasemobChatCallKitProvider :chat-client="chatClient">
       <div class="demo-section">
         <h2>功能演示</h2>
 
@@ -12,10 +12,10 @@
           <h3>单人通话</h3>
           <input v-model="targetUserId" placeholder="输入目标用户ID" class="input-field" />
           <div class="button-group">
-            <button @click="startSingleCall('audio')" class="btn audio-btn">
+            <button @click="startCall('audio')" class="btn audio-btn">
               语音通话
             </button>
-            <button @click="startSingleCall('video')" class="btn video-btn">
+            <button @click="startCall('video')" class="btn video-btn">
               视频通话
             </button>
           </div>
@@ -52,7 +52,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import SDK from 'easemob-websdk'
-
+import { useCallKit } from 'easemob-chat-callkit-vue3'
 // 状态管理
 const targetUserId = ref('user123')
 const groupId = ref('group123')
@@ -86,7 +86,7 @@ onMounted(() => {
   const connection = new SDK.connection({
     appKey: 'easemob-demo#support',
   })
-
+  console.log('useCallKit', useCallKit);
   // 模拟登录（实际使用时需要真实凭证）
   connection.open({
     user: 'ppp',
@@ -102,7 +102,8 @@ onMounted(() => {
 })
 
 // 方法
-const startSingleCall = (type: 'audio' | 'video') => {
+const { startSingleCall } = useCallKit()
+const startCall = (type: 'audio' | 'video') => {
   if (!targetUserId.value) {
     alert('请输入目标用户ID')
     return
@@ -115,6 +116,7 @@ const startSingleCall = (type: 'audio' | 'video') => {
   showSingleCall.value = true
   showMultiCall.value = false
   currentCallInfo.value = `单人${type === 'audio' ? '语音' : '视频'}通话: ${targetUserId.value}`
+
 }
 
 const startMultiCall = (type: 'audio' | 'video') => {
@@ -133,7 +135,9 @@ const startMultiCall = (type: 'audio' | 'video') => {
 }
 
 const handleSingleCallStart = () => {
-  console.log('单人通话开始')
+  // console.log('单人通话开始')
+  startCall('audio')
+  startSingleCall('pfh', 'audio', 'jjajajjajjaj')
 }
 
 const handleSingleCallEnd = () => {
