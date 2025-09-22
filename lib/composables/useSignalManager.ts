@@ -1,44 +1,28 @@
+import type { Chat } from "../core/sdk/imSDK";
+import { ChatSDK } from "../core/sdk/imSDK";
+import { SignalManager } from "../core/signal/SignalManager";
+
+export interface UseSignalManagerReturn {
+  signalManager: SignalManager;
+  sendInviteMessage: (targetId: string, payload: any) => Promise<void>;
+  sendAnswerMessage: (targetId: string, payload: any) => Promise<void>;
+  sendCancelMessage: (targetId: string, payload: any) => Promise<void>;
+}
+
 /**
- * 信令管理器组合式API - useSignalManager
- * 
- * 职责：
- * 1. 提供组合式API访问SignalManager
- * 2. 管理信令监听器的生命周期
- * 3. 提供类型安全的事件监听接口
- * 4. 自动清理监听器避免内存泄漏
- * 
- * 使用方式：
- * ```typescript
- * import { useSignalManager } from '@easemob/chat-callkit'
- * 
- * export default {
- *   setup() {
- *     const { onCallInvite, onCallEnd, startListening, stopListening } = useSignalManager()
- *     
- *     // 监听通话邀请
- *     onCallInvite((data) => {
- *       console.log('收到通话邀请', data)
- *     })
- *     
- *     // 监听通话结束
- *     onCallEnd((data) => {
- *       console.log('通话结束', data)
- *     })
- *     
- *     // 开始监听（通常在onMounted中调用）
- *     startListening()
- *     
- *     // 停止监听（通常在onUnmounted中调用）
- *     onUnmounted(() => {
- *       stopListening()
- *     })
- *   }
- * }
- * ```
+ * 信令管理器 - 基础架构
+ * 仅负责信令发送，监听功能由 useListenerManager 处理
  */
+export function useSignalManager(
+  client: Chat.Connection
+): UseSignalManagerReturn {
+  const signalManager = new SignalManager(client);
 
-import { inject } from 'vue'
-
-export function useSignalManager() {
-  // TODO: 实现组合式API
+  return {
+    signalManager,
+    // 占位实现
+    sendInviteMessage: async () => {},
+    sendAnswerMessage: async () => {},
+    sendCancelMessage: async () => {},
+  };
 }

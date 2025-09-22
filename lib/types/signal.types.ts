@@ -1,32 +1,43 @@
-/**
- * 信令相关类型定义 - Signal Types
- * 
- * 职责：
- * 1. 定义所有信令相关的TypeScript类型
- * 2. 提供类型安全的信令数据结构
- * 3. 支持类型推导和IDE智能提示
- * 4. 保持前后端信令格式的一致性
- * 
- * 类型分类：
- * - 基础信令类型：定义信令的基本结构
- * - 通话信令类型：通话相关的信令数据
- * - 消息信令类型：消息相关的信令数据
- * - 状态信令类型：状态同步相关的信令数据
- * 
- * 使用方式：
- * ```typescript
- * import type { CallSignal, MessageSignal, SignalType } from '@easemob/chat-callkit'
- * 
- * // 定义通话邀请信令
- * const inviteSignal: CallSignal = {
- *   type: 'call:invite',
- *   data: {
- *     callerId: 'user123',
- *     callType: 'video',
- *     targetId: 'user456'
- *   }
- * }
- * ```
- */
+// 邀请类型的文本消息接口定义
+export interface SignalMessageInviteExt {
+  // 基本信息
+  action: "invite"; // 固定为'invite'
+  callId: string;
+  calleeIMName: string;
+  callerDevId: string;
+  callerIMName: string;
+  channelName: string;
+  chatType: 0 | 1 | 2;
+  type: 0; // 从示例看是固定值
+  ts: number; // 时间戳
+  msgType: "rtcCallWithAgora"; // 从示例看是固定值
 
-// TODO: 定义信令相关的TypeScript类型
+  // 推送扩展信息
+  em_push_ext: {
+    type: "call"; // 固定为'call'
+    custom: {
+      action: "invite";
+      channelName: string;
+      type: 0;
+      callerDevId: string;
+      callId: string;
+      ts: number;
+      msgType: "rtcCallWithAgora";
+      callerIMName: string;
+      calleeIMName: string;
+      callerNickname: string;
+      chatType: 0 | 1 | 2;
+    };
+  };
+
+  // APNS推送扩展
+  em_apns_ext: {
+    em_push_type: "voip"; // 固定为'voip'
+  };
+
+  // 用户信息，可选字段
+  ease_chat_uikit_user_info?: {
+    nickname: string;
+    avatarURL: string;
+  };
+}

@@ -1,148 +1,114 @@
+import { type Chat, ChatSDK } from "../sdk/imSDK";
 /**
  * 信令管理器 - SignalManager
- * 
+ *
  * 单一职责：只负责信令的收发和分发
- * 
- * 核心功能：
- * 1. 监听信令事件
- * 2. 分发信令给注册的处理器
- * 3. 发送信令
- * 
+ *
  * 设计原则：
  * - 单一职责：只做信令的收发和分发
  * - 最小化接口：只暴露必要的方法
  * - 不可变状态：避免复杂的状态管理
  */
 
-import { AnySignal, SignalHandler, SignalType } from '../../types/signal.types';
-
-interface ListenerEntry {
-  handler: SignalHandler;
-  once: boolean;
-}
-
 export class SignalManager {
-  // 核心状态：监听器映射
-  private listeners = new Map<SignalType, ListenerEntry[]>();
-  private chatClient: any = null;
-
-  constructor(chatClient?: any) {
+  private chatClient: Chat.Connection | null = null;
+  constructor(chatClient: Chat.Connection) {
     this.chatClient = chatClient || null;
   }
-
-  /**
-   * 添加信令监听器
-   * @returns 卸载函数
-   */
-  on<T extends AnySignal>(
-    type: T['type'],
-    handler: SignalHandler<T>,
-    once = false
-  ): () => void {
-    if (!this.listeners.has(type)) {
-      this.listeners.set(type, []);
+  //监听文本类型消息监听（邀请信息）
+  addTextMessageListener(
+    MESSAGE_EVENT_NAME: string,
+    callback: (msg: Chat.TextMsgBody) => void
+  ) {
+    if (!this.chatClient) {
+      return;
     }
-
-    const entry = { handler: handler as SignalHandler, once };
-    this.listeners.get(type)!.push(entry);
-
-    // 返回卸载函数
-    return () => this.off(type, handler);
-  }
-
-  /**
-   * 一次性监听器
-   */
-  once<T extends AnySignal>(
-    type: T['type'],
-    handler: SignalHandler<T>
-  ): () => void {
-    return this.on(type, handler, true);
-  }
-
-  /**
-   * 移除信令监听器
-   */
-  off<T extends AnySignal>(
-    type: T['type'],
-    handler: SignalHandler<T>
-  ): void {
-    const handlers = this.listeners.get(type);
-    if (!handlers) return;
-
-    const index = handlers.findIndex(h => h.handler === handler);
-    if (index > -1) {
-      handlers.splice(index, 1);
-    }
-
-    // 清理空数组
-    if (handlers.length === 0) {
-      this.listeners.delete(type);
-    }
-  }
-
-  /**
-   * 发送信令
-   */
-  async emit(signal: AnySignal): Promise<void> {
-    // 分发给本地监听器
-    this.dispatch(signal);
-    
-    // TODO: 通过chatClient发送信令
-    if (this.chatClient) {
-      // 实际发送逻辑
-    }
-  }
-
-  /**
-   * 内部分发机制
-   */
-  private dispatch(signal: AnySignal): void {
-    const handlers = this.listeners.get(signal.type);
-    if (!handlers?.length) return;
-
-    // 创建副本避免修改原始数组
-    const handlersToCall = [...handlers];
-    
-    // 执行监听器
-    handlersToCall.forEach(({ handler, once }) => {
-      try {
-        handler(signal);
-      } catch (error) {
-        console.error(`Error in signal handler for ${signal.type}:`, error);
+    this.chatClient.addEventHandler(
+      MESSAGE_EVENT_NAME || "TEXT_MESSAGE_RECEIVED",
+      {
+        onTextMessage(msg) {
+          console.log(">>>>>>invite msg", msg);
+          callback(msg);
+        },
       }
-      
-      // 一次性监听器自动移除
-      if (once) {
-        const index = handlers.findIndex(h => h.handler === handler);
-        if (index > -1) handlers.splice(index, 1);
-      }
-    });
-
-    // 清理空数组
-    if (handlers.length === 0) {
-      this.listeners.delete(signal.type);
+    );
+  }
+  //监听命令类型消息监听（信令交互信息）
+  addCommandMessageListener(
+    MESSAGE_EVENT_NAME: string,
+    callback: (msg: Chat.CmdMsgBody) => void
+  ) {
+    if (!this.chatClient) {
+      return;
     }
+    this.chatClient.addEventHandler(
+      MESSAGE_EVENT_NAME || "COMMAND_MESSAGE_RECEIVED",
+      {
+        onCmdMessage(msg) {
+          console.log(">>>>>>command msg", msg);
+          callback(msg);
+        },
+      }
+    );
   }
-
-  /**
-   * 设置聊天客户端（如果需要发送信令）
-   */
-  setClient(client: any): void {
-    this.chatClient = client;
+  //发送文本类型消息
+  sendTextMessage(
+    to: string,
+    msg: string,
+    chatType: Chat.ChatType,
+    ext?: Record<string, string>,
+    callback?: (msg: Chat.SendMsgResult) => void
+  ) {
+    if (!this.chatClient) {
+      return;
+    }
+    const options: Chat.CreateTextMsgParameters = {
+      type: "txt",
+      chatType,
+      to,
+      msg,
+      ext,
+    };
+    const textMsg = ChatSDK.message.create(options);
+    this.chatClient
+      .send(textMsg)
+      .then((res) => {
+        console.log(">>>>>>send text msg success", res);
+        callback?.(res);
+      })
+      .catch((err) => {
+        console.log(">>>>>>send text msg error", err);
+        callback?.(err);
+      });
   }
-
-  /**
-   * 清理所有监听器
-   */
-  clear(): void {
-    this.listeners.clear();
-  }
-
-  /**
-   * 获取某类型的监听器数量（调试用）
-   */
-  listenerCount(type: SignalType): number {
-    return this.listeners.get(type)?.length || 0;
+  //发送命令类型消息
+  sendCommandMessage(
+    to: string,
+    action: string,
+    chatType: Chat.ChatType,
+    ext: Record<string, string>,
+    callback?: (msg: Chat.SendMsgResult) => void
+  ) {
+    if (!this.chatClient) {
+      return;
+    }
+    const options: Chat.CreateCmdMsgParameters = {
+      type: "cmd",
+      chatType,
+      to,
+      action,
+      ext,
+    };
+    const cmdMsg = ChatSDK.message.create(options);
+    this.chatClient
+      .send(cmdMsg)
+      .then((res) => {
+        console.log(">>>>>>send command msg success", res);
+        callback?.(res);
+      })
+      .catch((err) => {
+        console.log(">>>>>>send command msg error", err);
+        callback?.(err);
+      });
   }
 }

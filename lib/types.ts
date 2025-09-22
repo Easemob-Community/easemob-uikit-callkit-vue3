@@ -1,3 +1,4 @@
+import type { Chat } from "./core/sdk/imSDK";
 export interface EasemobChatCallKitOptions {
   // 基础配置
   appKey: string;
@@ -32,8 +33,8 @@ export interface CallKitInstance {
 }
 
 export interface ProviderConfig {
-  chatClient: any;
-  initConfig: {
+  chatClient: Chat.Connection;
+  initConfig?: {
     userId?: string;
     accessToken?: string;
     debug?: boolean;
@@ -45,3 +46,16 @@ export interface ProviderConfig {
 
 // 导出类型别名，避免导入错误
 export type EasemobChatCallKitInstance = CallKitInstance;
+
+export interface UseCallKitReturn {
+  startSingleCall: (
+    targetId: string,
+    type: "audio" | "video",
+    msg: string
+  ) => void;
+  startGroupCall: (
+    groupId: string,
+    type: "audio" | "video",
+    msg: string
+  ) => void;
+}

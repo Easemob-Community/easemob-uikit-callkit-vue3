@@ -35,5 +35,9 @@
     "vue": "^3.5.18",
     "vue-tsc": "^3.0.5"
   },
-  "packageManager": "pnpm@10.10.0"
+  "packageManager": "pnpm@10.10.0",
+  "dependencies": {
+    "easemob-websdk": "^4.16.0",
+    "pinia": "^3.0.3"
+  }
 }
