@@ -1,16 +1,46 @@
 import { ChatSDK } from "../core/sdk/imSDK";
 import type { Chat } from "../core/sdk/imSDK";
 import type { SignalMessageInviteExt } from "../types/signal.types";
-
+import { useCallStateStore } from "../store/callState";
 export class ChatService {
   private chatClient: Chat.Connection | null = null;
+  private callStateStore = useCallStateStore();
   constructor(chatClient: Chat.Connection) {
     this.chatClient = chatClient;
   }
   //构建邀请信息的ext
-  buildInviteMessageExt() {
+  private buildInviteMessageExt() {
     const ext: SignalMessageInviteExt = {
       action: "invite",
+      callId: this.callStateStore.callId,
+      callerIMName: this.callStateStore.callerUserId,
+      calleeIMName: this.callStateStore.calleeUserId || "暂未取到calleeUserId",
+      callerDevId: this.callStateStore.callerDevId,
+      channelName: this.callStateStore.channel,
+      chatType: this.callStateStore.type,
+      type: this.callStateStore.type,
+      ts: Date.now(),
+      msgType: "rtcCallWithAgora",
+      em_push_ext: {
+        type: "call",
+        custom: {
+          action: "invite",
+          channelName: this.callStateStore.channel,
+          type: this.callStateStore.type,
+          callerDevId: this.callStateStore.callerDevId,
+          callId: this.callStateStore.callId,
+          ts: Date.now(),
+          msgType: "rtcCallWithAgora",
+          callerIMName: this.callStateStore.callerUserId,
+          calleeIMName:
+            this.callStateStore.calleeUserId || "暂未取到calleeUserId",
+          callerNickname: this.callStateStore.callerNickname || "",
+          chatType: this.callStateStore.type,
+        },
+      },
+      em_apns_ext: {
+        em_push_type: "voip",
+      },
     };
     return ext;
   }
@@ -32,41 +62,7 @@ export class ChatService {
       to: targetId,
       msg: message,
       chatType,
-      ext: {
-        action: "invite",
-        channelName: "YJIGz2MB",
-        type: 0,
-        callerDevId: "webim_web_1756119033109",
-        callId: "tIxHcxhLFN",
-        ts: 1758191074490,
-        msgType: "rtcCallWithAgora",
-        callerIMName: "pfh",
-        calleeIMName: "ppp",
-        chatType: 0,
-        em_push_ext: {
-          type: "call",
-          custom: {
-            action: "invite",
-            channelName: "YJIGz2MB",
-            type: 0,
-            callerDevId: "webim_web_1756119033109",
-            callId: "tIxHcxhLFN",
-            ts: 1758191074490,
-            msgType: "rtcCallWithAgora",
-            callerIMName: "pfh",
-            calleeIMName: "ppp",
-            callerNickname: "国服第一前端",
-            chatType: 0,
-          },
-        },
-        em_apns_ext: {
-          em_push_type: "voip",
-        },
-        ease_chat_uikit_user_info: {
-          nickname: "国服第一前端",
-          avatarURL: "",
-        },
-      },
+      ext: this.buildInviteMessageExt(),
     };
     const msg = ChatSDK.message.create(options);
     return new Promise((resolve, reject) => {

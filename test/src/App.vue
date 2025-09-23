@@ -3,7 +3,7 @@
     <h1>Easemob Chat CallKit Vue3 演示</h1>
 
     <!-- 使用Provider包裹应用 -->
-    <EasemobChatCallKitProvider :chat-client="chatClient">
+    <EasemobChatCallKitProvider :chat-client="chatClient" :init-config="{ inviteTimeout: 30000 }">
       <div class="demo-section">
         <h2>功能演示</h2>
 
@@ -54,8 +54,8 @@ import { ref, onMounted } from 'vue'
 import SDK from 'easemob-websdk'
 import { useCallKit } from 'easemob-chat-callkit-vue3'
 // 状态管理
-const targetUserId = ref('user123')
-const groupId = ref('group123')
+const targetUserId = ref('')
+const groupId = ref('')
 const showSingleCall = ref(false)
 const showMultiCall = ref(false)
 const singleCallType = ref<'audio' | 'video'>('video')
@@ -115,7 +115,7 @@ const startCall = (type: 'audio' | 'video') => {
   singleCallType.value = type
   showSingleCall.value = true
   showMultiCall.value = false
-  currentCallInfo.value = `单人${type === 'audio' ? '语音' : '视频'}通话: ${targetUserId.value}`
+  currentCallInfo.value = `单人${type === 'audio' ? '语音' : '视频'}通话: ${targetUserId.value}`;
 
 }
 
@@ -135,9 +135,9 @@ const startMultiCall = (type: 'audio' | 'video') => {
 }
 
 const handleSingleCallStart = () => {
-  // console.log('单人通话开始')
-  startCall('audio')
-  startSingleCall('pfh', 'audio', 'jjajajjajjaj')
+  console.log('单人通话开始')
+  startCall(singleCallType.value)
+  startSingleCall(targetUserId.value, singleCallType.value)
 }
 
 const handleSingleCallEnd = () => {

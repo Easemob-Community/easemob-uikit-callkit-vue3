@@ -35,13 +35,12 @@ export interface CallKitInstance {
 export interface ProviderConfig {
   chatClient: Chat.Connection;
   initConfig?: {
-    userId?: string;
-    accessToken?: string;
-    debug?: boolean;
+    debug?: boolean; // 开启调试模式
+    enableRingtone?: boolean; // 开启铃声
+    resizable?: boolean; // 开启可调整大小
+    draggable?: boolean; // 开启可拖动
+    inviteTimeout?: number; // 邀请超时时间，单位毫秒，默认 30000 毫秒
   };
-  enableRingtone?: boolean;
-  resizable?: boolean;
-  draggable?: boolean;
 }
 
 // 导出类型别名，避免导入错误

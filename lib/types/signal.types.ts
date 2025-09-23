@@ -1,3 +1,4 @@
+import { CALL_TYPE, CALLKIT_ACTION_MSG_TYPE } from "./callstate.types";
 // 邀请类型的文本消息接口定义
 export interface SignalMessageInviteExt {
   // 基本信息
@@ -7,10 +8,10 @@ export interface SignalMessageInviteExt {
   callerDevId: string;
   callerIMName: string;
   channelName: string;
-  chatType: 0 | 1 | 2;
-  type: 0; // 从示例看是固定值
+  chatType: CALL_TYPE;
+  type: CALL_TYPE; // 从示例看是固定值
   ts: number; // 时间戳
-  msgType: "rtcCallWithAgora"; // 从示例看是固定值
+  msgType: CALLKIT_ACTION_MSG_TYPE; // 从示例看是固定值
 
   // 推送扩展信息
   em_push_ext: {
@@ -18,15 +19,15 @@ export interface SignalMessageInviteExt {
     custom: {
       action: "invite";
       channelName: string;
-      type: 0;
+      type: CALL_TYPE;
       callerDevId: string;
       callId: string;
       ts: number;
-      msgType: "rtcCallWithAgora";
+      msgType: CALLKIT_ACTION_MSG_TYPE;
       callerIMName: string;
       calleeIMName: string;
       callerNickname: string;
-      chatType: 0 | 1 | 2;
+      chatType: CALL_TYPE;
     };
   };
 

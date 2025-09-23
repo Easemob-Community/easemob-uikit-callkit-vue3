@@ -1,63 +1,51 @@
 // Store相关类型定义
 import type { Chat } from "../core/sdk/imSDK";
-
-export type CallStatus =
-  | "idle"
-  | "inviting"
-  | "ringing"
-  | "connecting"
-  | "connected"
-  | "ended";
+import type {
+  CALL_STATUS,
+  CALL_INFO,
+  CALL_TYPE,
+} from "../types/callstate.types";
+export type CallStatus = CALL_STATUS;
 export interface ChatClientState {
   client: Chat.Connection | null;
 }
-export interface CallParticipant {
-  userId: string;
-  nickname?: string;
-  avatar?: string;
-  isAudioEnabled: boolean;
-  isVideoEnabled: boolean;
-  isLocalUser: boolean;
-  joinedAt: number;
-}
+// export interface CallParticipant {
+//   userId: string;
+//   nickname?: string;
+//   avatar?: string;
+//   isAudioEnabled: boolean;
+//   isVideoEnabled: boolean;
+//   isLocalUser: boolean;
+//   joinedAt: number;
+// }
 
-export interface CurrentCallInfo {
-  callId: string;
-  callerId: string;
-  calleeIds: string[];
-  callType: "audio" | "video";
-  startTime: number;
-  duration: number;
-  status: CallStatus;
-  participants: CallParticipant[];
-  isGroupCall: boolean;
-  channelId?: string;
+// export interface CurrentCallInfo {
+//   callId: string;
+//   callerId: string;
+//   calleeIds: string[];
+//   callType: "audio" | "video";
+//   startTime: number;
+//   duration: number;
+//   status: CallStatus;
+//   participants: CallParticipant[];
+//   isGroupCall: boolean;
+//   channelId?: string;
+// }
+export interface INVITE_INFO {
+  type: CALL_TYPE;
+  calleeUserId: string;
+  groupId?: string;
+  groupName?: string;
+  groupAvatar?: string;
 }
-
-export interface CallState {
+export interface CallState extends CALL_INFO {
   // 基础状态
   status: CallStatus;
-  isInCall: boolean;
   callType: "audio" | "video" | null;
-
-  // 当前通话信息
-  currentCall: CurrentCallInfo | null;
-
-  // 来电信息
-  incomingCall: {
-    callId: string;
-    callerId: string;
-    callType: "audio" | "video";
-    timestamp: number;
-  } | null;
-
-  // 通话设置
-  settings: {
-    enableAudio: boolean;
-    enableVideo: boolean;
-    enableSpeaker: boolean;
-    enableMicrophone: boolean;
-  };
+  //超时时间，单位ms，默认30s
+  inviteTimeout?: number;
+  //超时定时器
+  inviteTimeoutTimer?: NodeJS.Timeout | null;
 }
 
 // RTC频道状态类型
