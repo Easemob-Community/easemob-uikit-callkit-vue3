@@ -50,7 +50,11 @@ export class ChatService {
    * @param message 消息内容
    * @param chatType 聊天类型
    */
-  sendTextMessage(targetId: string, chatType: Chat.ChatType, message: string) {
+  sendTextMessage(
+    targetId: string,
+    chatType: Chat.ChatType,
+    message: string
+  ): Promise<Chat.SendMsgResult> {
     if (!this.chatClient) {
       throw new Error("ChatClient未初始化");
     }

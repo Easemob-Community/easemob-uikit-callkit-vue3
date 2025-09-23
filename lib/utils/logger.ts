@@ -7,6 +7,16 @@ export enum LogLevel {
   VERBOSE = 4, // 详细日志
 }
 
+// ANSI颜色代码
+export const ANSI_COLORS = {
+  RESET: "\x1b[0m",
+  RED: "\x1b[31m",
+  YELLOW: "\x1b[33m",
+  GREEN: "\x1b[32m",
+  BLUE: "\x1b[34m",
+  GRAY: "\x1b[90m",
+};
+
 // 日志级别名称映射
 export const LogLevelNames = {
   [LogLevel.ERROR]: "ERROR",
@@ -16,12 +26,22 @@ export const LogLevelNames = {
   [LogLevel.VERBOSE]: "VERBOSE",
 };
 
+// 日志级别对应的颜色
+export const LogLevelColors = {
+  [LogLevel.ERROR]: ANSI_COLORS.RED,
+  [LogLevel.WARN]: ANSI_COLORS.YELLOW,
+  [LogLevel.INFO]: ANSI_COLORS.GREEN,
+  [LogLevel.DEBUG]: ANSI_COLORS.BLUE,
+  [LogLevel.VERBOSE]: ANSI_COLORS.GRAY,
+};
+
 // 日志管理配置
 export interface LoggerConfig {
   level: LogLevel; // 当前日志级别
   enableConsole: boolean; // 是否启用控制台输出
   enablePrefix: boolean; // 是否启用日志前缀
   prefix?: string; // 自定义前缀
+  debug?: boolean; // 是否启用调试模式
 }
 
 // 日志管理类
@@ -37,6 +57,11 @@ export class Logger {
       prefix: "[CallKit]", // 默认前缀
       ...config,
     };
+    
+    // 根据debug配置设置日志级别
+    if (this.config.debug !== undefined) {
+      this.setDebug(this.config.debug);
+    }
   }
 
   // 获取单例实例
@@ -53,6 +78,17 @@ export class Logger {
   // 更新配置
   public updateConfig(config: Partial<LoggerConfig>): void {
     this.config = { ...this.config, ...config };
+    
+    // 如果配置中包含debug字段，则更新日志级别
+    if (config.debug !== undefined) {
+      this.setDebug(config.debug);
+    }
+  }
+  
+  // 根据debug模式设置日志级别
+  public setDebug(debug: boolean): void {
+    this.config.debug = debug;
+    this.config.level = debug ? LogLevel.VERBOSE : LogLevel.ERROR;
   }
 
   // 获取当前配置
@@ -93,6 +129,7 @@ export class Logger {
   ): string {
     const timestamp = new Date().toISOString();
     const levelName = LogLevelNames[level];
+    const levelColor = LogLevelColors[level];
 
     let formattedMessage = "";
 
@@ -100,7 +137,8 @@ export class Logger {
       formattedMessage += `${this.config.prefix} `;
     }
 
-    formattedMessage += `[${timestamp}] [${levelName}] ${message}`;
+    // 添加带颜色的日志级别名称
+    formattedMessage += `[${timestamp}] ${levelColor}[${levelName}]${ANSI_COLORS.RESET} ${message}`;
 
     return formattedMessage;
   }

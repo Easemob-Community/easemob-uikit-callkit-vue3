@@ -2,8 +2,8 @@
   <div id="app">
     <h1>Easemob Chat CallKit Vue3 演示</h1>
 
-    <!-- 使用Provider包裹应用 -->
-    <EasemobChatCallKitProvider :chat-client="chatClient" :init-config="{ inviteTimeout: 30000 }">
+    <!-- 使用Provider包裹应用 - 开启debug模式以测试logger -->
+    <EasemobChatCallKitProvider :chat-client="chatClient" :init-config="{ inviteTimeout: 30000, debug: true }">
       <div class="demo-section">
         <h2>功能演示</h2>
 
