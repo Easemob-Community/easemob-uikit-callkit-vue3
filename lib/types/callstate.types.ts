@@ -19,8 +19,13 @@ export enum CALL_STATUS {
   CONFIRM_CALLEE = 6,
   IN_CALL = 7,
 }
-
+export enum CALLKIT_CMD_MSG_RESULT_TYPE {
+  ACCEPT = "accept",
+  REFUSE = "refuse",
+  BUSY = "busy",
+}
 export type CALLKIT_ACTION_MSG_TYPE = "rtcCallWithAgora";
+export type CALLKIT_TEXT_MSG_ACTION = "invite";
 
 export type CALLKIT_CMD_MSG_ACTION_TYPE =
   | "confirmRing"

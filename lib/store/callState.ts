@@ -29,6 +29,7 @@ export const useCallStateStore = defineStore("callState", {
     // 超时设置
     inviteTimeout: 30000, // 默认30秒超时
     inviteTimeoutTimer: null,
+    userInfoMap: new Map(),
   }),
 
   /**
@@ -62,6 +63,15 @@ export const useCallStateStore = defineStore("callState", {
 
       // 开始超时计时
       this.startTimeoutTimer();
+    },
+    /** 设置用户信息 */
+    setUserInfo(
+      userId: string,
+      userInfo: { nickname?: string; avatarURL?: string }
+    ) {
+      if (this.userInfoMap) {
+        this.userInfoMap.set(userId, userInfo);
+      }
     },
 
     /**
@@ -155,10 +165,24 @@ export const useCallStateStore = defineStore("callState", {
     /**
      * 只读获取当前CallState
      */
-    getCallState(): CallState {
-      return { ...this } as CallState;
+    getCallStatus(): CALL_STATUS {
+      return this.status as CALL_STATUS;
     },
-
+    getCallState(): CallState {
+      return this as CallState;
+    },
+    /** 获取用户信息 */
+    getUserInfo(): (userId: string) => {
+      nickname?: string;
+      avatarURL?: string;
+    } {
+      return (userId: string) => {
+        if (!this.userInfoMap) {
+          return {};
+        }
+        return this.userInfoMap.get(userId) || {};
+      };
+    },
     /**
      * 判断是否处于邀请中状态
      */

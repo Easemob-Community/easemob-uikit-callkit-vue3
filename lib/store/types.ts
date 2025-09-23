@@ -41,6 +41,7 @@ export interface INVITE_INFO {
 export interface CallState extends CALL_INFO {
   // 基础状态
   status: CallStatus;
+  userInfoMap?: Map<string, { nickname?: string; avatarURL?: string }>;
   callType: "audio" | "video" | null;
   //超时时间，单位ms，默认30s
   inviteTimeout?: number;

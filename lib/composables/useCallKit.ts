@@ -1,10 +1,9 @@
-import { inject, ref, computed } from "vue";
 import type { Chat } from "../core/sdk/imSDK";
 import { useChatClientStore } from "../store/chatClient";
 import type { UseCallKitReturn } from "../types";
 import { ChatService } from "../services/ChatService";
 import { useCallStateStore } from "../store/callState";
-import { CALL_STATUS, CALL_TYPE } from "../types/callstate.types";
+import { CALL_TYPE } from "../types/callstate.types";
 import { logger } from "../utils/logger";
 
 // 组合式API：useCallKit
@@ -73,7 +72,6 @@ export function useCallKit(): UseCallKitReturn {
       logger.info(`startGroupCall: 准备发送群组通话邀请信息`);
 
       // 注意：实际的群组通话邀请发送逻辑可能需要不同的实现
-      // 这里只是将原有的console.log替换为logger
       logger.verbose(
         `startGroupCall: 群组通话邀请信息 - 群组ID: ${groupId}, 类型: ${type}, 消息: ${msg}`
       );
