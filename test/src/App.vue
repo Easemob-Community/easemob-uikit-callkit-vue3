@@ -83,10 +83,11 @@ const mockParticipants = [
 // 初始化环信客户端
 onMounted(() => {
   // 创建环信连接实例
+  //关闭IM日志输出
+  SDK.logger.disableAll()
   const connection = new SDK.connection({
     appKey: 'easemob-demo#support',
   })
-  console.log('useCallKit', useCallKit);
   // 模拟登录（实际使用时需要真实凭证）
   connection.open({
     user: 'ppp',
