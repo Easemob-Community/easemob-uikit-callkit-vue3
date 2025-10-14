@@ -189,5 +189,7 @@ export interface SignalingMessageOptions {
   action: string;
   ext: SignalingExt;
   receiverList?: string[];
+  /** 是否直投在线用户 */
+  deliverOnlineOnly: boolean;
 }
 export type CALLKIT_SIGNALING_CMD_ACTION = "rtcCall";

@@ -75,6 +75,7 @@ export function useListenerManager(): ListenerManagerReturn {
             "answerCall",
             "singleChat",
             newInvitationInfo,
+            true,
             CALLKIT_CMD_MSG_RESULT_TYPE.BUSY
           )
           .then((res) => {
@@ -108,7 +109,13 @@ export function useListenerManager(): ListenerManagerReturn {
     logger.info("通话邀请已更新至store", callStateStore.getCallState);
     //发送alerting 信令
     chatService
-      .sendSignalMessage(message.from as string, "alert", "singleChat")
+      .sendSignalMessage(
+        message.from as string,
+        "alert",
+        "singleChat",
+        {},
+        true
+      )
       .then((res) => {
         logger.info(`发送alerting 信令成功，消息ID: ${res.serverMsgId}`);
         logger.debug(`发送alerting 信令详情:`, res.message);

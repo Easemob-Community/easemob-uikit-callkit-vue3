@@ -148,12 +148,17 @@ export class ChatService {
    * @param targetId 接收方ID
    * @param action 消息动作
    * @param chatType 聊天类型
+   * @param ext 信令消息扩展字段
+   * @param isDirectToOnlineUser 是否直投在线用户
+   * @param result 通话结果
    */
   sendSignalMessage(
     targetId: string,
     action: CALLKIT_CMD_MSG_ACTION_TYPE,
     chatType: SignalingMessageOptions["chatType"],
     ext?: Partial<SignalingExt>,
+    //是否直投在线用户
+    isDirectToOnlineUser?: boolean,
     /** 通话结果 */
     result?: CALLKIT_CMD_MSG_RESULT_TYPE
   ): Promise<Chat.SendMsgResult> {
@@ -169,6 +174,7 @@ export class ChatService {
       to: targetId,
       chatType,
       action: "rtcCall",
+      deliverOnlineOnly: isDirectToOnlineUser || false,
       ext: {
         ...this.buildSignalingMessageExt(
           action,
