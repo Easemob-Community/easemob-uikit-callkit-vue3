@@ -32,7 +32,8 @@ export type CALLKIT_CMD_MSG_ACTION_TYPE =
   | "alert"
   | "answerCall"
   | "leaveCall"
-  | "confirmCallee";
+  | "confirmCallee"
+  | "cancelCall";
 // Call info interface
 export enum CALL_TYPE {
   AUDIO_1V1 = 0, // 一对一语音通话
@@ -58,4 +59,18 @@ export interface CALL_INFO {
   inviteMessageId?: string; // Invitation message ID
   duration?: string; // Call duration, default 0
   state?: CALL_STATUS; // Call status, default idle
+}
+
+//挂断原因枚举
+export enum HANGUP_REASON {
+  HANGUP = "hangup", // Hang up call
+  CANCEL = "cancel", // Cancel call
+  REMOTE_CANCEL = "remoteCancel", // Remote cancel call
+  REFUSE = "refuse", // Refuse call
+  REMOTE_REFUSE = "remoteRefuse", // Remote refuse call
+  BUSY = "busy", // Busy
+  NO_RESPONSE = "noResponse", // No response (timeout)
+  REMOTE_NO_RESPONSE = "remoteNoResponse", // Remote no response
+  HANDLE_ON_OTHER_DEVICE = "handleOnOtherDevice", // Handled on other device
+  ABNORMAL_END = "abnormalEnd", // Abnormal end
 }

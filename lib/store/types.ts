@@ -47,6 +47,7 @@ export interface CallState extends CALL_INFO {
   inviteTimeout?: number;
   //超时定时器
   inviteTimeoutTimer?: NodeJS.Timeout | null;
+  UIdToUserIdMap?: Map<string, string>; // UID到用户ID的映射
 }
 
 // RTC频道状态类型

@@ -7,6 +7,16 @@
       <div class="demo-section">
         <h2>功能演示</h2>
 
+        <!-- 登录表单 -->
+        <div class="login-section">
+          <h3>登录</h3>
+          <div class="login-form">
+            <input v-model="loginUserId" placeholder="输入用户ID" class="input-field" />
+            <input v-model="loginPassword" type="password" placeholder="输入密码" class="input-field" />
+            <button @click="handleLogin" class="btn login-btn">登录</button>
+          </div>
+        </div>
+
         <!-- 单人通话演示 -->
         <div class="call-demo">
           <h3>单人通话</h3>
@@ -61,6 +71,9 @@ const showMultiCall = ref(false)
 const singleCallType = ref<'audio' | 'video'>('video')
 const multiCallType = ref<'audio' | 'video'>('video')
 const currentCallInfo = ref('')
+// 登录相关状态
+const loginUserId = ref('ppp')
+const loginPassword = ref('1')
 
 // 环信客户端实例
 const chatClient = ref()
@@ -87,19 +100,11 @@ onMounted(() => {
   SDK.logger.disableAll()
   const connection = new SDK.connection({
     appKey: 'easemob-demo#support',
+    isFixedDeviceId: false
   })
-  // 模拟登录（实际使用时需要真实凭证）
-  connection.open({
-    user: 'ppp',
-    pwd: '1'
-  }).then(() => {
-    console.log('环信客户端连接成功')
-    chatClient.value = connection
-  }).catch((error: any) => {
-    console.error('环信客户端连接失败:', error)
-    // 为了演示，即使没有真实连接也赋值一个模拟对象
-    chatClient.value = connection
-  })
+
+  chatClient.value = connection
+  // 演示模式下，默认不自动登录，等待用户输入凭证
 })
 
 // 方法
@@ -155,6 +160,31 @@ const handleMultiCallEnd = () => {
   console.log('群组通话结束')
   showMultiCall.value = false
   currentCallInfo.value = ''
+}
+
+// 登录处理函数
+const handleLogin = () => {
+  if (!loginUserId.value || !loginPassword.value) {
+    alert('请输入用户ID和密码')
+    return
+  }
+
+  if (!chatClient.value) {
+    alert('环信客户端未初始化')
+    return
+  }
+
+  // 使用用户输入的凭证进行登录
+  chatClient.value.open({
+    user: loginUserId.value,
+    pwd: loginPassword.value
+  }).then(() => {
+    console.log('登录成功')
+    alert('登录成功')
+  }).catch((error: any) => {
+    console.error('登录失败:', error)
+    alert(`登录失败: ${error.message || '未知错误'}`)
+  })
 }
 </script>
 
@@ -227,6 +257,26 @@ const handleMultiCallEnd = () => {
 
 .btn:hover:not(:disabled) {
   opacity: 0.8;
+}
+
+.login-section {
+  margin: 20px 0;
+  padding: 15px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background-color: #f0f0f0;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 300px;
+}
+
+.login-btn {
+  background-color: #6c757d;
+  color: white;
 }
 
 .status-display {

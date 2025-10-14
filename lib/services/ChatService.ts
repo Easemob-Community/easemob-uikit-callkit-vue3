@@ -1,16 +1,17 @@
 import { ChatSDK } from "../core/sdk/imSDK";
 import type { Chat } from "../core/sdk/imSDK";
-import {
-  type CancelCallSignalingExt,
-  type LeaveCallSignalingExt,
-  type InviteSignalingExt,
-  type SignalingExt,
-  type SignalingMessageOptions,
+import type {
+  CancelCallSignalingExt,
+  LeaveCallSignalingExt,
+  InviteSignalingExt,
+  SignalingExt,
+  SignalingMessageOptions,
   CALLKIT_SIGNALING_CMD_ACTION,
 } from "../types/signal.types";
 import { useCallStateStore } from "../store/callState";
 import {
-  CALLKIT_CMD_MSG_ACTION_TYPE,
+  CALL_TYPE,
+  type CALLKIT_CMD_MSG_ACTION_TYPE,
   CALLKIT_CMD_MSG_RESULT_TYPE,
 } from "../types/callstate.types";
 export class ChatService {
@@ -21,32 +22,33 @@ export class ChatService {
   }
   //构建邀请信息的ext
   private buildInviteMessageExt() {
+    const callState = this.callStateStore.getCallState;
     const ext: InviteSignalingExt = {
       action: "invite",
-      callId: this.callStateStore.callId,
-      callerIMName: this.callStateStore.callerUserId,
-      calleeIMName: this.callStateStore.calleeUserId || "暂未取到calleeUserId",
-      callerDevId: this.callStateStore.callerDevId,
-      channelName: this.callStateStore.channel,
-      chatType: this.callStateStore.type,
-      type: this.callStateStore.type,
+      callId: callState.callId || "",
+      callerIMName: callState.callerUserId || "",
+      calleeIMName: callState.calleeUserId || "暂未取到calleeUserId",
+      callerDevId:
+        this.chatClient?.context.jid.clientResource || "暂未取到callerDevId",
+      channelName: callState.channel || "",
+      chatType: callState.type || CALL_TYPE.AUDIO_1V1,
+      type: callState.type || CALL_TYPE.AUDIO_1V1,
       ts: Date.now(),
       msgType: "rtcCallWithAgora",
       em_push_ext: {
         type: "call",
         custom: {
           action: "invite",
-          channelName: this.callStateStore.channel,
-          type: this.callStateStore.type,
-          callerDevId: this.callStateStore.callerDevId,
-          callId: this.callStateStore.callId,
+          channelName: callState.channel || "",
+          type: callState.type || CALL_TYPE.AUDIO_1V1,
+          callerDevId: this.chatClient?.context.jid.clientResource || "",
+          callId: callState.callId || "",
           ts: Date.now(),
           msgType: "rtcCallWithAgora",
-          callerIMName: this.callStateStore.callerUserId,
-          calleeIMName:
-            this.callStateStore.calleeUserId || "暂未取到calleeUserId",
-          callerNickname: this.callStateStore.callerNickname || "",
-          chatType: this.callStateStore.type,
+          callerIMName: callState.callerUserId || "",
+          calleeIMName: callState.calleeUserId || "暂未取到calleeUserId",
+          callerNickname: callState.callerNickname || "",
+          chatType: callState.type || CALL_TYPE.AUDIO_1V1,
         },
       },
       em_apns_ext: {
@@ -70,9 +72,22 @@ export class ChatService {
           action: "alert",
           ts: Date.now(),
           msgType: "rtcCallWithAgora",
-          calleeDevId: ext?.calleeDevId || callState.calleeDevId || "",
+          calleeDevId:
+            this.chatClient?.context.jid.clientResource ||
+            "未成功获取当前用户calleeDevId",
           callerDevId: ext?.callerDevId || callState.callerDevId || "",
           callId: ext?.callId || callState.callId || "",
+        };
+      }
+      case "confirmRing": {
+        return {
+          action: "confirmRing",
+          ts: Date.now(),
+          msgType: "rtcCallWithAgora",
+          calleeDevId: ext?.calleeDevId || "暂未取到有效calleeDevId",
+          callerDevId: this.chatClient?.context.jid.clientResource || "",
+          callId: ext?.callId || "",
+          status: (ext as { status?: boolean })?.status || false,
         };
       }
       case "answerCall": {
@@ -87,6 +102,7 @@ export class ChatService {
           result: result || CALLKIT_CMD_MSG_RESULT_TYPE.BUSY,
         };
       }
+
       default:
         throw new Error(`未知的信令消息动作: ${action}`);
     }

@@ -17,5 +17,6 @@ export const useChatClientStore = defineStore("chatClient", {
   },
   getters: {
     getChatClient: (state) => state.client,
+    getClientDeviceId: (state) => state.client?.context.jid.clientResource,
   },
 });

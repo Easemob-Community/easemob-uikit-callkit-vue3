@@ -1,4 +1,4 @@
-import { CALL_TYPE, CALLKIT_ACTION_MSG_TYPE } from "./callstate.types";
+import { CALL_TYPE, type CALLKIT_ACTION_MSG_TYPE } from "./callstate.types";
 // 邀请类型的文本消息接口定义
 export interface SignalMessageInviteExt {
   // 基本信息

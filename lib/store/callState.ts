@@ -22,14 +22,15 @@ export const useCallStateStore = defineStore("callState", {
     groupId: "",
     groupName: "",
     groupAvatar: "",
-    invitedMembers: [],
-    joinedMembers: [],
+    invitedMembers: [], //被邀请成员列表
+    joinedMembers: [], //已加入成员列表
     inviteMessageId: "",
     duration: "",
     // 超时设置
     inviteTimeout: 30000, // 默认30秒超时
     inviteTimeoutTimer: null,
-    userInfoMap: new Map(),
+    userInfoMap: new Map(), // 用户ID到用户信息的映射
+    UIdToUserIdMap: new Map(), // UID到用户ID的映射
   }),
 
   /**
@@ -73,11 +74,15 @@ export const useCallStateStore = defineStore("callState", {
         this.userInfoMap.set(userId, userInfo);
       }
     },
-
+    //更新invitedMembers
+    updateInvitedMembers(members: string[]) {
+      this.invitedMembers = members;
+    },
     /**
      * 开始超时计时
+     * 支持传入callback，超时后执行callback
      */
-    startTimeoutTimer() {
+    startTimeoutTimer(callback?: () => void) {
       // 先清除已有的定时器，避免重复计时
       this.clearTimeoutTimer();
 
@@ -85,6 +90,7 @@ export const useCallStateStore = defineStore("callState", {
       if (this.inviteTimeout) {
         this.inviteTimeoutTimer = setTimeout(() => {
           this.handleTimeout();
+          callback?.();
         }, this.inviteTimeout) as unknown as number;
       }
     },
@@ -148,7 +154,7 @@ export const useCallStateStore = defineStore("callState", {
     buildAndUpdateInviteState(inviteInfo: INVITE_INFO) {
       this.initInviteInfo(inviteInfo);
       // 可以在这里添加更多的构建逻辑
-      return this.state as CallState;
+      return this.state as unknown as CallState;
     },
 
     /**
@@ -183,6 +189,10 @@ export const useCallStateStore = defineStore("callState", {
         return this.userInfoMap.get(userId) || {};
       };
     },
+    //获取定时器状态
+    getInviteTimeoutTimer(): number | null {
+      return this.inviteTimeoutTimer;
+    },
     /**
      * 判断是否处于邀请中状态
      */
@@ -196,6 +206,10 @@ export const useCallStateStore = defineStore("callState", {
     isInCall(): boolean {
       // 根据实际业务需求定义通话中状态
       return this.status !== CALL_STATUS.IDLE;
+    },
+
+    getInvitedMembers(): string[] {
+      return this.invitedMembers || [];
     },
   },
 });

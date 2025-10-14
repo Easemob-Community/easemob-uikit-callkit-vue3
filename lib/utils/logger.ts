@@ -54,10 +54,10 @@ export class Logger {
       level: LogLevel.ERROR, // 默认只输出错误日志
       enableConsole: true, // 默认启用控制台输出
       enablePrefix: true, // 默认启用前缀
-      prefix: "[CallKit]", // 默认前缀
+      prefix: "[Vue3 CallKit]", // 默认前缀
       ...config,
     };
-    
+
     // 根据debug配置设置日志级别
     if (this.config.debug !== undefined) {
       this.setDebug(this.config.debug);
@@ -78,13 +78,13 @@ export class Logger {
   // 更新配置
   public updateConfig(config: Partial<LoggerConfig>): void {
     this.config = { ...this.config, ...config };
-    
+
     // 如果配置中包含debug字段，则更新日志级别
     if (config.debug !== undefined) {
       this.setDebug(config.debug);
     }
   }
-  
+
   // 根据debug模式设置日志级别
   public setDebug(debug: boolean): void {
     this.config.debug = debug;
