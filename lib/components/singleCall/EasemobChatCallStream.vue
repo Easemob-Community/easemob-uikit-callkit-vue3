@@ -1,5 +1,5 @@
 <template>
-  <div class="easemob-chat-single-call">
+  <div class="call-stream-container">
     <div class="call-container">
       <div class="local-video">
         <video ref="localVideo" autoplay muted></video>
@@ -28,75 +28,60 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted } from 'vue'
 
 interface Props {
-  targetUser: string
   type: 'audio' | 'video'
-  enableRingtone?: boolean
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  enableRingtone: true
-})
+const props = defineProps<Props>()
 
 const emit = defineEmits<{
-  callStarted: []
-  callEnded: []
+  ended: []
 }>()
 
 const localVideo = ref<HTMLVideoElement>()
 const remoteVideo = ref<HTMLVideoElement>()
 const isMuted = ref(false)
 const isVideoEnabled = ref(true)
-const isCallActive = ref(false)
 
-const startCall = async () => {
-  try {
-    // 初始化通话
-    isCallActive.value = true
-    emit('callStarted')
-    
-    // 这里应该集成实际的通话SDK
-    console.log(`Starting ${props.type} call with ${props.targetUser}`)
-  } catch (error) {
-    console.error('Failed to start call:', error)
-  }
-}
-
+// 切换静音
 const toggleMute = () => {
   isMuted.value = !isMuted.value
   // 实现静音逻辑
 }
 
+// 切换视频
 const toggleVideo = () => {
   isVideoEnabled.value = !isVideoEnabled.value
   // 实现视频开关逻辑
 }
 
+// 结束通话
 const endCall = () => {
-  isCallActive.value = false
-  emit('callEnded')
+  emit('ended')
+}
+
+// 开始媒体流
+const startMediaStream = async () => {
+  try {
+    // 这里应该实现实际的媒体流初始化和推拉流逻辑
+    console.log('Starting media stream for', props.type, 'call')
+  } catch (error) {
+    console.error('Failed to start media stream:', error)
+  }
 }
 
 onMounted(() => {
-  startCall()
-})
-
-onUnmounted(() => {
-  endCall()
+  startMediaStream()
 })
 </script>
 
 <style scoped>
-.easemob-chat-single-call {
-  position: fixed;
-  top: 0;
-  left: 0;
+.call-stream-container {
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.9);
-  z-index: 1000;
+  position: relative;
 }
 
 .call-container {

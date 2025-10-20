@@ -1,6 +1,6 @@
 import { type App } from "vue";
 import EasemobChatCallKitProvider from "./components/EasemobChatCallKitProvider.vue";
-import EasemobChatSingleCall from "./components/EasemobChatSingleCall.vue";
+import EasemobChatSingleCall from "./components/singleCall/EasemobChatSingleCall.vue";
 import EasemobChatMultiCall from "./components/EasemobChatMultiCall.vue";
 import { pinia, installPinia } from "./store";
 import { useCallStateStore } from "./store/callState";

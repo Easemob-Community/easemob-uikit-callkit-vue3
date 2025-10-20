@@ -85,17 +85,21 @@
 ### 5.1 通话状态管理
 
 ```typescript
-import { useCallState } from '@easemob/chat-callkit'
+import { useCallStateStore } from '@easemob/chat-callkit'
+import { ref } from 'vue'
 
-const { callState, updateCallState, onStateChange } = useCallState()
+// 直接使用Pinia store
+const callStateStore = useCallStateStore()
 
-// 监听状态变化
-onStateChange((newState, oldState) => {
+// 监听状态变化 - 使用store.$subscribe
+let oldState = { ...callStateStore.$state }
+const stopWatch = callStateStore.$subscribe((_mutation, newState) => {
   console.log('通话状态变化:', newState)
+  oldState = { ...newState }
 })
 
 // 更新状态
-updateCallState({
+callStateStore.updateCallState({
   status: 'connected',
   isInCall: true
 })
