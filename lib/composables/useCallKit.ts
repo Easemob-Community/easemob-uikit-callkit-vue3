@@ -1,10 +1,9 @@
-import type { Chat } from "../core/sdk/imSDK";
 import { useChatClientStore } from "../store/chatClient";
 import type { UseCallKitReturn } from "../types";
-import { ChatService } from "../services/ChatService";
 import { useCallStateStore } from "../store/callState";
 import { CALL_TYPE } from "../types/callstate.types";
 import { logger } from "../utils/logger";
+import { useSignalManager } from "./useSignalManager";
 
 // 组合式API：useCallKit
 export function useCallKit(): UseCallKitReturn {
@@ -31,14 +30,13 @@ export function useCallKit(): UseCallKitReturn {
     });
 
     logger.verbose(`startSingleCall: 已初始化邀请信息，通话类型: ${type}`);
-
-    const chatClient = chatClientStore.getChatClient as Chat.Connection;
-    const chatService = new ChatService(chatClient);
-
+    // 使用信令管理器处理信令发送
+    const { sendInviteMessage } = useSignalManager();
     try {
-      const message = await chatService.sendTextMessage(
+      // 使用信令管理器发送邀请消息
+      const message = await sendInviteMessage(
         targetId,
-        "singleChat",
+        "singleChat" as any,
         msg
       );
       logger.info(
