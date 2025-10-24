@@ -102,7 +102,15 @@ export class ChatService {
           result: result || CALLKIT_CMD_MSG_RESULT_TYPE.BUSY,
         };
       }
-
+      case "cancelCall": {
+        return {
+          action: "cancelCall",
+          callerDevId: callState.callerDevId || "未从callState取到callerDevId",
+          callId: callState.callId || "未从callState取到callId",
+          ts: Date.now(),
+          msgType: "rtcCallWithAgora",
+        };
+      }
       default:
         throw new Error(`未知的信令消息动作: ${action}`);
     }
@@ -159,8 +167,10 @@ export class ChatService {
     ext?: Partial<SignalingExt>,
     //是否直投在线用户
     isDirectToOnlineUser?: boolean,
-    /** 通话结果 */
-    result?: CALLKIT_CMD_MSG_RESULT_TYPE
+    // 通话结果
+    result?: CALLKIT_CMD_MSG_RESULT_TYPE,
+    //定向发送成员列表
+    receiverList?: string[]
   ): Promise<Chat.SendMsgResult> {
     if (!this.chatClient) {
       throw new Error("ChatClient未初始化");
@@ -185,6 +195,7 @@ export class ChatService {
           result
         ),
       },
+      receiverList,
     };
     const msg = ChatSDK.message.create(options);
     return new Promise((resolve, reject) => {

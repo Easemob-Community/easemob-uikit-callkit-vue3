@@ -5,13 +5,12 @@ import type { Chat } from "../core/sdk/imSDK";
 import {
   CALL_STATUS,
   CALL_TYPE,
-  CALLKIT_CMD_MSG_RESULT_TYPE,
   HANGUP_REASON,
   type CALLKIT_TEXT_MSG_ACTION,
   type CALLKIT_CMD_MSG_ACTION_TYPE,
 } from "../types/callstate.types";
-import { ChatService } from "../services/ChatService";
 import type { SignalingExt } from "../types/signal.types";
+import { useSignalManager } from "./useSignalManager";
 
 // 定义CmdMsgBody接口以替代不存在的Chat.CmdMsgBody
 export interface CmdMsgBody {
@@ -37,7 +36,12 @@ export function useListenerManager(): ListenerManagerReturn {
   const chatClientStore = useChatClientStore();
   const callStateStore = useCallStateStore();
   const client = chatClientStore.getChatClient as Chat.Connection;
-  const chatService = new ChatService(client);
+  const {
+    sendBusyAnswerMessage,
+    sendAlertMessage,
+    sendConfirmRingMessage,
+    sendConfirmCalleeMessage,
+  } = useSignalManager();
   /**
    * 处理通话邀请消息
    */
@@ -53,11 +57,9 @@ export function useListenerManager(): ListenerManagerReturn {
       return; // 忽略自己发送的消息
     }
     const ext = message.ext;
-    const chatService = new ChatService(client);
     //校验当前用户的通话状态是否为idle
     if (callStateStore.getCallStatus > CALL_STATUS.IDLE) {
       logger.warn("当前通话状态不是idle，应答拒绝通话邀请");
-
       if (message.from) {
         const newInvitationInfo = {
           callerUserId: message.from,
@@ -69,26 +71,9 @@ export function useListenerManager(): ListenerManagerReturn {
           "当前通话状态不是idle，应答拒绝通话邀请",
           newInvitationInfo
         );
-        chatService
-          .sendSignalMessage(
-            message.from,
-            "answerCall",
-            "singleChat",
-            newInvitationInfo,
-            true,
-            CALLKIT_CMD_MSG_RESULT_TYPE.BUSY
-          )
-          .then((res) => {
-            logger.info(
-              `正在忙碌，拒绝通话邀请成功，消息ID: ${res.serverMsgId}`
-            );
-            logger.debug(`正在忙碌，拒绝通话邀请详情:`, res.message);
-          })
-          .catch((err) => {
-            logger.error(
-              `拒绝通话邀请失败，目标ID: ${message.from}，错误信息: ${err}`
-            );
-          });
+        sendBusyAnswerMessage(message.from, newInvitationInfo).catch((err) => {
+          // 错误已在useSignalManager内部记录
+        });
         return;
       }
     }
@@ -108,23 +93,9 @@ export function useListenerManager(): ListenerManagerReturn {
     });
     logger.info("通话邀请已更新至store", callStateStore.getCallState);
     //发送alerting 信令
-    chatService
-      .sendSignalMessage(
-        message.from as string,
-        "alert",
-        "singleChat",
-        {},
-        true
-      )
-      .then((res) => {
-        logger.info(`发送alerting 信令成功，消息ID: ${res.serverMsgId}`);
-        logger.debug(`发送alerting 信令详情:`, res.message);
-      })
-      .catch((err) => {
-        logger.error(
-          `发送alerting 信令失败，目标ID: ${message.from}，错误信息: ${err}`
-        );
-      });
+    sendAlertMessage(message.from as string).catch((err) => {
+      // 错误已在useSignalManager内部记录
+    });
     callStateStore.setCallStatus(CALL_STATUS.ALERTING);
     logger.info(`通话状态已更新至ALERTING`);
     //设置超时计时器
@@ -208,16 +179,11 @@ export function useListenerManager(): ListenerManagerReturn {
 
     logger.debug(`确认响铃信令消息详情:`, confirmRingSignalMessage);
     if (confirmRingSignalMessage) {
-      chatService
-        .sendSignalMessage(
-          confirmRingSignalMessage.to as string,
-          confirmRingSignalMessage.action as CALLKIT_CMD_MSG_ACTION_TYPE,
-          "singleChat",
-          confirmRingSignalMessage.ext
-        )
-        .then((res) => {
-          logger.info(`发送确认响铃信令成功，消息ID: ${res.serverMsgId}`);
-          logger.debug(`发送确认响铃信令详情:`, res.message);
+      sendConfirmRingMessage(
+        confirmRingSignalMessage.to as string,
+        confirmRingSignalMessage.ext
+      )
+        .then(() => {
           //对方弹出邀请后，如超出设定则执行自定挂断
           if (callStateStore.type !== CALL_TYPE.VIDEO_MULTI) {
             callStateStore.startTimeoutTimer(() => {
@@ -226,8 +192,8 @@ export function useListenerManager(): ListenerManagerReturn {
             });
           }
         })
-        .catch((err) => {
-          logger.error(`发送确认响铃信令失败，错误信息: ${err}`);
+        .catch(() => {
+          // 错误已在useSignalManager内部记录
         });
     }
   };
@@ -392,7 +358,19 @@ export function useListenerManager(): ListenerManagerReturn {
     if (ext?.result !== "accept") {
       const reason =
         ext?.result === "busy" ? HANGUP_REASON.BUSY : HANGUP_REASON.REFUSE;
-      //TODO 发送confirmCallee信令
+
+      // 发送confirmCallee信令，通知对方已确认收到拒绝信息
+      const confirmCalleePayload = {
+        callId: ext.callId,
+        callerDevId: ext.callerDevId,
+        result: ext.result,
+      };
+      sendConfirmCalleeMessage(
+        message.from as string,
+        confirmCalleePayload
+      ).catch(() => {
+        // 错误已在useSignalManager内部记录
+      });
 
       //针对群组多人通话的逻辑处理
       if (
@@ -410,7 +388,18 @@ export function useListenerManager(): ListenerManagerReturn {
         //TODO huang 挂断通话
       }
     } else {
-      //TODO 发送confirmCallee信令
+      // 发送confirmCallee信令，通知对方已确认收到接受信息
+      const confirmCalleePayload = {
+        callId: ext.callId,
+        callerDevId: ext.callerDevId,
+        result: "accept",
+      };
+      sendConfirmCalleeMessage(
+        message.from as string,
+        confirmCalleePayload
+      ).catch(() => {
+        // 错误已在useSignalManager内部记录
+      });
     }
   };
   //注册文本消息监听
