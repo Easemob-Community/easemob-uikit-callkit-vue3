@@ -1,4 +1,5 @@
 import type { Chat } from "./core/sdk/imSDK";
+import type { HANGUP_REASON } from "./types/callstate.types";
 export interface EasemobChatCallKitOptions {
   // 基础配置
   appKey: string;
@@ -57,4 +58,19 @@ export interface UseCallKitReturn {
     type: "audio" | "video",
     msg: string
   ) => void;
+}
+
+// useEndCall 返回类型
+export interface UseEndCallReturn {
+  // 核心挂断方法
+  hangup: (reason?: HANGUP_REASON) => Promise<void>;
+  hangupCall: () => Promise<void>;
+  cancelCall: () => Promise<void>;
+  handleRemoteCancel: () => Promise<void>;
+  handleRemoteRefuse: () => Promise<void>;
+  handleAbnormalEnd: () => Promise<void>;
+  
+  // 状态检查方法
+  canHangup: () => boolean;
+  canCancel: () => boolean;
 }
