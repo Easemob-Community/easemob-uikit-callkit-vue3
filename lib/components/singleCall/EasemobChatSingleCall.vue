@@ -13,6 +13,7 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useCallStateStore } from '../../store/callState'
 import { CALL_STATUS } from '../../types/callstate.types'
+import { useEndCall } from '../../composables/useEndCall'
 import EasemobChatCallWaiting from './EasemobChatCallWaiting.vue'
 import EasemobChatCallStream from './EasemobChatCallStream.vue'
 
@@ -54,8 +55,11 @@ const startCall = async () => {
 }
 
 // 处理取消呼叫
+const { cancelCall } = useEndCall()
 const handleCancelCall = () => {
   isCallActive.value = false
+  console.log('111111');
+  cancelCall()
   emit('callCanceled')
 }
 
@@ -76,7 +80,7 @@ let stopStateWatch: Function | null = null
 
 onMounted(() => {
   startCall()
-  
+
   // 设置状态监听器
   stopStateWatch = callStateStore.$subscribe((_mutation, state) => {
     console.log('Call state changed:', state.status)

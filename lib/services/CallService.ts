@@ -2,20 +2,20 @@
 import { useCallStateStore } from "../store/callState";
 import { useChatClientStore } from "../store/chatClient";
 import { useRtcChannelStore } from "../store/rtcChannel";
-import { HANGUP_REASON } from "../types/callstate.types";
+import { HANGUP_REASON, CALL_STATUS } from "../types/callstate.types";
 
 export class CallService {
   private logger = console;
-  
+
   // 延迟获取store实例，确保在Pinia激活后使用
   private get callStateStore() {
     return useCallStateStore();
   }
-  
+
   private get rtcChannelStore() {
     return useRtcChannelStore();
   }
-  
+
   private get chatClientStore() {
     return useChatClientStore();
   }
@@ -23,9 +23,24 @@ export class CallService {
   async hangup(reason: HANGUP_REASON = HANGUP_REASON.HANGUP) {
     this.logger.log("hangup method called:", { reason });
 
-    // 防止重复调用
-    if (this.callStateStore.getCallStatus() === "IDLE") {
-      this.logger.warn("Call is not active, skip hangup");
+    try {
+      // 防止重复调用
+      const callStateStore = this.callStateStore;
+      if (
+        !callStateStore ||
+        typeof callStateStore.getCallStatus === "undefined"
+      ) {
+        this.logger.error("CallState store not properly initialized");
+        return;
+      }
+
+      const currentStatus = callStateStore.getCallStatus;
+      if (currentStatus === CALL_STATUS.IDLE) {
+        this.logger.warn("Call is not active, skip hangup");
+        return;
+      }
+    } catch (error) {
+      this.logger.error("Error checking call status:", error);
       return;
     }
 
@@ -43,11 +58,7 @@ export class CallService {
       this.logger.error("Hangup process failed:", error);
       // 即使出错也要尝试重置基本状态
       try {
-        this.callStateStore.$patch({
-          status: "IDLE",
-          isInCall: false,
-          hangupReason: HANGUP_REASON.ABNORMAL_END,
-        });
+        this.callStateStore.setCallStatus(CALL_STATUS.IDLE);
       } catch (resetError) {
         this.logger.error(
           "Failed to reset state after hangup error:",
@@ -74,14 +85,15 @@ export class CallService {
 
   // 判断是否为远程原因
   private isRemoteReason(reason: HANGUP_REASON): boolean {
-    return [
+    const remoteReasons: HANGUP_REASON[] = [
       HANGUP_REASON.REMOTE_CANCEL,
       HANGUP_REASON.REMOTE_REFUSE,
       HANGUP_REASON.BUSY,
       HANGUP_REASON.NO_RESPONSE,
       HANGUP_REASON.REMOTE_NO_RESPONSE,
       HANGUP_REASON.HANDLE_ON_OTHER_DEVICE,
-    ].includes(reason);
+    ];
+    return remoteReasons.includes(reason);
   }
 
   // 普通挂断策略
@@ -89,7 +101,7 @@ export class CallService {
     reason: HANGUP_REASON
   ): Promise<void> {
     try {
-      const chatClient = this.chatClientStore.getChatClient();
+      const chatClient = this.chatClientStore.getChatClient;
       if (chatClient && chatClient.sendHangupMessage) {
         await chatClient.sendHangupMessage(reason);
       }
@@ -102,9 +114,9 @@ export class CallService {
   // 取消呼叫策略
   private async handleCancelStrategy(): Promise<void> {
     try {
-      const chatClient = this.chatClientStore.getChatClient();
+      const chatClient = this.chatClientStore.getChatClient;
       if (chatClient && chatClient.sendCancelMessage) {
-        const unjoinedMembers = this.callStateStore.getInvitedMembers() || [];
+        const unjoinedMembers = this.callStateStore.getInvitedMembers || [];
         if (unjoinedMembers.length > 0) {
           await chatClient.sendCancelMessage(
             HANGUP_REASON.CANCEL,
@@ -121,7 +133,7 @@ export class CallService {
   // 清理媒体资源
   private async cleanupMediaResources(): Promise<void> {
     try {
-      const activeChannel = this.rtcChannelStore.activeChannel();
+      const activeChannel = this.rtcChannelStore.activeChannel;
       // 通过activeChannel获取rtcClient
       if (activeChannel?.rtcClient?.unpublishAll) {
         await activeChannel.rtcClient.unpublishAll();
@@ -134,12 +146,13 @@ export class CallService {
   // 清理连接
   private async cleanupConnection(): Promise<void> {
     try {
-      const activeChannel = this.rtcChannelStore.activeChannel();
-      
+      const activeChannel = this.rtcChannelStore.activeChannel;
+
       // 离开频道
       if (activeChannel?.leave) await activeChannel.leave();
       // 销毁客户端
-      if (activeChannel?.rtcClient?.destroy) await activeChannel.rtcClient.destroy();
+      if (activeChannel?.rtcClient?.destroy)
+        await activeChannel.rtcClient.destroy();
     } catch (error) {
       this.logger.error("Error cleaning up connection:", error);
     }
@@ -148,11 +161,15 @@ export class CallService {
   // 重置状态
   private resetState(reason: HANGUP_REASON): void {
     try {
-      this.callStateStore.$patch({
-        status: "IDLE",
-        currentCall: null,
+      const callStateStore = this.callStateStore;
+      if (!callStateStore) {
+        this.logger.error("CallState store not available for reset");
+        return;
+      }
+
+      callStateStore.$patch({
+        status: CALL_STATUS.IDLE,
         hangupReason: reason,
-        isInCall: false,
       });
 
       // 使用logger记录事件
