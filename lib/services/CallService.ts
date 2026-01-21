@@ -194,26 +194,69 @@ export class CallService {
   // 清理媒体资源
   private async cleanupMediaResources(): Promise<void> {
     try {
-      // TODO: RTC 媒体资源清理，等待 RTC 实现
-      // const activeChannel = this.rtcChannelStore.activeChannel;
-      // if (activeChannel?.rtcClient?.unpublishAll) {
-      //   await activeChannel.rtcClient.unpublishAll();
-      // }
+      const rtcService = this.rtcChannelStore.rtcService
+      if (!rtcService) {
+        logger.debug('CallService: RtcService 未初始化，无需清理媒体资源')
+        return
+      }
+  
+      logger.info('CallService: 开始清理媒体资源')
+        
+      // 获取 RTC 客户端
+      const client = rtcService.getClient()
+      if (!client) {
+        logger.debug('CallService: RTC 客户端不存在')
+        return
+      }
+  
+      // 取消发布所有本地轨道
+      if (client.connectionState === 'CONNECTED') {
+        const localTracks = client.localTracks
+        if (localTracks && localTracks.length > 0) {
+          try {
+            await client.unpublish(localTracks)
+            logger.info('CallService: 已取消发布所有本地轨道')
+          } catch (error) {
+            logger.error('CallService: 取消发布本地轨道失败:', error)
+          }
+        }
+      }
+  
+      logger.info('CallService: 媒体资源清理完成')
     } catch (error) {
-      this.logger.error("Error cleaning up media resources:", error);
+      this.logger.error('Error cleaning up media resources:', error)
     }
   }
 
   // 清理连接
   private async cleanupConnection(): Promise<void> {
     try {
-      // TODO: RTC 连接清理，等待 RTC 实现
-      // const activeChannel = this.rtcChannelStore.activeChannel;
-      // if (activeChannel?.leave) await activeChannel.leave();
-      // if (activeChannel?.rtcClient?.destroy)
-      //   await activeChannel.rtcClient.destroy();
+      const rtcService = this.rtcChannelStore.rtcService
+      if (!rtcService) {
+        logger.debug('CallService: RtcService 未初始化，无需清理连接')
+        return
+      }
+  
+      logger.info('CallService: 开始清理 RTC 连接')
+  
+      // 调用 RtcService 的 leaveChannel 方法，它会：
+      // 1. 取消发布本地轨道
+      // 2. 关闭本地轨道
+      // 3. 离开频道
+      await rtcService.leaveChannel()
+        
+      logger.info('CallService: 已离开 RTC 频道')
+  
+      // 清理 rtcChannelStore 中的状态
+      this.rtcChannelStore.setAudioEnabled(false)
+      this.rtcChannelStore.setVideoEnabled(false)
+      this.rtcChannelStore.setLocalStream(null)
+      // isConnected 是 state 属性，直接赋值
+      this.rtcChannelStore.isConnected = false
+        
+      logger.info('CallService: RTC 连接清理完成')
     } catch (error) {
-      this.logger.error("Error cleaning up connection:", error);
+      this.logger.error('Error cleaning up connection:', error)
     }
   }
 

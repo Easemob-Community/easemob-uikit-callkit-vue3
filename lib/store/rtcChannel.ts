@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 import type { RtcChannelState, RtcChannelInfo } from './types'
+import { RtcService } from '../services/RtcService'
+import { logger } from '../utils/logger'
 
 export const useRtcChannelStore = defineStore('rtcChannel', {
   /**
@@ -12,7 +14,9 @@ export const useRtcChannelStore = defineStore('rtcChannel', {
     localStream: null,
     remoteStreams: {},
     audioEnabled: true,
-    videoEnabled: true
+    videoEnabled: true,
+    rtcService: null as RtcService | null, // RTC服务实例
+    agoraAppId: null as string | null // Agora AppId
   }),
   
   /**
@@ -38,6 +42,13 @@ export const useRtcChannelStore = defineStore('rtcChannel', {
      */
     channelIds(): string[] {
       return Object.keys(this.channels)
+    },
+    
+    /**
+     * 获取RTC服务实例
+     */
+    getRtcService(): any {
+      return this.rtcService
     }
   },
   
@@ -45,6 +56,40 @@ export const useRtcChannelStore = defineStore('rtcChannel', {
    * 频道管理方法
    */
   actions: {
+    /**
+     * 初始化RTC服务
+     */
+    async initializeRtcService(agoraAppId: string) {
+      if (this.rtcService) {
+        logger.warn('RTC服务已经初始化,无需重复初始化')
+        return
+      }
+      
+      try {
+        logger.info('初始化RTC服务...')
+        this.agoraAppId = agoraAppId
+        const service = new RtcService({ appId: agoraAppId })
+        await service.initialize()
+        this.rtcService = service
+        logger.info('RTC服务初始化成功')
+      } catch (error) {
+        logger.error('RTC服务初始化失败:', error)
+        throw error
+      }
+    },
+    
+    /**
+     * 销毁RTC服务
+     */
+    async destroyRtcService() {
+      if (this.rtcService) {
+        logger.info('销毁RTC服务...')
+        await this.rtcService.destroy()
+        this.rtcService = null
+        this.agoraAppId = null
+      }
+    },
+    
     /**
      * 创建新的RTC频道
      */

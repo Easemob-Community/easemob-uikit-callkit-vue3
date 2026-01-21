@@ -45,6 +45,148 @@
  * ```
  */
 
+import { computed, ref } from 'vue'
+import { useRtcChannelStore } from '../store/rtcChannel'
+import { logger } from '../utils/logger'
+
 export function useRtcService() {
-  // TODO: 实现RTC服务组合式API
+  const rtcChannelStore = useRtcChannelStore()
+  
+  // 从 store 获取响应式状态
+  const localStream = computed(() => rtcChannelStore.localStream)
+  const remoteStreams = computed(() => rtcChannelStore.remoteStreams)
+  const isVideoEnabled = computed(() => rtcChannelStore.videoEnabled)
+  const isAudioEnabled = computed(() => rtcChannelStore.audioEnabled)
+  const isConnected = computed(() => rtcChannelStore.isConnected)
+  const activeChannel = computed(() => rtcChannelStore.activeChannel)
+
+  /**
+   * 切换视频状态
+   */
+  const toggleVideo = async (enabled?: boolean): Promise<boolean> => {
+    try {
+      const newState = enabled !== undefined ? enabled : !isVideoEnabled.value
+      rtcChannelStore.setVideoEnabled(newState)
+      
+      logger.info('Video toggled:', newState)
+      return newState
+    } catch (error) {
+      logger.error('Failed to toggle video:', error)
+      return isVideoEnabled.value
+    }
+  }
+
+  /**
+   * 切换音频状态
+   */
+  const toggleAudio = async (enabled?: boolean): Promise<boolean> => {
+    try {
+      const newState = enabled !== undefined ? enabled : !isAudioEnabled.value
+      rtcChannelStore.setAudioEnabled(newState)
+      
+      logger.info('Audio toggled:', newState)
+      return newState
+    } catch (error) {
+      logger.error('Failed to toggle audio:', error)
+      return isAudioEnabled.value
+    }
+  }
+
+  /**
+   * 切换摄像头
+   */
+  const switchCamera = async (deviceId?: string): Promise<boolean> => {
+    try {
+      // TODO: 实现摄像头切换逻辑
+      // 需要通过 RTC service 获取可用设备列表并切换
+      logger.info('Switch camera:', deviceId)
+      return true
+    } catch (error) {
+      logger.error('Failed to switch camera:', error)
+      return false
+    }
+  }
+
+  /**
+   * 切换麦克风
+   */
+  const switchMicrophone = async (deviceId?: string): Promise<boolean> => {
+    try {
+      // TODO: 实现麦克风切换逻辑
+      // 需要通过 RTC service 获取可用设备列表并切换
+      logger.info('Switch microphone:', deviceId)
+      return true
+    } catch (error) {
+      logger.error('Failed to switch microphone:', error)
+      return false
+    }
+  }
+
+  /**
+   * 获取本地视频流
+   */
+  const getLocalStream = (): MediaStream | null => {
+    return localStream.value
+  }
+
+  /**
+   * 获取远程视频流
+   */
+  const getRemoteStream = (userId: string): MediaStream | undefined => {
+    return remoteStreams.value[userId]
+  }
+
+  /**
+   * 添加远程流
+   */
+  const addRemoteStream = (userId: string, stream: MediaStream): void => {
+    rtcChannelStore.addRemoteStream(userId, stream)
+  }
+
+  /**
+   * 移除远程流
+   */
+  const removeRemoteStream = (userId: string): void => {
+    rtcChannelStore.removeRemoteStream(userId)
+  }
+
+  /**
+   * 设置本地流
+   */
+  const setLocalStream = (stream: MediaStream | null): void => {
+    rtcChannelStore.setLocalStream(stream)
+  }
+
+  /**
+   * 重置 RTC 状态
+   */
+  const reset = (): void => {
+    rtcChannelStore.reset()
+  }
+
+  return {
+    // 响应式状态
+    localStream,
+    remoteStreams,
+    isVideoEnabled,
+    isAudioEnabled,
+    isConnected,
+    activeChannel,
+    
+    // 控制方法
+    toggleVideo,
+    toggleAudio,
+    switchCamera,
+    switchMicrophone,
+    
+    // 流管理方法
+    getLocalStream,
+    getRemoteStream,
+    addRemoteStream,
+    removeRemoteStream,
+    setLocalStream,
+    
+    // 其他方法
+    reset
+  }
 }

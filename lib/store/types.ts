@@ -5,6 +5,7 @@ import type {
   CALL_INFO,
   CALL_TYPE,
 } from "../types/callstate.types";
+import type { RtcService } from '../services/RtcService';
 export type CallStatus = CALL_STATUS;
 export interface ChatClientState {
   client: Chat.Connection | null;
@@ -60,6 +61,8 @@ export interface RtcChannelState {
   remoteStreams: Record<string, MediaStream>;
   audioEnabled: boolean;
   videoEnabled: boolean;
+  rtcService: any; // RTC服务实例(使用any避免Pinia类型推断问题)
+  agoraAppId: string | null; // Agora AppId
 }
 
 // RTC频道信息类型

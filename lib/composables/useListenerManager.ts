@@ -11,6 +11,7 @@ import {
 } from "../types/callstate.types";
 import type { SignalingExt } from "../types/signal.types";
 import { useSignalManager } from "./useSignalManager";
+import { useJoinChannel } from "./useJoinChannel";
 import { CallService } from "../services/CallService";
 
 // 定义CmdMsgBody接口以替代不存在的Chat.CmdMsgBody
@@ -36,7 +37,7 @@ export function useListenerManager(): ListenerManagerReturn {
   // 获取Pinia store实例
   const chatClientStore = useChatClientStore();
   const callStateStore = useCallStateStore();
-  const client = chatClientStore.getChatClient as Chat.Connection;
+  // 移除静态client变量，改为在需要时动态获取
   const {
     sendBusyAnswerMessage,
     sendAlertMessage,
@@ -44,10 +45,15 @@ export function useListenerManager(): ListenerManagerReturn {
     sendConfirmCalleeMessage,
     sendAnswerMessage,
   } = useSignalManager();
+  
+  // 直接调用 useJoinChannel 获取加入频道的方法
+  const { joinChannel: joinRtcChannel } = useJoinChannel();
   /**
    * 处理通话邀请消息
    */
   const handleInvitationMessage = (message: Chat.TextMsgBody) => {
+    // 动态获取最新的client实例
+    const client = chatClientStore.getChatClient as Chat.Connection;
     if (!client) {
       logger.warn("ChatClient 未初始化，无法创建 ChatService 实例");
       return;
@@ -421,13 +427,14 @@ export function useListenerManager(): ListenerManagerReturn {
         callStateStore.type !== CALL_TYPE.VIDEO_MULTI &&
         callStateStore.type !== CALL_TYPE.AUDIO_MULTI
       ) {
-        logger.info("一对一通话，更新状态为 IN_CALL");
+        logger.info("一对一通话，更新状态为 IN_CALL并加入RTC频道");
         callStateStore.setCallStatus(CALL_STATUS.IN_CALL);
+        
+        // 主叫方收到接受后，加入RTC频道
+        joinRtcChannel().catch((error: any) => {
+          logger.error("主叫方加入RTC频道失败:", error);
+        });
       }
-      
-      // TODO: 这里需要加入 RTC 频道的逻辑
-      // 由于你提到 RTC 部分先不管，这里预留接口
-      // 实际应该调用类似: rtcService.joinChannel(callState.channel)
     }
   };
 
@@ -576,8 +583,10 @@ export function useListenerManager(): ListenerManagerReturn {
     // 这是被叫方的最终确认，此时双方都准备好进入通话
     callStateStore.setCallStatus(CALL_STATUS.IN_CALL);
     
-    // TODO: 这里需要加入 RTC 频道的逻辑
-    // 实际应该调用类似: rtcService.joinChannel(callState.channel)
+    // 被叫方加入RTC频道
+    joinRtcChannel().catch((error: any) => {
+      logger.error("被叫方加入RTC频道失败:", error);
+    });
   };
   //注册文本消息监听
   const mountTextMessageListener = () => {

@@ -35,6 +35,7 @@ export interface CallKitInstance {
 
 export interface ProviderConfig {
   chatClient?: Chat.Connection; // 可选，支持延迟初始化
+  agoraAppId?: string; // Agora AppId，用于RTC通话
   initConfig?: {
     debug?: boolean; // 开启调试模式
     enableRingtone?: boolean; // 开启铃声

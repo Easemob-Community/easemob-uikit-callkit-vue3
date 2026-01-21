@@ -37,6 +37,7 @@
   },
   "packageManager": "pnpm@10.10.0",
   "dependencies": {
+    "agora-rtc-sdk-ng": "^4.24.2",
     "easemob-websdk": "^4.16.0",
     "pinia": "^3.0.3"
   }

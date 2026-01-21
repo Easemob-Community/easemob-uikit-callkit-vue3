@@ -5,11 +5,12 @@
 </template>
 
 <script setup lang="ts">
-import { provide, watchEffect, computed } from 'vue'
+import { watchEffect, computed, onUnmounted } from 'vue'
 import type { ProviderConfig } from '../types'
 import { useListenerManager } from '../composables/useListenerManager';
 import { useChatClientStore } from '../store/chatClient';
 import { useCallStateStore } from '../store/callState';
+import { useRtcChannelStore } from '../store/rtcChannel';
 import { logger } from '../utils/logger';
 
 // 定义默认的initConfig对象
@@ -52,11 +53,13 @@ const globalConfig = computed(() => ({
   debug: effectiveInitConfig.debug,
 }));
 
-// 在 setup 顶层调用 provide
-provide('easemob-callkit-config', globalConfig);
-logger.debug('CallKit Provider 全局配置已提供给子组件');
+// 创建全局 store 实例
+const rtcChannelStore = useRtcChannelStore();
 
-// 使用合并后的配置
+// 在 setup 顶层创建 listenerManager
+const { mountTextMessageListener, mountSignalListener } = useListenerManager();
+
+// 先设置日志级别（必须在RTC初始化之前）
 watchEffect(() => {
   const callStateStore = useCallStateStore();
   callStateStore.inviteTimeout = effectiveInitConfig.inviteTimeout;
@@ -68,11 +71,22 @@ watchEffect(() => {
   logger.info(`CallKit Provider 初始化完成，配置: debug=${effectiveInitConfig.debug}, enableRingtone=${effectiveInitConfig.enableRingtone}`);
   logger.debug(`CallKit Provider 详细配置: inviteTimeout=${effectiveInitConfig.inviteTimeout}, resizable=${effectiveInitConfig.resizable}, draggable=${effectiveInitConfig.draggable}`);
   logger.verbose(`CallKit 当前日志级别: ${logger.getCurrentLevelName()}`);
-})
+});
+
+// 初始化RTC服务（在日志配置之后）
+watchEffect(async () => {
+  if (props.agoraAppId && !rtcChannelStore.rtcService) {
+    try {
+      await rtcChannelStore.initializeRtcService(props.agoraAppId);
+    } catch (error) {
+      // 错误已在store中记录
+    }
+  }
+});
 watchEffect(() => {
   if (chatClientStore.getChatClient) {
     logger.info('CallKit Provider 开始挂载事件监听器');
-    const { mountTextMessageListener, mountSignalListener } = useListenerManager();
+    // 使用已经在 setup 顶层创建的 listenerManager
     mountTextMessageListener();
     mountSignalListener();
     logger.debug('CallKit Provider 事件监听器挂载完成');
@@ -81,5 +95,9 @@ watchEffect(() => {
   }
 })
 
+// 组件卸载时清理RTC服务
+onUnmounted(async () => {
+  await rtcChannelStore.destroyRtcService();
+});
 
 </script>

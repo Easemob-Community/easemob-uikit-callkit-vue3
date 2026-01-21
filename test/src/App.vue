@@ -3,7 +3,7 @@
     <h1>Easemob Chat CallKit Vue3 演示</h1>
 
     <!-- 使用Provider包裹应用 - 开启debug模式以测试logger -->
-    <EasemobChatCallKitProvider :chat-client="chatClient" :init-config="{ inviteTimeout: 30000, debug: true }">
+    <EasemobChatCallKitProvider :chat-client="chatClient" :agora-app-id="'079c29108da649439a6f0b721a4212e4'" :init-config="{ inviteTimeout: 30000, debug: true }">
       <!-- 通话邀请通知 -->
       <InvitationNotification />
       

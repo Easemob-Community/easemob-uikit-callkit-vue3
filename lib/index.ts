@@ -9,6 +9,9 @@ import { useRtcChannelStore } from "./store/rtcChannel";
 import { useCallKit } from "./composables/useCallKit";
 import { useEndCall } from "./composables/useEndCall";
 import { useAnswerCall } from "./composables/useAnswerCall";
+import { useRtcService } from "./composables/useRtcService";
+import { useJoinChannel } from "./composables/useJoinChannel";
+import { RtcService } from "./services/RtcService";
 // 导出组件
 export {
   EasemobChatCallKitProvider,
@@ -20,7 +23,9 @@ export {
 // 导出store
 export { pinia, useCallStateStore, useRtcChannelStore };
 // 导出部分hook
-export { useCallKit, useEndCall, useAnswerCall };
+export { useCallKit, useEndCall, useAnswerCall, useRtcService, useJoinChannel };
+// 导出RTC服务
+export { RtcService };
 
 // 导出类型
 export type {
