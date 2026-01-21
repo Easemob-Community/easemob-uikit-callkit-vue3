@@ -122,34 +122,57 @@ export class ChatService {
           result: result || (ext as { result?: string })?.result || CALLKIT_CMD_MSG_RESULT_TYPE.ACCEPT,
         };
       }
+      case "leaveCall": {
+        return {
+          action: "leaveCall",
+          callId: callState.callId || "未从callState取到callId",
+          ts: Date.now(),
+          msgType: "rtcCallWithAgora",
+        };
+      }
       default:
         throw new Error(`未知的信令消息动作: ${action}`);
     }
   }
   /**
    * 发送文本消息
-   * @param targetId 接收方ID
-   * @param message 消息内容
+   * @param targetId 接收方ID（单聊）或接收方ID数组（群聊）
    * @param chatType 聊天类型
+   * @param message 消息内容
+   * @param groupId 群组ID（群聊时必须）
    */
   sendTextMessage(
-    targetId: string,
+    targetId: string | string[],
     chatType: Chat.ChatType,
-    message: string
+    message: string,
+    groupId?: string
   ): Promise<Chat.SendMsgResult> {
     if (!this.chatClient) {
       throw new Error("ChatClient未初始化");
     }
+    
+    // 判断是否为群组通话
+    const isGroupChat = Array.isArray(targetId);
+    const inviteExt = this.buildInviteMessageExt();
+    
     interface ITextInviteMessage extends Chat.CreateTextMsgParameters {
       ext: InviteSignalingExt;
+      receiverList?: string[];
     }
+    
     const options: ITextInviteMessage = {
       type: "txt",
-      to: targetId,
+      to: isGroupChat ? (groupId || "") : targetId as string,
       msg: message,
-      chatType,
-      ext: this.buildInviteMessageExt(),
+      chatType: isGroupChat ? "groupChat" : chatType,
+      ext: inviteExt,
     };
+    
+    // 如果是群组通话，添加 receiverList 定向消息
+    if (isGroupChat && Array.isArray(targetId)) {
+      options.receiverList = targetId;
+    }
+    
     const msg = ChatSDK.message.create(options);
     return new Promise((resolve, reject) => {
       this.chatClient

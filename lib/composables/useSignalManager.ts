@@ -6,9 +6,10 @@ import { CALLKIT_CMD_MSG_RESULT_TYPE } from "../types/callstate.types";
 
 export interface UseSignalManagerReturn {
   sendInviteMessage: (
-    targetId: string,
+    targetId: string | string[],
     chatType: Chat.ChatType,
-    message: string
+    message: string,
+    groupId?: string
   ) => Promise<Chat.SendMsgResult>;
   sendAnswerMessage: (
     targetId: string,
@@ -16,6 +17,11 @@ export interface UseSignalManagerReturn {
     result?: CALLKIT_CMD_MSG_RESULT_TYPE
   ) => Promise<Chat.SendMsgResult>;
   sendCancelMessage: (
+    to: string,
+    chatType: "singleChat" | "groupChat",
+    receiverList?: string[]
+  ) => Promise<Chat.SendMsgResult>;
+  sendLeaveMessage: (
     to: string,
     chatType: "singleChat" | "groupChat",
     receiverList?: string[]
@@ -59,17 +65,20 @@ export function useSignalManager(): UseSignalManagerReturn {
   
   /**
    * 发送通话邀请消息
-   * @param targetId 目标用户ID
+   * @param targetId 目标用户ID或用户ID数组（群组通话）
    * @param chatType 聊天类型（singleChat/groupChat）
    * @param message 邀请消息内容
+   * @param groupId 群组ID（群组通话时必须）
    */
   const sendInviteMessage = async (
-    targetId: string,
+    targetId: string | string[],
     chatType: Chat.ChatType,
-    message: string
+    message: string,
+    groupId?: string
   ): Promise<Chat.SendMsgResult> => {
+    const isGroupChat = Array.isArray(targetId);
     logger.debug(
-      `useSignalManager: 发送通话邀请消息，目标ID: ${targetId}, 聊天类型: ${chatType}`
+      `useSignalManager: 发送通话邀请消息，目标ID: ${isGroupChat ? `[群组: ${groupId}, 成员: ${targetId.length}]` : targetId}, 聊天类型: ${chatType}`
     );
 
     const client = getClient();
@@ -79,7 +88,8 @@ export function useSignalManager(): UseSignalManagerReturn {
       const result = await chatService.sendTextMessage(
         targetId,
         chatType,
-        message
+        message,
+        groupId
       );
       logger.info(
         `useSignalManager: 发送邀请消息成功，消息ID: ${result.serverMsgId}`
@@ -292,10 +302,49 @@ export function useSignalManager(): UseSignalManagerReturn {
     }
   };
 
+  /**
+   * 发送离开通话的信令
+   * @param to 目标用户ID或群组ID
+   * @param chatType 聊天类型（singleChat/groupChat）
+   * @param receiverList 接收者列表（群组通话时使用）
+   */
+  const sendLeaveMessage = async (
+    to: string,
+    chatType: "singleChat" | "groupChat",
+    receiverList?: string[]
+  ): Promise<Chat.SendMsgResult> => {
+    logger.debug(
+      `useSignalManager: 发送离开通话信令，目标ID: ${to}, 聊天类型: ${chatType}`
+    );
+
+    const client = getClient();
+    const chatService = new ChatService(client);
+
+    try {
+      const result = await chatService.sendSignalMessage(
+        to,
+        "leaveCall",
+        chatType as any,
+        {},
+        false,
+        undefined,
+        receiverList
+      );
+      logger.info(
+        `useSignalManager: 发送离开通话信令成功，消息ID: ${result.serverMsgId}`
+      );
+      return result;
+    } catch (error) {
+      logger.error(`useSignalManager: 发送离开通话信令失败:`, error);
+      throw error;
+    }
+  };
+
   return {
     sendInviteMessage,
     sendAnswerMessage,
     sendCancelMessage,
+    sendLeaveMessage,
     sendBusyAnswerMessage,
     sendAlertMessage,
     sendConfirmRingMessage,

@@ -5,7 +5,7 @@
 </template>
 
 <script setup lang="ts">
-import { provide, watchEffect } from 'vue'
+import { provide, watchEffect, computed } from 'vue'
 import type { ProviderConfig } from '../types'
 import { useListenerManager } from '../composables/useListenerManager';
 import { useChatClientStore } from '../store/chatClient';
@@ -43,6 +43,19 @@ const effectiveInitConfig = {
 logger.debug(`CallKit Provider 配置合并完成：默认配置 + 用户配置`);
 logger.verbose(`CallKit Provider 合并后的完整配置: ${JSON.stringify(effectiveInitConfig)}`);
 
+// 创建响应式的全局配置
+const globalConfig = computed(() => ({
+  enableRingtone: effectiveInitConfig.enableRingtone,
+  resizable: effectiveInitConfig.resizable,
+  draggable: effectiveInitConfig.draggable,
+  chatClient: props.chatClient,
+  debug: effectiveInitConfig.debug,
+}));
+
+// 在 setup 顶层调用 provide
+provide('easemob-callkit-config', globalConfig);
+logger.debug('CallKit Provider 全局配置已提供给子组件');
+
 // 使用合并后的配置
 watchEffect(() => {
   const callStateStore = useCallStateStore();
@@ -55,18 +68,6 @@ watchEffect(() => {
   logger.info(`CallKit Provider 初始化完成，配置: debug=${effectiveInitConfig.debug}, enableRingtone=${effectiveInitConfig.enableRingtone}`);
   logger.debug(`CallKit Provider 详细配置: inviteTimeout=${effectiveInitConfig.inviteTimeout}, resizable=${effectiveInitConfig.resizable}, draggable=${effectiveInitConfig.draggable}`);
   logger.verbose(`CallKit 当前日志级别: ${logger.getCurrentLevelName()}`);
-
-  // 提供全局配置
-  const globalConfig = {
-    enableRingtone: effectiveInitConfig.enableRingtone,
-    resizable: effectiveInitConfig.resizable,
-    draggable: effectiveInitConfig.draggable,
-    chatClient: props.chatClient,
-    debug: effectiveInitConfig.debug,
-  };
-  
-  provide('easemob-callkit-config', globalConfig);
-  logger.debug('CallKit Provider 全局配置已提供给子组件');
 })
 watchEffect(() => {
   if (chatClientStore.getChatClient) {

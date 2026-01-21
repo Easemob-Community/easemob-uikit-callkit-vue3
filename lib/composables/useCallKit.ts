@@ -47,34 +47,62 @@ export function useCallKit(): UseCallKitReturn {
       logger.error(`startSingleCall: 发送单人通话邀请信息失败:`, error);
     }
   };
-  const startGroupCall = (
+  const startGroupCall = async (
     groupId: string,
+    members: string[],
     type: "audio" | "video",
-    msg: string
+    msg: string,
+    groupName?: string,
+    groupAvatar?: string
   ) => {
-    logger.debug(`startGroupCall: 开始发起群组${type}通话，群组ID: ${groupId}`);
+    logger.debug(
+      `startGroupCall: 开始发起群组${type}通话，群组ID: ${groupId}，邀请成员数: ${members.length}`
+    );
 
     if (!chatClientStore.getChatClient) {
       logger.warn("ChatClient未初始化，请确保在Provider内使用");
       return;
     }
 
+    if (!members || members.length === 0) {
+      logger.warn("群组通话必须指定邀请成员列表");
+      return;
+    }
+
     try {
-      //设置当前通话状态为inviting
+      // 设置当前通话状态为inviting
       callStateStore.initInviteInfo({
+        groupId,
+        groupName,
+        groupAvatar,
         calleeUserId: groupId,
         type: type === "audio" ? CALL_TYPE.AUDIO_MULTI : CALL_TYPE.VIDEO_MULTI,
+        invitedMembers: members,
       });
 
       logger.verbose(`startGroupCall: 已初始化群组邀请信息，通话类型: ${type}`);
       logger.info(`startGroupCall: 准备发送群组通话邀请信息`);
 
-      // 注意：实际的群组通话邀请发送逻辑可能需要不同的实现
-      logger.verbose(
-        `startGroupCall: 群组通话邀请信息 - 群组ID: ${groupId}, 类型: ${type}, 消息: ${msg}`
-      );
+      // 使用信令管理器发送群组邀请消息
+      const { sendInviteMessage } = useSignalManager();
+      try {
+        const message = await sendInviteMessage(
+          members,
+          "groupChat" as any,
+          msg,
+          groupId
+        );
+        logger.info(
+          `startGroupCall: 发送群组通话邀请信息成功，消息ID: ${message.serverMsgId}`
+        );
+        logger.verbose(`startGroupCall: 邀请消息详情:`, message);
+      } catch (error) {
+        logger.error(`startGroupCall: 发送群组通话邀请信息失败:`, error);
+        throw error;
+      }
     } catch (error) {
       logger.error(`startGroupCall: 群组通话初始化失败:`, error);
+      throw error;
     }
   };
   return {

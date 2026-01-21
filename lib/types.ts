@@ -34,7 +34,7 @@ export interface CallKitInstance {
 }
 
 export interface ProviderConfig {
-  chatClient: Chat.Connection;
+  chatClient?: Chat.Connection; // 可选，支持延迟初始化
   initConfig?: {
     debug?: boolean; // 开启调试模式
     enableRingtone?: boolean; // 开启铃声
@@ -52,12 +52,15 @@ export interface UseCallKitReturn {
     targetId: string,
     type: "audio" | "video",
     msg: string
-  ) => void;
+  ) => Promise<void>;
   startGroupCall: (
     groupId: string,
+    members: string[],
     type: "audio" | "video",
-    msg: string
-  ) => void;
+    msg: string,
+    groupName?: string,
+    groupAvatar?: string
+  ) => Promise<void>;
 }
 
 // useEndCall 返回类型

@@ -87,7 +87,7 @@ export function useListenerManager(): ListenerManagerReturn {
       callerDevId: ext?.callerDevId,
       callerUserId: ext?.callerIMName || message.from,
       calleeUserId:
-        ext?.type === CALL_TYPE.VIDEO_MULTI ? ext?.groupId : message.to,
+        (ext?.type === CALL_TYPE.VIDEO_MULTI || ext?.type === CALL_TYPE.AUDIO_MULTI) ? ext?.groupId : message.to,
       groupId: ext?.callkitGroupInfo?.groupId,
       groupName: ext?.callkitGroupInfo?.groupName,
       groupAvatar: ext?.callkitGroupInfo?.groupAvatar,
@@ -190,7 +190,7 @@ export function useListenerManager(): ListenerManagerReturn {
       )
         .then(() => {
           //对方弹出邀请后，如超出设定则执行自定挂断
-          if (callStateStore.type !== CALL_TYPE.VIDEO_MULTI) {
+          if (callStateStore.type !== CALL_TYPE.VIDEO_MULTI && callStateStore.type !== CALL_TYPE.AUDIO_MULTI) {
             callStateStore.startTimeoutTimer(() => {
               logger.info(`确认响铃信令超时，通话已取消`);
               //TODO 取消通话
@@ -238,7 +238,7 @@ export function useListenerManager(): ListenerManagerReturn {
     }
     logger.debug(">>>>>>开始构建确认响铃信令消息");
     // 检查是否为群呼
-    if (currentCallInfo.type === CALL_TYPE.VIDEO_MULTI) {
+    if (currentCallInfo.type === CALL_TYPE.VIDEO_MULTI || currentCallInfo.type === CALL_TYPE.AUDIO_MULTI) {
       const joinedUserIds =
         currentCallInfo.joinedMembers?.map((member) =>
           currentCallInfo?.UIdToUserIdMap?.get(member.uid)
@@ -476,11 +476,25 @@ export function useListenerManager(): ListenerManagerReturn {
     logger.debug(`leaveCall信令消息详情:`, ext);
 
     // 校验callId是否匹配
+    // 特殊情况：如果当前状态为IDLE（可能刚被resetCallState重置），且是来自主叫方的leaveCall信令，直接忽略
     if (ext.callId !== callStateStore.getCallState.callId) {
       logger.warn(
         `leaveCall信令消息通话callId与当前通话callId不一致，leaveCall信令消息通话callId: ${ext.callId}，当前通话callId: ${callStateStore.getCallState.callId}`
       );
-      return;
+      
+      // 如果当前状态已经是IDLE，说明通话已经被其他信令（如cancelCall）结束，直接忽略
+      if (callStateStore.getCallStatus === CALL_STATUS.IDLE) {
+        logger.info("当前通话状态已为IDLE，忽略leaveCall信令");
+        return;
+      }
+      
+      // 如果当前还处于ALERTING状态（邀请弹窗），且leaveCall来自主叫方，也需要执行挂断关闭弹窗
+      if (callStateStore.getCallStatus === CALL_STATUS.ALERTING && message.from === callStateStore.getCallState.callerUserId) {
+        logger.info("当前处于ALERTING状态，且leaveCall来自主叫方，执行挂断关闭邀请弹窗");
+        // 继续执行下面的挂断逻辑
+      } else {
+        return;
+      }
     }
 
     // 清除超时定时器

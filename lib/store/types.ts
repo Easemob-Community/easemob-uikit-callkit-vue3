@@ -37,6 +37,7 @@ export interface INVITE_INFO {
   groupId?: string;
   groupName?: string;
   groupAvatar?: string;
+  invitedMembers?: string[]; // 群组通话邀请成员列表
 }
 export interface CallState extends CALL_INFO {
   // 基础状态

@@ -45,7 +45,7 @@ export const useCallStateStore = defineStore("callState", {
     },
     //初始化邀请信息状态创建
     initInviteInfo(inviteInfo: INVITE_INFO) {
-      const { type, calleeUserId, groupId, groupName, groupAvatar } =
+      const { type, calleeUserId, groupId, groupName, groupAvatar, invitedMembers } =
         inviteInfo;
       this.type = type;
       this.calleeUserId = calleeUserId;
@@ -57,6 +57,7 @@ export const useCallStateStore = defineStore("callState", {
         this.groupId = groupId || "";
         this.groupName = groupName || "";
         this.groupAvatar = groupAvatar || "";
+        this.invitedMembers = invitedMembers || [];
       }
       this.callId = generateRandomChannel(10);
       this.channel = generateRandomChannel(8);

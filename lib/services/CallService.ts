@@ -2,7 +2,7 @@
 import { useCallStateStore } from "../store/callState";
 import { useChatClientStore } from "../store/chatClient";
 import { useRtcChannelStore } from "../store/rtcChannel";
-import { HANGUP_REASON, CALL_STATUS } from "../types/callstate.types";
+import { HANGUP_REASON, CALL_STATUS, CALL_TYPE } from "../types/callstate.types";
 import { useSignalManager } from "../composables/useSignalManager";
 import { logger } from "../utils/logger";
 
@@ -103,12 +103,62 @@ export class CallService {
     reason: HANGUP_REASON
   ): Promise<void> {
     try {
-      const chatClient = this.chatClientStore.getChatClient;
-      if (chatClient && chatClient.sendHangupMessage) {
-        await chatClient.sendHangupMessage(reason);
+      const callState = this.callStateStore.getCallState;
+      if (!callState) {
+        logger.warn("CallService: 挂断失败，通话状态为空");
+        return;
       }
+
+      // 使用 useSignalManager 发送 leaveCall 信令
+      const { sendLeaveMessage } = useSignalManager();
+      
+      // 判断是群组通话还是一对一通话
+      const isGroupCall = 
+        callState.type === CALL_TYPE.VIDEO_MULTI || 
+        callState.type === CALL_TYPE.AUDIO_MULTI;
+      
+      if (isGroupCall) {
+        // 群组通话：发送群定向消息给通话中的其他人
+        if (!callState.groupId) {
+          logger.warn("CallService: 群组通话挂断失败，groupId 为空");
+          return;
+        }
+        
+        logger.info(
+          `CallService: 发送群组离开通话信令，群组: ${callState.groupId}`
+        );
+        
+        await sendLeaveMessage(
+          callState.groupId,
+          "groupChat"
+          // TODO: 这里应该传递 joinedMembers 的 userId 列表作为 receiverList
+          // 目前暂不实现，后续 RTC 接入后补充
+        );
+      } else {
+        // 一对一通话：发送单聊消息
+        const targetUserId = 
+          callState.calleeUserId && callState.calleeUserId !== this.chatClientStore.getChatClient?.user
+            ? callState.calleeUserId
+            : callState.callerUserId;
+        
+        if (!targetUserId) {
+          logger.warn("CallService: 一对一通话挂断失败，目标用户ID为空");
+          return;
+        }
+        
+        logger.info(
+          `CallService: 发送一对一离开通话信令，目标用户: ${targetUserId}`
+        );
+        
+        await sendLeaveMessage(
+          targetUserId,
+          "singleChat"
+        );
+      }
+      
+      logger.info("CallService: 离开通话信令发送成功");
     } catch (error) {
-      this.logger.error("Error sending hangup message:", error);
+      logger.error("CallService: 发送离开通话信令失败:", error);
       // 发送失败不影响后续流程
     }
   }
@@ -144,11 +194,11 @@ export class CallService {
   // 清理媒体资源
   private async cleanupMediaResources(): Promise<void> {
     try {
-      const activeChannel = this.rtcChannelStore.activeChannel;
-      // 通过activeChannel获取rtcClient
-      if (activeChannel?.rtcClient?.unpublishAll) {
-        await activeChannel.rtcClient.unpublishAll();
-      }
+      // TODO: RTC 媒体资源清理，等待 RTC 实现
+      // const activeChannel = this.rtcChannelStore.activeChannel;
+      // if (activeChannel?.rtcClient?.unpublishAll) {
+      //   await activeChannel.rtcClient.unpublishAll();
+      // }
     } catch (error) {
       this.logger.error("Error cleaning up media resources:", error);
     }
@@ -157,13 +207,11 @@ export class CallService {
   // 清理连接
   private async cleanupConnection(): Promise<void> {
     try {
-      const activeChannel = this.rtcChannelStore.activeChannel;
-
-      // 离开频道
-      if (activeChannel?.leave) await activeChannel.leave();
-      // 销毁客户端
-      if (activeChannel?.rtcClient?.destroy)
-        await activeChannel.rtcClient.destroy();
+      // TODO: RTC 连接清理，等待 RTC 实现
+      // const activeChannel = this.rtcChannelStore.activeChannel;
+      // if (activeChannel?.leave) await activeChannel.leave();
+      // if (activeChannel?.rtcClient?.destroy)
+      //   await activeChannel.rtcClient.destroy();
     } catch (error) {
       this.logger.error("Error cleaning up connection:", error);
     }

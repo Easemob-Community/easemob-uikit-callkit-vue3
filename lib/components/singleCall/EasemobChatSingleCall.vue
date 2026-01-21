@@ -57,9 +57,9 @@ const startCall = async () => {
 // 处理取消呼叫
 const { cancelCall } = useEndCall()
 const handleCancelCall = () => {
-  isCallActive.value = false
-  console.log('111111');
+  // 先调用取消逻辑,由CallService发送取消信令并重置状态
   cancelCall()
+  // 触发取消事件供外层使用
   emit('callCanceled')
 }
 

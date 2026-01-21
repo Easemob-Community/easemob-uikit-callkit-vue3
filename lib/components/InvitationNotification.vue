@@ -79,13 +79,23 @@ const callerAvatar = computed(() => {
 
 const callType = computed(() => {
   const type = callStateStore.getCallState.type
-  if (type === CALL_TYPE.VIDEO_1V1) return 'video'
-  if (type === CALL_TYPE.AUDIO_1V1) return 'audio'
+  if (type === CALL_TYPE.VIDEO_1V1 || type === CALL_TYPE.VIDEO_MULTI) return 'video'
+  if (type === CALL_TYPE.AUDIO_1V1 || type === CALL_TYPE.AUDIO_MULTI) return 'audio'
   return 'audio'
 })
 
+const isGroupCall = computed(() => {
+  const type = callStateStore.getCallState.type
+  return type === CALL_TYPE.VIDEO_MULTI || type === CALL_TYPE.AUDIO_MULTI
+})
+
 const callDescription = computed(() => {
-  return callType.value === 'video' ? '视频通话邀请' : '语音通话邀请'
+  const base = callType.value === 'video' ? '视频通话' : '语音通话'
+  if (isGroupCall.value) {
+    const groupName = callStateStore.getCallState.groupName
+    return `邀请您加入${groupName ? `「${groupName}」` : '群组'}${base}`
+  }
+  return `${base}邀请`
 })
 
 // 检查 ChatClient 是否已登录
