@@ -3,6 +3,8 @@ import { useCallStateStore } from "../store/callState";
 import { useChatClientStore } from "../store/chatClient";
 import { useRtcChannelStore } from "../store/rtcChannel";
 import { HANGUP_REASON, CALL_STATUS } from "../types/callstate.types";
+import { useSignalManager } from "../composables/useSignalManager";
+import { logger } from "../utils/logger";
 
 export class CallService {
   private logger = console;
@@ -114,18 +116,27 @@ export class CallService {
   // 取消呼叫策略
   private async handleCancelStrategy(): Promise<void> {
     try {
-      const chatClient = this.chatClientStore.getChatClient;
-      if (chatClient && chatClient.sendCancelMessage) {
-        const unjoinedMembers = this.callStateStore.getInvitedMembers || [];
-        if (unjoinedMembers.length > 0) {
-          await chatClient.sendCancelMessage(
-            HANGUP_REASON.CANCEL,
-            unjoinedMembers
-          );
-        }
+      const callState = this.callStateStore.getCallState;
+      if (!callState || !callState.calleeUserId) {
+        logger.warn("CallService: 取消通话失败，缺少被叫方信息");
+        return;
       }
+
+      // 使用 useSignalManager 发送 cancelCall 信令
+      const { sendCancelMessage } = useSignalManager();
+      
+      logger.info(
+        `CallService: 发送取消通话信令，目标用户: ${callState.calleeUserId}`
+      );
+      
+      await sendCancelMessage(
+        callState.calleeUserId,
+        "singleChat"
+      );
+      
+      logger.info("CallService: 取消通话信令发送成功");
     } catch (error) {
-      this.logger.error("Error sending cancel message:", error);
+      logger.error("CallService: 发送取消通话信令失败:", error);
       // 发送失败不影响后续流程
     }
   }
@@ -167,13 +178,11 @@ export class CallService {
         return;
       }
 
-      callStateStore.$patch({
-        status: CALL_STATUS.IDLE,
-        hangupReason: reason,
-      });
+      // 使用 resetCallState 方法重置状态
+      callStateStore.resetCallState();
 
       // 使用logger记录事件
-      this.logger.log("call-ended event:", { reason });
+      logger.log("call-ended event:", { reason });
     } catch (error) {
       this.logger.error("Error resetting state:", error);
     }
