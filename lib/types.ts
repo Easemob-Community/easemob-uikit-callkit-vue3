@@ -74,3 +74,13 @@ export interface UseEndCallReturn {
   canHangup: () => boolean;
   canCancel: () => boolean;
 }
+
+// useAnswerCall 返回类型
+export interface UseAnswerCallReturn {
+  // 接受通话
+  acceptCall: () => Promise<void>;
+  // 拒绝通话
+  rejectCall: () => Promise<void>;
+  // 忙碌拒绝通话
+  busyRejectCall: () => Promise<void>;
+}

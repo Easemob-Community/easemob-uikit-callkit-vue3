@@ -84,6 +84,10 @@ onMounted(() => {
   // 设置状态监听器
   stopStateWatch = callStateStore.$subscribe((_mutation, state) => {
     console.log('Call state changed:', state.status)
+    // 当状态变为IDLE时，触发callEnded事件关闭弹窗
+    if (state.status === CALL_STATUS.IDLE && isCallActive.value) {
+      handleEndCall()
+    }
   })
 })
 

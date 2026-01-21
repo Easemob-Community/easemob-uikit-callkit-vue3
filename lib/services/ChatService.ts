@@ -111,6 +111,17 @@ export class ChatService {
           msgType: "rtcCallWithAgora",
         };
       }
+      case "confirmCallee": {
+        return {
+          action: "confirmCallee",
+          ts: Date.now(),
+          msgType: "rtcCallWithAgora",
+          callerDevId: this.chatClient?.context.jid.clientResource || "",  // 主叫方的设备ID
+          calleeDevId: ext?.calleeDevId || "",  // 被叫方的设备ID（从answerCall信令中获取）
+          callId: ext?.callId || callState.callId || "",
+          result: result || (ext as { result?: string })?.result || CALLKIT_CMD_MSG_RESULT_TYPE.ACCEPT,
+        };
+      }
       default:
         throw new Error(`未知的信令消息动作: ${action}`);
     }

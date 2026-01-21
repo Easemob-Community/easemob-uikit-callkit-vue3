@@ -11,6 +11,7 @@ import {
 } from "../types/callstate.types";
 import type { SignalingExt } from "../types/signal.types";
 import { useSignalManager } from "./useSignalManager";
+import { CallService } from "../services/CallService";
 
 // 定义CmdMsgBody接口以替代不存在的Chat.CmdMsgBody
 export interface CmdMsgBody {
@@ -41,6 +42,7 @@ export function useListenerManager(): ListenerManagerReturn {
     sendAlertMessage,
     sendConfirmRingMessage,
     sendConfirmCalleeMessage,
+    sendAnswerMessage,
   } = useSignalManager();
   /**
    * 处理通话邀请消息
@@ -148,10 +150,13 @@ export function useListenerManager(): ListenerManagerReturn {
         handleAnswerCallMessage(message);
         break;
       case "confirmCallee":
+        handleConfirmCalleeMessage(message);
         break;
       case "cancelCall":
+        handleCancelCallMessage(message);
         break;
       case "leaveCall":
+        handleLeaveCallMessage(message);
         break;
       default:
         logger.warn(`未知信令消息类型: ${ext.action}`);
@@ -261,24 +266,25 @@ export function useListenerManager(): ListenerManagerReturn {
   /**
    * 处理确认响铃信令消息
    * @param message 收到的确认响铃信令消息
-   * @description 处理确认响铃信令消息（场景为：收到确认响铃信令消息后，整体判定状态暂无任何问题即向对方发送confirmCallee信令）
+   * @description 处理确认响铃信令消息（场景为：主叫方收到被叫方的confirmRing信令消息后，整体判定状态暂无任何问题）
    */
   const handleConfirmRingSignalMessage = (message: CmdMsgBody) => {
     const { ext } = message;
-    if (ext?.calleeDevId !== chatClientStore.getClientDeviceId) {
+    // 主叫方收到被叫方的confirmRing，应该检查callerDevId是否匹配当前设备
+    if (ext?.callerDevId !== chatClientStore.getClientDeviceId) {
       //多端情况下的其他设备消息
       logger.warn(
-        `[handleConfirmRingSignalMessage]多端情况下的其他设备消息，不处理确认响铃信令消息,deviceId: ${chatClientStore.getClientDeviceId}`
+        `[handleConfirmRingSignalMessage]多端情况下的其他设备消息，不处理确认响铃信令消息,deviceId: ${chatClientStore.getClientDeviceId}, callerDevId: ${ext?.callerDevId}`
       );
       return; // 多端情况下的其他设备消息
     }
-    if (ext?.callerDevId !== callStateStore.getCallState.callerDevId) {
-      // 主叫有两个设备
+    if (ext?.calleeDevId !== callStateStore.getCallState.calleeDevId) {
+      // 被叫有两个设备
       // 多端情况下的其他设备消息
       logger.warn(
-        `[handleConfirmRingSignalMessage]主叫有两个设备，多端情况下的其他设备消息，不处理确认响铃信令消息,deviceId: ${chatClientStore.getClientDeviceId}`
+        `[handleConfirmRingSignalMessage]被叫有两个设备，多端情况下的其他设备消息，不处理确认响铃信令消息,calleeDevId: ${ext?.calleeDevId}, expected: ${callStateStore.getCallState.calleeDevId}`
       );
-      return; // 确认响铃信令消息主叫设备ID与当前通话主叫设备ID不一致
+      return; // 确认响铃信令消息被叫设备ID与当前通话被叫设备ID不一致
     }
     //当前如果有通话计时器，清除它
     if (callStateStore.getInviteTimeoutTimer) {
@@ -363,6 +369,7 @@ export function useListenerManager(): ListenerManagerReturn {
       const confirmCalleePayload = {
         callId: ext.callId,
         callerDevId: ext.callerDevId,
+        calleeDevId: ext.calleeDevId,  // 必须包含calleeDevId，iOS端需要用来验证设备
         result: ext.result,
       };
       sendConfirmCalleeMessage(
@@ -385,13 +392,21 @@ export function useListenerManager(): ListenerManagerReturn {
         callStateStore.updateInvitedMembers(invitedMembers);
       } else {
         //一对一通话执行挂断
-        //TODO huang 挂断通话
+        logger.info("收到对方拒绝，执行挂断操作");
+        const callService = new CallService();
+        callService.handleRemoteRefuse().catch((err) => {
+          logger.error("执行挂断失败:", err);
+        });
       }
     } else {
+      // 对方接受通话
+      logger.info("收到对方接受，开始进入通话流程");
+      
       // 发送confirmCallee信令，通知对方已确认收到接受信息
       const confirmCalleePayload = {
         callId: ext.callId,
         callerDevId: ext.callerDevId,
+        calleeDevId: ext.calleeDevId,  // 必须包含calleeDevId，iOS端需要用来验证设备
         result: "accept",
       };
       sendConfirmCalleeMessage(
@@ -400,7 +415,155 @@ export function useListenerManager(): ListenerManagerReturn {
       ).catch(() => {
         // 错误已在useSignalManager内部记录
       });
+
+      // 更新通话状态为 IN_CALL (对于一对一通话)
+      if (
+        callStateStore.type !== CALL_TYPE.VIDEO_MULTI &&
+        callStateStore.type !== CALL_TYPE.AUDIO_MULTI
+      ) {
+        logger.info("一对一通话，更新状态为 IN_CALL");
+        callStateStore.setCallStatus(CALL_STATUS.IN_CALL);
+      }
+      
+      // TODO: 这里需要加入 RTC 频道的逻辑
+      // 由于你提到 RTC 部分先不管，这里预留接口
+      // 实际应该调用类似: rtcService.joinChannel(callState.channel)
     }
+  };
+
+  /**
+   * 处理cancelCall信令消息
+   * @param message 收到的cancelCall信令消息
+   * @description 处理取消通话信令消息
+   */
+  const handleCancelCallMessage = (message: CmdMsgBody) => {
+    const ext = message.ext;
+    if (!ext) {
+      logger.warn("信令消息体中无扩展信息");
+      return;
+    }
+    logger.info(`收到cancelCall信令消息，发送方: ${message.from || "未知"}`);
+    logger.debug(`cancelCall信令消息详情:`, ext);
+
+    // 校验callId是否匹配
+    if (ext.callId !== callStateStore.getCallState.callId) {
+      logger.warn(
+        `cancelCall信令消息通话callId与当前通话callId不一致，cancelCall信令消息通话callId: ${ext.callId}，当前通话callId: ${callStateStore.getCallState.callId}`
+      );
+      return;
+    }
+
+    // 对方取消了通话，执行挂断
+    logger.info("收到对方取消通话，执行挂断操作");
+    const callService = new CallService();
+    callService.handleRemoteCancel().catch((err) => {
+      logger.error("执行挂断失败:", err);
+    });
+  };
+
+  /**
+   * 处理leaveCall信令消息
+   * @param message 收到的leaveCall信令消息
+   * @description 处理对方离开通话的信令，销毁并重置当前通话状态
+   */
+  const handleLeaveCallMessage = (message: CmdMsgBody) => {
+    const ext = message.ext;
+    if (!ext) {
+      logger.warn("信令消息体中无扩展信息");
+      return;
+    }
+    logger.info(`收到leaveCall信令消息，发送方: ${message.from || "未知"}`);
+    logger.debug(`leaveCall信令消息详情:`, ext);
+
+    // 校验callId是否匹配
+    if (ext.callId !== callStateStore.getCallState.callId) {
+      logger.warn(
+        `leaveCall信令消息通话callId与当前通话callId不一致，leaveCall信令消息通话callId: ${ext.callId}，当前通话callId: ${callStateStore.getCallState.callId}`
+      );
+      return;
+    }
+
+    // 清除超时定时器
+    if (callStateStore.getInviteTimeoutTimer) {
+      callStateStore.clearTimeoutTimer();
+    }
+
+    // 对方离开通话，销毁并重置当前通话状态
+    logger.info("收到对方离开通话信令，销毁并重置当前通话状态");
+    const callService = new CallService();
+    callService.hangup(HANGUP_REASON.HANGUP).catch((err) => {
+      logger.error("执行挂断失败:", err);
+    });
+  };
+
+  /**
+   * 处理confirmCallee信令消息
+   * @param message 收到的confirmCallee信令消息
+   * @description 主叫方收到被叫方的confirmCallee确认信令，检查是否成功建立通话
+   */
+  const handleConfirmCalleeMessage = (message: CmdMsgBody) => {
+    const ext = message.ext;
+    if (!ext) {
+      logger.warn("信令消息体中无扩展信息");
+      return;
+    }
+    logger.info(
+      `收到confirmCallee信令消息，发送方: ${message.from || "未知"}`
+    );
+    logger.debug(`confirmCallee信令消息详情:`, ext);
+
+    // 当前已经在通话中，忽略 confirmCallee 消息，不挂断当前通话
+    if (callStateStore.getCallStatus === CALL_STATUS.IN_CALL) {
+      logger.debug(
+        "当前已在通话中，忽略confirmCallee信令消息"
+      );
+      return;
+    }
+
+    // 校验callId是否匹配
+    if (ext.callId !== callStateStore.getCallState.callId) {
+      logger.warn(
+        `confirmCallee信令消息通话callId与当前通话callId不一致，confirmCallee信令消息通话callId: ${ext.callId}，当前通话callId: ${callStateStore.getCallState.callId}`
+      );
+      return;
+    }
+
+    // 收到其他设备的 confirmCallee 消息，挂断当前通话
+    if (ext.calleeDevId !== chatClientStore.getClientDeviceId) {
+      logger.warn(
+        `收到其他设备的confirmCallee消息，挂断当前通话，calleeDevId: ${ext.calleeDevId}，当前设备ID: ${chatClientStore.getClientDeviceId}`
+      );
+      const callService = new CallService();
+      callService
+        .hangup(HANGUP_REASON.HANDLE_ON_OTHER_DEVICE)
+        .catch((err) => {
+          logger.error("执行挂断失败:", err);
+        });
+      return;
+    }
+
+    // 收到拒绝或忙线的 confirmCallee 消息，挂断通话
+    if (ext.result !== "accept") {
+      const reason =
+        ext.result === "busy" ? HANGUP_REASON.BUSY : HANGUP_REASON.REFUSE;
+      logger.warn(`收到拒绝或忙线的confirmCallee消息，挂断通话，reason: ${reason}`);
+      const callService = new CallService();
+      callService.hangup(reason).catch((err) => {
+        logger.error("执行挂断失败:", err);
+      });
+      return;
+    }
+
+    // 收到接受的 confirmCallee 消息，更新状态为CONFIRM_CALLEE并加入通话
+    logger.info("收到接受的confirmCallee消息，通话确认成功，准备加入通话");
+    callStateStore.setCallStatus(CALL_STATUS.CONFIRM_CALLEE);
+    
+    // 被叫方收到confirmCallee后，应该更新为IN_CALL状态（与主叫方保持一致）
+    // 这是被叫方的最终确认，此时双方都准备好进入通话
+    callStateStore.setCallStatus(CALL_STATUS.IN_CALL);
+    
+    // TODO: 这里需要加入 RTC 频道的逻辑
+    // 实际应该调用类似: rtcService.joinChannel(callState.channel)
   };
   //注册文本消息监听
   const mountTextMessageListener = () => {

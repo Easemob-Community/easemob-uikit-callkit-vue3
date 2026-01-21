@@ -4,6 +4,9 @@
 
     <!-- 使用Provider包裹应用 - 开启debug模式以测试logger -->
     <EasemobChatCallKitProvider :chat-client="chatClient" :init-config="{ inviteTimeout: 30000, debug: true }">
+      <!-- 通话邀请通知 -->
+      <InvitationNotification />
+      
       <div class="demo-section">
         <h2>功能演示</h2>
 
@@ -53,6 +56,9 @@
 
         <div class="status-display" v-if="currentCallInfo">
           <p>{{ currentCallInfo }}</p>
+          <button @click="handleEndCall" class="btn end-call-btn">
+            结束通话
+          </button>
         </div>
       </div>
     </EasemobChatCallKitProvider>
@@ -62,7 +68,13 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import SDK from 'easemob-websdk'
-import { useCallKit } from 'easemob-chat-callkit-vue3'
+import { useCallStateStore } from '../../lib/store/callState'
+import { CallService } from '../../lib/services/CallService'
+import { HANGUP_REASON } from '../../lib/types/callstate.types'
+import { useCallKit } from '../../lib/composables/useCallKit'
+import InvitationNotification from '../../lib/components/InvitationNotification.vue'
+import EasemobChatSingleCall from '../../lib/components/singleCall/EasemobChatSingleCall.vue'
+import EasemobChatMultiCall from '../../lib/components/EasemobChatMultiCall.vue'
 // 状态管理
 const targetUserId = ref('')
 const groupId = ref('')
@@ -118,11 +130,15 @@ const startCall = (type: 'audio' | 'video') => {
     alert('环信客户端未初始化')
     return
   }
+  
   singleCallType.value = type
   showSingleCall.value = true
   showMultiCall.value = false
-  currentCallInfo.value = `单人${type === 'audio' ? '语音' : '视频'}通话: ${targetUserId.value}`;
-
+  currentCallInfo.value = `单人${type === 'audio' ? '语音' : '视频'}通话: ${targetUserId.value}`
+  
+  // 发送通话邀请信令
+  const inviteMessage = type === 'audio' ? '邀请您进行语音通话' : '邀请您进行视频通话'
+  startSingleCall(targetUserId.value, type, inviteMessage)
 }
 
 const startMultiCall = (type: 'audio' | 'video') => {
@@ -141,9 +157,7 @@ const startMultiCall = (type: 'audio' | 'video') => {
 }
 
 const handleSingleCallStart = () => {
-  console.log('单人通话开始')
-  startCall(singleCallType.value)
-  startSingleCall(targetUserId.value, singleCallType.value)
+  console.log('单人通话已显示界面')
 }
 
 const handleSingleCallEnd = () => {
@@ -185,6 +199,24 @@ const handleLogin = () => {
     console.error('登录失败:', error)
     alert(`登录失败: ${error.message || '未知错误'}`)
   })
+}
+
+// 结束通话处理函数
+const handleEndCall = () => {
+  console.log('用户主动结束通话')
+  const callService = new CallService()
+  callService.hangup(HANGUP_REASON.HANGUP)
+    .then(() => {
+      console.log('通话已结束')
+      showSingleCall.value = false
+      showMultiCall.value = false
+      currentCallInfo.value = ''
+      alert('通话已结束')
+    })
+    .catch((error) => {
+      console.error('结束通话失败:', error)
+      alert('结束通话失败')
+    })
 }
 </script>
 
@@ -285,5 +317,15 @@ const handleLogin = () => {
   background-color: #e3f2fd;
   border-radius: 4px;
   color: #1976d2;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.end-call-btn {
+  background-color: #dc3545;
+  color: white;
+  padding: 8px 16px;
+  align-self: flex-start;
 }
 </style>

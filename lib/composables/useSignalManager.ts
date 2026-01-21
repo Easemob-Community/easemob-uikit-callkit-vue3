@@ -10,7 +10,11 @@ export interface UseSignalManagerReturn {
     chatType: Chat.ChatType,
     message: string
   ) => Promise<Chat.SendMsgResult>;
-  sendAnswerMessage: (targetId: string, payload: any) => Promise<void>;
+  sendAnswerMessage: (
+    targetId: string,
+    payload: any,
+    result?: CALLKIT_CMD_MSG_RESULT_TYPE
+  ) => Promise<Chat.SendMsgResult>;
   sendCancelMessage: (
     to: string,
     chatType: "singleChat" | "groupChat",
@@ -39,7 +43,20 @@ export interface UseSignalManagerReturn {
  */
 export function useSignalManager(): UseSignalManagerReturn {
   const chatClientStore = useChatClientStore();
-  const client = chatClientStore.getChatClient as Chat.Connection;
+  
+  /**
+   * 获取当前的 ChatClient 实例
+   * 每次调用都获取最新的 client，确保获取到登录后的实例
+   */
+  const getClient = (): Chat.Connection => {
+    const client = chatClientStore.getChatClient as Chat.Connection;
+    if (!client) {
+      logger.warn("ChatClient未初始化，请确保在Provider内使用");
+      throw new Error("ChatClient未初始化");
+    }
+    return client;
+  };
+  
   /**
    * 发送通话邀请消息
    * @param targetId 目标用户ID
@@ -55,11 +72,7 @@ export function useSignalManager(): UseSignalManagerReturn {
       `useSignalManager: 发送通话邀请消息，目标ID: ${targetId}, 聊天类型: ${chatType}`
     );
 
-    if (!client) {
-      logger.warn("ChatClient未初始化，请确保在Provider内使用");
-      throw new Error("ChatClient未初始化");
-    }
-
+    const client = getClient();
     const chatService = new ChatService(client);
 
     try {
@@ -78,7 +91,42 @@ export function useSignalManager(): UseSignalManagerReturn {
     }
   };
 
-  const sendAnswerMessage = async () => {};
+  /**
+   * 被叫方发送answerCall信令
+   * @param targetId 目标用户ID
+   * @param payload answerCall相关信息
+   * @param result 通话结果 (accept/refuse/busy)
+   */
+  const sendAnswerMessage = async (
+    targetId: string,
+    payload: any,
+    result: CALLKIT_CMD_MSG_RESULT_TYPE = CALLKIT_CMD_MSG_RESULT_TYPE.ACCEPT
+  ): Promise<Chat.SendMsgResult> => {
+    logger.debug(
+      `useSignalManager: 发送answerCall信令，目标ID: ${targetId}, 结果: ${result}`
+    );
+
+    const client = getClient();
+    const chatService = new ChatService(client);
+
+    try {
+      const result_sendSignal = await chatService.sendSignalMessage(
+        targetId,
+        "answerCall",
+        "singleChat" as any,
+        payload,
+        true,
+        result
+      );
+      logger.info(
+        `useSignalManager: 发送answerCall信令成功，消息ID: ${result_sendSignal.serverMsgId}`
+      );
+      return result_sendSignal;
+    } catch (error) {
+      logger.error(`useSignalManager: 发送answerCall信令失败:`, error);
+      throw error;
+    }
+  };
   /**
    * 发送取消通话邀请的信令
    * @param targetId 目标用户ID
@@ -93,11 +141,7 @@ export function useSignalManager(): UseSignalManagerReturn {
       `useSignalManager: 发送取消通话邀请信令，目标ID: ${to}, 聊天类型: ${chatType}`
     );
 
-    if (!client) {
-      logger.warn("ChatClient未初始化，请确保在Provider内使用");
-      throw new Error("ChatClient未初始化");
-    }
-
+    const client = getClient();
     const chatService = new ChatService(client);
 
     try {
@@ -132,11 +176,7 @@ export function useSignalManager(): UseSignalManagerReturn {
       `useSignalManager: 发送忙碌拒绝通话邀请信令，目标ID: ${targetId}`
     );
 
-    if (!client) {
-      logger.warn("ChatClient未初始化，请确保在Provider内使用");
-      throw new Error("ChatClient未初始化");
-    }
-
+    const client = getClient();
     const chatService = new ChatService(client);
 
     try {
@@ -167,11 +207,7 @@ export function useSignalManager(): UseSignalManagerReturn {
   ): Promise<Chat.SendMsgResult> => {
     logger.debug(`useSignalManager: 发送alerting信令，目标ID: ${targetId}`);
 
-    if (!client) {
-      logger.warn("ChatClient未初始化，请确保在Provider内使用");
-      throw new Error("ChatClient未初始化");
-    }
-
+    const client = getClient();
     const chatService = new ChatService(client);
 
     try {
@@ -203,11 +239,7 @@ export function useSignalManager(): UseSignalManagerReturn {
   ): Promise<Chat.SendMsgResult> => {
     logger.debug(`useSignalManager: 发送确认响铃信令，目标ID: ${targetId}`);
 
-    if (!client) {
-      logger.warn("ChatClient未初始化，请确保在Provider内使用");
-      throw new Error("ChatClient未初始化");
-    }
-
+    const client = getClient();
     const chatService = new ChatService(client);
 
     try {
@@ -240,11 +272,7 @@ export function useSignalManager(): UseSignalManagerReturn {
       `useSignalManager: 发送确认被叫方状态信令，目标ID: ${targetId}`
     );
 
-    if (!client) {
-      logger.warn("ChatClient未初始化，请确保在Provider内使用");
-      throw new Error("ChatClient未初始化");
-    }
-
+    const client = getClient();
     const chatService = new ChatService(client);
 
     try {
