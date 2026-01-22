@@ -247,12 +247,8 @@ export class CallService {
         
       logger.info('CallService: 已离开 RTC 频道')
   
-      // 清理 rtcChannelStore 中的状态
-      this.rtcChannelStore.setAudioEnabled(false)
-      this.rtcChannelStore.setVideoEnabled(false)
-      this.rtcChannelStore.setLocalStream(null)
-      // isConnected 是 state 属性，直接赋值
-      this.rtcChannelStore.isConnected = false
+      // 使用 rtcChannelStore 的 reset 方法完整清理所有 RTC 状态
+      this.rtcChannelStore.reset()
         
       logger.info('CallService: RTC 连接清理完成')
     } catch (error) {

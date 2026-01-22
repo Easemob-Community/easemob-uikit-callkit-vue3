@@ -16,7 +16,10 @@ export const useRtcChannelStore = defineStore('rtcChannel', {
     audioEnabled: true,
     videoEnabled: true,
     rtcService: null as RtcService | null, // RTC服务实例
-    agoraAppId: null as string | null // Agora AppId
+    agoraAppId: null as string | null, // Agora AppId
+    callDuration: 0, // 通话时长（秒）
+    callStartTime: 0, // 通话开始时间戳
+    _timer: null as any // 内部定时器
   }),
   
   /**
@@ -49,6 +52,20 @@ export const useRtcChannelStore = defineStore('rtcChannel', {
      */
     getRtcService(): any {
       return this.rtcService
+    },
+    
+    /**
+     * 获取格式化的通话时长
+     */
+    formattedCallDuration(): string {
+      const hours = Math.floor(this.callDuration / 3600)
+      const minutes = Math.floor((this.callDuration % 3600) / 60)
+      const seconds = this.callDuration % 60
+      
+      if (hours > 0) {
+        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+      }
+      return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
     }
   },
   
@@ -207,16 +224,74 @@ export const useRtcChannelStore = defineStore('rtcChannel', {
     },
     
     /**
+     * 开始通话计时
+     */
+    startCallTimer() {
+      if (this._timer) {
+        clearInterval(this._timer)
+      }
+      this.callStartTime = Date.now()
+      this.callDuration = 0
+      
+      this._timer = setInterval(() => {
+        this.updateCallDuration()
+      }, 1000)
+    },
+    
+    /**
+     * 更新通话时长（内部调用）
+     */
+    updateCallDuration() {
+      if (this.callStartTime === 0) return
+      this.callDuration = Math.floor((Date.now() - this.callStartTime) / 1000)
+    },
+    
+    /**
+     * 停止通话计时
+     */
+    stopCallTimer() {
+      if (this._timer) {
+        clearInterval(this._timer)
+        this._timer = null
+      }
+      this.callStartTime = 0
+      this.callDuration = 0
+    },
+    
+    /**
      * 重置所有RTC频道状态
      */
     reset() {
+      // 停止并清理本地流的所有轨道
+      if (this.localStream) {
+        this.localStream.getTracks().forEach(track => {
+          track.stop()
+          logger.debug('本地轨道已停止:', track.kind)
+        })
+      }
+      
+      // 停止并清理所有远程流的轨道
+      Object.entries(this.remoteStreams).forEach(([userId, stream]) => {
+        if (stream instanceof MediaStream) {
+          stream.getTracks().forEach(track => {
+            track.stop()
+            logger.debug(`远程轨道已停止 (${userId}):`, track.kind)
+          })
+        }
+      })
+      
       this.channels = {}
       this.activeChannelId = null
       this.isConnected = false
       this.localStream = null
       this.remoteStreams = {}
-      this.audioEnabled = true
       this.videoEnabled = true
+      this.callDuration = 0
+      this.callStartTime = 0
+      if (this._timer) {
+        clearInterval(this._timer)
+        this._timer = null
+      }
     }
   }
 })

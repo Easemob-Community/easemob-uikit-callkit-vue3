@@ -50,6 +50,8 @@ export interface CallState extends CALL_INFO {
   //超时定时器
   inviteTimeoutTimer?: NodeJS.Timeout | null;
   UIdToUserIdMap?: Map<string, string>; // UID到用户ID的映射
+  // 窗口模式状态
+  isMinimized?: boolean; // 是否为小窗口模式
 }
 
 // RTC频道状态类型
@@ -63,6 +65,9 @@ export interface RtcChannelState {
   videoEnabled: boolean;
   rtcService: any; // RTC服务实例(使用any避免Pinia类型推断问题)
   agoraAppId: string | null; // Agora AppId
+  callDuration: number; // 通话时长（秒）
+  callStartTime: number; // 通话开始时间戳
+  _timer?: any; // 内部定时器
 }
 
 // RTC频道信息类型

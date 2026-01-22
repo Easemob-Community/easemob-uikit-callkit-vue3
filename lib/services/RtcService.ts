@@ -94,15 +94,29 @@ export class RtcService {
   }
 
   /**
+   * 更新 appId（支持动态更新）
+   */
+  setAppId(appId: string): void {
+    this.appId = appId
+    logger.debug('RtcService: appId 已更新为', appId)
+  }
+
+  /**
    * 加入频道
    */
   async joinChannel(
     channelName: string,
     token: string | null,
-    uid: number
+    uid: number,
+    appId?: string  // 支持传入动态 appId
   ): Promise<number> {
     if (!this.client) {
       throw new Error('RTC client not initialized')
+    }
+
+    // 如果传入了 appId，更新本地 appId
+    if (appId) {
+      this.setAppId(appId)
     }
 
     try {
@@ -113,7 +127,7 @@ export class RtcService {
         uid
       )
       
-      logger.info('Joined RTC channel:', { channelName, uid: this.agoraUid })
+      logger.info('Joined RTC channel:', { channelName, uid: this.agoraUid, appId: this.appId })
       return this.agoraUid
     } catch (error) {
       logger.error('Failed to join channel:', error)
@@ -559,13 +573,37 @@ export class RtcService {
     try {
       await this.leaveChannel()
       
+      // 清理并停止所有远程轨道
+      this.remoteVideoTracks.forEach((track, userId) => {
+        try {
+          track.stop()
+          logger.debug('远程视频轨道已停止:', userId)
+        } catch (error) {
+          logger.warn('停止远程视频轨道失败:', error)
+        }
+      })
+      this.remoteVideoTracks.clear()
+      
+      this.remoteAudioTracks.forEach((track, userId) => {
+        try {
+          track.stop()
+          logger.debug('远程音频轨道已停止:', userId)
+        } catch (error) {
+          logger.warn('停止远程音频轨道失败:', error)
+        }
+      })
+      this.remoteAudioTracks.clear()
+      
       if (this.client) {
         this.client.removeAllListeners()
         this.client = null
       }
       
-      this.remoteVideoTracks.clear()
-      this.remoteAudioTracks.clear()
+      // 重置状态标志
+      this.isAudioEnabled = true
+      this.isVideoEnabled = true
+      this.agoraUid = 0
+      this.currentCameraDeviceId = null
       
       logger.info('RtcService destroyed')
     } catch (error) {

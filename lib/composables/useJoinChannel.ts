@@ -128,12 +128,18 @@ export function useJoinChannel(): UseJoinChannelReturn {
         agoraUid
       })
       
-      // 加入频道,使用获取的token和uid
-      const uid = await rtcService.joinChannel(callState.channel, accessToken, agoraUid)
+      // 加入频道,使用获取的token和uid，以及动态获取的appId
+      const uid = await rtcService.joinChannel(
+        callState.channel, 
+        accessToken, 
+        agoraUid,
+        agoraAppId || undefined  // 传入动态获取的 appId
+      )
       logger.info('成功加入RTC频道', { 
         channel: callState.channel, 
         uid,
-        agoraUid 
+        agoraUid,
+        appId: agoraAppId 
       })
       
       // 创建并发布音视频轨道
@@ -158,7 +164,10 @@ export function useJoinChannel(): UseJoinChannelReturn {
       // 更新store状态
       rtcChannelStore.isConnected = true
       rtcChannelStore.setActiveChannel(callState.channel)
-      logger.info('RTC频道状态更新完成')
+      
+      // 启动通话计时
+      rtcChannelStore.startCallTimer()
+      logger.info('RTC频道状态更新完成，通话计时已启动')
       
     } catch (error) {
       logger.error('加入RTC频道失败:', error)

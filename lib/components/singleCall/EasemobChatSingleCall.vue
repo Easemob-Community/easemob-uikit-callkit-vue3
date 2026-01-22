@@ -1,11 +1,28 @@
 <template>
-  <div class="easemob-chat-single-call">
-    <!-- 待接听状态子组件 -->
-    <EasemobChatCallWaiting v-if="callStatus === CALL_STATUS.INVITING" :targetUser="props.targetUser" :type="props.type"
-      @cancel="handleCancelCall" @switchToVideo="handleSwitchToVideo" />
+  <div>
+    <!-- 大窗口模式 -->
+    <div v-if="!isMinimized" class="easemob-chat-single-call">
+      <!-- 待接听状态子组件 -->
+      <EasemobChatCallWaiting v-if="callStatus === CALL_STATUS.INVITING" :targetUser="props.targetUser" :type="props.type"
+        @cancel="handleCancelCall" @switchToVideo="handleSwitchToVideo" />
 
-    <!-- 通话中状态子组件 -->
-    <EasemobChatCallStream v-else :type="props.type" @ended="handleEndCall" />
+      <!-- 通话中状态子组件 -->
+      <EasemobChatCallStream v-else :type="props.type" @ended="handleEndCall" />
+      
+      <!-- 最小化按钮 -->
+      <button v-if="callStatus !== CALL_STATUS.INVITING" class="minimize-btn" @click="handleMinimize" title="最小化">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+    
+    <!-- 小窗口模式 -->
+    <EasemobChatMiniWindow 
+      v-if="isMinimized" 
+      @expand="handleExpand" 
+      @close="handleEndCall"
+    />
   </div>
 </template>
 
@@ -13,9 +30,9 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useCallStateStore } from '../../store/callState'
 import { CALL_STATUS } from '../../types/callstate.types'
-import { useEndCall } from '../../composables/useEndCall'
 import EasemobChatCallWaiting from './EasemobChatCallWaiting.vue'
 import EasemobChatCallStream from './EasemobChatCallStream.vue'
+import EasemobChatMiniWindow from '../EasemobChatMiniWindow.vue'
 
 interface Props {
   targetUser: string
@@ -40,6 +57,24 @@ const isCallActive = ref(false)
 // 计算属性 - 获取当前通话状态
 const callStatus = computed(() => callStateStore.status)
 
+// 小窗口模式状态
+const isMinimized = computed(() => callStateStore.isMinimized)
+
+// 最小化窗口
+const handleMinimize = () => {
+  callStateStore.isMinimized = true
+}
+
+// 展开窗口
+const handleExpand = () => {
+  callStateStore.isMinimized = false
+  // 延迟后通知子组件重新播放远程视频
+  setTimeout(() => {
+    // 触发一个自定义事件让 CallStream 组件重新播放视频
+    window.dispatchEvent(new CustomEvent('callkit:window-expanded'))
+  }, 100)
+}
+
 // 开始通话
 const startCall = async () => {
   try {
@@ -55,10 +90,7 @@ const startCall = async () => {
 }
 
 // 处理取消呼叫
-const { cancelCall } = useEndCall()
 const handleCancelCall = () => {
-  // 先调用取消逻辑,由CallService发送取消信令并重置状态
-  cancelCall()
   // 触发取消事件供外层使用
   emit('callCanceled')
 }
@@ -112,5 +144,35 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+}
+
+.minimize-btn {
+  position: absolute;
+  top: 24px;
+  right: 80px;
+  width: 48px;
+  height: 48px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+  backdrop-filter: blur(10px);
+  z-index: 10;
+}
+
+.minimize-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
+}
+
+.minimize-btn svg {
+  width: 24px;
+  height: 24px;
 }
 </style>

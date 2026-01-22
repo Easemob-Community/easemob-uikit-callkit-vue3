@@ -3,6 +3,7 @@ import EasemobChatCallKitProvider from "./components/EasemobChatCallKitProvider.
 import EasemobChatSingleCall from "./components/singleCall/EasemobChatSingleCall.vue";
 import EasemobChatMultiCall from "./components/EasemobChatMultiCall.vue";
 import InvitationNotification from "./components/InvitationNotification.vue";
+import EasemobChatMiniWindow from "./components/EasemobChatMiniWindow.vue";
 import { pinia, installPinia } from "./store";
 import { useCallStateStore } from "./store/callState";
 import { useRtcChannelStore } from "./store/rtcChannel";
@@ -18,6 +19,7 @@ export {
   EasemobChatSingleCall,
   EasemobChatMultiCall,
   InvitationNotification,
+  EasemobChatMiniWindow,
 };
 
 // 导出store
@@ -47,5 +49,6 @@ export default {
     app.component("EasemobChatSingleCall", EasemobChatSingleCall);
     app.component("EasemobChatMultiCall", EasemobChatMultiCall);
     app.component("InvitationNotification", InvitationNotification);
+    app.component("EasemobChatMiniWindow", EasemobChatMiniWindow);
   },
 };
