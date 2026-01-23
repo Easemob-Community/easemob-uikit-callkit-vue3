@@ -84,14 +84,19 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
 import SDK from 'easemob-websdk'
-import { useCallStateStore } from '../../lib/store/callState'
-import { useRtcChannelStore } from '../../lib/store/rtcChannel'
-import { CallService } from '../../lib/services/CallService'
-import { HANGUP_REASON, CALL_STATUS, CALL_TYPE } from '../../lib/types/callstate.types'
-import { useCallKit } from '../../lib/composables/useCallKit'
-import InvitationNotification from '../../lib/components/InvitationNotification.vue'
-import EasemobChatSingleCall from '../../lib/components/singleCall/EasemobChatSingleCall.vue'
-import EasemobChatMultiCall from "../../lib/components/multiCall/EasemobChatMultiCall.vue"
+import { 
+  useCallStateStore, 
+  useRtcChannelStore, 
+  HANGUP_REASON, 
+  CALL_STATUS, 
+  CALL_TYPE, 
+  useCallKit, 
+  useEndCall,
+  EasemobChatCallKitProvider,
+  InvitationNotification, 
+  EasemobChatSingleCall, 
+  EasemobChatMultiCall 
+} from 'easemob-chat-callkit-vue3'
 // 状态管理
 const targetUserId = ref('')
 const groupId = ref('')
@@ -261,6 +266,7 @@ watch(
 
 // 方法
 const { startSingleCall, startGroupCall } = useCallKit()
+const { hangup } = useEndCall()
 const startCall = async (type: 'audio' | 'video') => {
   if (!targetUserId.value) {
     alert('请输入目标用户ID')
@@ -408,8 +414,7 @@ const handleResetState = () => {
 // 结束通话处理函数
 const handleEndCall = () => {
   console.log('用户主动结束通话')
-  const callService = new CallService()
-  callService.hangup(HANGUP_REASON.HANGUP)
+  hangup(HANGUP_REASON.HANGUP)
     .then(() => {
       console.log('通话已结束')
       showSingleCall.value = false

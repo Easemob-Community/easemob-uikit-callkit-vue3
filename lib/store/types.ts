@@ -10,28 +10,28 @@ export type CallStatus = CALL_STATUS;
 export interface ChatClientState {
   client: Chat.Connection | null;
 }
-// export interface CallParticipant {
-//   userId: string;
-//   nickname?: string;
-//   avatar?: string;
-//   isAudioEnabled: boolean;
-//   isVideoEnabled: boolean;
-//   isLocalUser: boolean;
-//   joinedAt: number;
-// }
+export interface CallParticipant {
+  userId: string;
+  nickname?: string;
+  avatar?: string;
+  isAudioEnabled: boolean;
+  isVideoEnabled: boolean;
+  isLocalUser: boolean;
+  joinedAt: number;
+}
 
-// export interface CurrentCallInfo {
-//   callId: string;
-//   callerId: string;
-//   calleeIds: string[];
-//   callType: "audio" | "video";
-//   startTime: number;
-//   duration: number;
-//   status: CallStatus;
-//   participants: CallParticipant[];
-//   isGroupCall: boolean;
-//   channelId?: string;
-// }
+export interface CurrentCallInfo {
+  callId: string;
+  callerId: string;
+  calleeIds: string[];
+  callType: "audio" | "video";
+  startTime: number;
+  duration: number;
+  status: CallStatus;
+  participants: CallParticipant[];
+  isGroupCall: boolean;
+  channelId?: string;
+}
 export interface INVITE_INFO {
   type: CALL_TYPE;
   calleeUserId: string;
@@ -48,7 +48,7 @@ export interface CallState extends CALL_INFO {
   //超时时间，单位ms，默认30s
   inviteTimeout?: number;
   //超时定时器
-  inviteTimeoutTimer?: NodeJS.Timeout | null;
+  inviteTimeoutTimer?: any | null;
   UIdToUserIdMap?: Map<string, string>; // UID到用户ID的映射
   // 窗口模式状态
   isMinimized?: boolean; // 是否为小窗口模式

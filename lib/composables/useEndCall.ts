@@ -98,22 +98,22 @@ export function useEndCall() {
   }
 
   /**
-   * 检查当前是否可以挂断
-   * @returns boolean 是否可以执行挂断操作
+   * 检查当前是否可以挣断
+   * @returns boolean 是否可以执行挣断操作
    */
   function canHangup(): boolean {
-    return callStateStore.callStatus !== "IDLE" && callStateStore.isInCall;
+    return callStateStore.status as any !== "IDLE" && callStateStore.isInCall;
   }
-
+  
   /**
    * 检查当前是否可以取消通话
    * @returns boolean 是否可以执行取消操作
    */
   function canCancel(): boolean {
-    // 只有在邀请状态才能取消
-    return callStateStore.callStatus === "INVITING";
+    // 只有在邨请状态才能取消
+    return callStateStore.status as any === "INVITING";
   }
-
+  
   return {
     // 核心挂断方法
     hangup,

@@ -1,24 +1,30 @@
 {
   "name": "easemob-chat-callkit-vue3",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "type": "module",
   "description": "Easemob Chat CallKit Vue3 Plugin",
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./release/dist/index.js",
+  "module": "./release/dist/index.js",
+  "types": "./release/dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    }
+      "import": "./release/dist/index.js",
+      "types": "./release/dist/index.d.ts"
+    },
+    "./style.css": {
+      "import": "./release/dist/easemob-chat-callkit-vue3.css",
+      "default": "./release/dist/easemob-chat-callkit-vue3.css"
+    },
+    "./release/dist/*": "./release/dist/*"
   },
   "files": [
-    "dist"
+    "release/dist"
   ],
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
     "build:lib": "vite build --config vite.lib.config.ts",
+    "build:pack": "rm -rf release && pnpm build:lib && pnpm pack --pack-destination release",
     "preview": "vite preview",
     "test": "cd test && pnpm dev"
   },

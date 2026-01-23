@@ -16,14 +16,13 @@
  */
 
 import AgoraRTC, {
-  IAgoraRTCClient,
-  IAgoraRTCRemoteUser,
-  ICameraVideoTrack,
-  IMicrophoneAudioTrack,
-  IRemoteAudioTrack,
-  IRemoteVideoTrack,
-  VideoEncoderConfigurationPreset,
-  IAgoraRTCError
+  type IAgoraRTCClient,
+  type IAgoraRTCRemoteUser,
+  type ICameraVideoTrack,
+  type IMicrophoneAudioTrack,
+  type IRemoteAudioTrack,
+  type IRemoteVideoTrack,
+  type VideoEncoderConfigurationPreset,
 } from 'agora-rtc-sdk-ng'
 import { useRtcChannelStore } from '../store/rtcChannel'
 import { logger } from '../utils/logger'
@@ -43,7 +42,7 @@ export interface RtcServiceConfig {
 export class RtcService {
   private client: IAgoraRTCClient | null = null
   private appId: string = ''
-  private agoraUid: number = 0
+  private agoraUid: number | string = 0
   private localVideoTrack: ICameraVideoTrack | null = null
   private localAudioTrack: IMicrophoneAudioTrack | null = null
   private remoteVideoTracks: Map<string, IRemoteVideoTrack> = new Map()
@@ -110,9 +109,9 @@ export class RtcService {
   async joinChannel(
     channelName: string,
     token: string | null,
-    uid: number,
+    uid: number | string,
     appId?: string  // 支持传入动态 appId
-  ): Promise<number> {
+  ): Promise<number | string> {
     if (!this.client) {
       throw new Error('RTC client not initialized')
     }

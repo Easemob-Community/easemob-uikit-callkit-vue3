@@ -1,11 +1,13 @@
 // 日志级别枚举
-export enum LogLevel {
-  ERROR = 0, // 错误日志
-  WARN = 1, // 警告日志
-  INFO = 2, // 信息日志
-  DEBUG = 3, // 调试日志
-  VERBOSE = 4, // 详细日志
-}
+export const LogLevel = {
+  ERROR: 0, // 错误日志
+  WARN: 1, // 警告日志
+  INFO: 2, // 信息日志
+  DEBUG: 3, // 调试日志
+  VERBOSE: 4, // 详细日志
+} as const;
+
+export type LogLevel = typeof LogLevel[keyof typeof LogLevel];
 
 // ANSI颜色代码
 export const ANSI_COLORS = {
