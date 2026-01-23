@@ -234,7 +234,7 @@ onMounted(() => {
     if (rtcService) {
       const client = rtcService.getClient()
       if (client) {
-        client.on('user-published', async (user, mediaType) => {
+        client.on('user-published', async (_user: any, mediaType: any) => {
           if (mediaType === 'video') {
             logger.info('小窗口收到远程视频发布事件')
             retryCount.value = 0 // 重置重试计数
@@ -244,7 +244,7 @@ onMounted(() => {
           }
         })
         
-        client.on('user-unpublished', (user, mediaType) => {
+        client.on('user-unpublished', (_user: any, mediaType: any) => {
           if (mediaType === 'video') {
             hasRemoteVideo.value = false
             logger.info('小窗口远程视频取消发布')
@@ -255,10 +255,52 @@ onMounted(() => {
   }
 })
 
+// 组件隐藏时停止视频播放，释放视频轨道
+watch(isVisible, (visible) => {
+  if (!visible && miniRemoteVideo.value) {
+    // 小窗隐藏时，停止所有正在播放的远程视频轨道
+    const rtcService = rtcChannelStore.rtcService
+    if (rtcService) {
+      const client = rtcService.getClient()
+      if (client && client.remoteUsers) {
+        client.remoteUsers.forEach((remoteUser: any) => {
+          const remoteVideoTrack = rtcService.getRemoteVideoTrack(remoteUser.uid.toString())
+          if (remoteVideoTrack) {
+            remoteVideoTrack.stop()
+            logger.info('小窗隐藏，停止远程视频轨道播放', { uid: remoteUser.uid })
+          }
+        })
+      }
+    }
+    
+    // 清空video元素
+    if (miniRemoteVideo.value.srcObject) {
+      miniRemoteVideo.value.srcObject = null
+    }
+    hasRemoteVideo.value = false
+  }
+})
+
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
   document.removeEventListener('mousemove', onDrag)
   document.removeEventListener('mouseup', stopDrag)
+  
+  // 组件销毁时停止所有视频轨道
+  if (miniRemoteVideo.value) {
+    const rtcService = rtcChannelStore.rtcService
+    if (rtcService) {
+      const client = rtcService.getClient()
+      if (client && client.remoteUsers) {
+        client.remoteUsers.forEach((remoteUser: any) => {
+          const remoteVideoTrack = rtcService.getRemoteVideoTrack(remoteUser.uid.toString())
+          if (remoteVideoTrack) {
+            remoteVideoTrack.stop()
+          }
+        })
+      }
+    }
+  }
 })
 </script>
 
