@@ -13,6 +13,12 @@ dist
 dist-ssr
 *.local
 old
+
+# Build outputs
+release/
+*.tgz
+lib/style.css
+lib/style.css.d.ts
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
