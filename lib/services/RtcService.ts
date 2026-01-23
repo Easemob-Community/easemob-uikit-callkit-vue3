@@ -37,6 +37,7 @@ export interface RtcServiceConfig {
   onUserPublished?: (user: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => void
   onUserUnpublished?: (user: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => void
   onVolumeIndicator?: (volumes: any[]) => void
+  chatClient?: any // 环信客户端实例，用于获取userId映射
 }
 
 export class RtcService {
@@ -52,6 +53,7 @@ export class RtcService {
   private encoderConfig: VideoEncoderConfigurationPreset = '720p'
   private isAudioEnabled: boolean = true
   private isVideoEnabled: boolean = true
+  private chatClient: any = null // 环信客户端实例
   
   // 回调函数
   private onNetworkQualityChange?: (quality: any) => void
@@ -66,6 +68,7 @@ export class RtcService {
   constructor(config: RtcServiceConfig) {
     this.appId = config.appId
     this.encoderConfig = config.encoderConfig || '720p'
+    this.chatClient = config.chatClient
     this.onNetworkQualityChange = config.onNetworkQualityChange
     this.onUserJoined = config.onUserJoined
     this.onUserLeft = config.onUserLeft
@@ -439,17 +442,50 @@ export class RtcService {
   }
 
   /**
-   * 获取远程视频轨道
+   * 获取远程视频轨道（通过userId）
    */
   getRemoteVideoTrack(userId: string): IRemoteVideoTrack | null {
-    return this.remoteVideoTracks.get(userId) || null
+    // 先查找Map中是否直接存在该key(兼容旧代码可能直接使用UID)
+    if (this.remoteVideoTracks.has(userId)) {
+      return this.remoteVideoTracks.get(userId) || null
+    }
+    
+    // 尝试通过userId查找UID，然后查找轨道
+    // 遍历uidToUserIdMap找到对应的UID
+    const uidToUserIdMap = this.rtcChannelStore.uidToUserIdMap
+    for (const [uid, mappedUserId] of uidToUserIdMap.entries()) {
+      if (mappedUserId === userId) {
+        const track = this.remoteVideoTracks.get(uid)
+        if (track) {
+          return track
+        }
+      }
+    }
+    
+    return null
   }
 
   /**
-   * 获取远程音频轨道
+   * 获取远程音频轨道（通过userId）
    */
   getRemoteAudioTrack(userId: string): IRemoteAudioTrack | null {
-    return this.remoteAudioTracks.get(userId) || null
+    // 先查找Map中是否直接存在该key(兼容旧代码可能直接使用UID)
+    if (this.remoteAudioTracks.has(userId)) {
+      return this.remoteAudioTracks.get(userId) || null
+    }
+    
+    // 尝试通过userId查找UID，然后查找轨道
+    const uidToUserIdMap = this.rtcChannelStore.uidToUserIdMap
+    for (const [uid, mappedUserId] of uidToUserIdMap.entries()) {
+      if (mappedUserId === userId) {
+        const track = this.remoteAudioTracks.get(uid)
+        if (track) {
+          return track
+        }
+      }
+    }
+    
+    return null
   }
 
   /**
@@ -510,30 +546,101 @@ export class RtcService {
     if (!this.client) return
 
     // 用户加入
-    this.client.on('user-joined', (user: IAgoraRTCRemoteUser) => {
+    this.client.on('user-joined', async (user: IAgoraRTCRemoteUser) => {
       logger.info('User joined:', user.uid)
-      this.onUserJoined?.(user.uid.toString())
+      
+      // 获取userId映射
+      let userId = this.rtcChannelStore.getUserIdByUid(user.uid.toString())
+      
+      // 1. 先检查是否有待加入的userId（从 answerCall 信令添加）
+      if (!userId) {
+        const pendingUserId = this.rtcChannelStore.popPendingUserId()
+        if (pendingUserId) {
+          userId = pendingUserId
+          this.rtcChannelStore.setUidToUserIdMapping(user.uid.toString(), userId)
+          logger.info('User-joined: 使用待加入列表匹配 userId:', { uid: user.uid, userId })
+        }
+      }
+      
+      // 2. 如果还没有，尝试通过环信API获取映射
+      if (!userId && this.chatClient) {
+        try {
+          const res = await this.chatClient.getUserIdByRTCUIds([user.uid])
+          userId = res.data[user.uid]
+          if (userId) {
+            this.rtcChannelStore.setUidToUserIdMapping(user.uid.toString(), userId)
+            logger.info('User-joined: 通过API获取userId映射:', { uid: user.uid, userId })
+          } else {
+            logger.warn('User-joined: API返回的userId为空:', user.uid)
+          }
+        } catch (error) {
+          logger.error('获取userId映射失败:', error)
+        }
+      }
+      
+      // 标记用户已加入RTC
+      if (userId) {
+        this.rtcChannelStore.markUserJoinedRtc(userId)
+        logger.info('[RTC DEBUG] 用户已标记为加入RTC:', { 
+          uid: user.uid, 
+          userId,
+          joinedRtcUsers: Array.from(this.rtcChannelStore.joinedRtcUsers)
+        })
+      } else {
+        logger.warn('User-joined: 未能获取userId映射，使用uid作为默认值:', user.uid)
+      }
+      
+      this.onUserJoined?.(userId || user.uid.toString())
     })
 
     // 用户离开
     this.client.on('user-left', (user: IAgoraRTCRemoteUser, reason: string) => {
       logger.info('User left:', user.uid, reason)
       
+      // 获取userId
+      const userId = this.rtcChannelStore.getUserIdByUid(user.uid.toString())
+      
       // 清理远程轨道
       this.remoteVideoTracks.delete(user.uid.toString())
       this.remoteAudioTracks.delete(user.uid.toString())
       
-      this.onUserLeft?.(user.uid.toString())
+      // 标记用户已离开RTC
+      if (userId) {
+        this.rtcChannelStore.markUserLeftRtc(userId)
+      }
+      
+      this.onUserLeft?.(userId || user.uid.toString())
     })
 
     // 用户发布 - 自动订阅远程用户
     this.client.on('user-published', async (user: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => {
       logger.info('User published:', user.uid, mediaType)
       
+      // 获取userId映射
+      let userId = this.rtcChannelStore.getUserIdByUid(user.uid.toString())
+      if (!userId && this.chatClient) {
+        try {
+          const res = await this.chatClient.getUserIdByRTCUIds([user.uid])
+          userId = res.data[user.uid]
+          if (userId) {
+            this.rtcChannelStore.setUidToUserIdMapping(user.uid.toString(), userId)
+            this.rtcChannelStore.markUserJoinedRtc(userId)
+            logger.info('[RTC DEBUG] user-published 时标记用户加入:', { 
+              uid: user.uid, 
+              userId,
+              mediaType,
+              joinedRtcUsers: Array.from(this.rtcChannelStore.joinedRtcUsers)
+            })
+          }
+        } catch (error) {
+          logger.error('获取userId映射失败:', error)
+        }
+      }
+      
       // 自动订阅远程用户
       try {
         await this.subscribeRemoteUser(user, mediaType)
-        logger.info('自动订阅远程用户成功:', { uid: user.uid, mediaType })
+        logger.info('自动订阅远程用户成功:', { uid: user.uid, userId, mediaType })
       } catch (error) {
         logger.error('自动订阅远程用户失败:', error)
       }

@@ -65,7 +65,8 @@
             :type="multiCallType" 
             :current-user-id="chatClient?.user"
             @call-started="handleMultiCallStart" 
-            @call-ended="handleMultiCallEnd" 
+            @call-ended="handleMultiCallEnd"
+            @user-left="handleUserLeft"
           />
         </div>
 
@@ -84,12 +85,13 @@
 import { ref, onMounted, watch, computed } from 'vue'
 import SDK from 'easemob-websdk'
 import { useCallStateStore } from '../../lib/store/callState'
+import { useRtcChannelStore } from '../../lib/store/rtcChannel'
 import { CallService } from '../../lib/services/CallService'
 import { HANGUP_REASON, CALL_STATUS, CALL_TYPE } from '../../lib/types/callstate.types'
 import { useCallKit } from '../../lib/composables/useCallKit'
 import InvitationNotification from '../../lib/components/InvitationNotification.vue'
 import EasemobChatSingleCall from '../../lib/components/singleCall/EasemobChatSingleCall.vue'
-import EasemobChatMultiCall from '../../lib/components/EasemobChatMultiCall.vue'
+import EasemobChatMultiCall from "../../lib/components/multiCall/EasemobChatMultiCall.vue"
 // 状态管理
 const targetUserId = ref('')
 const groupId = ref('')
@@ -118,26 +120,40 @@ const callConfig = {
 // 动态生成群组参与者列表
 const mockParticipants = computed(() => {
   const callStateStore = useCallStateStore()
+  const rtcChannelStore = useRtcChannelStore()
   const state = callStateStore.getCallState
   const participants: any[] = []
   
-  // 添加当前用户（被叫方）
-  if (state.calleeUserId && chatClient.value?.user) {
+  console.log('[App DEBUG] mockParticipants 计算:', {
+    currentUser: chatClient.value?.user,
+    callerUserId: state.callerUserId,
+    invitedMembers: JSON.parse(JSON.stringify(state.invitedMembers)),
+    joinedRtcUsers: Array.from(rtcChannelStore.joinedRtcUsers),
+    uidToUserIdMap: JSON.parse(JSON.stringify(Array.from(rtcChannelStore.uidToUserIdMap.entries())))
+  })
+  
+  // 添加当前用户
+  if (chatClient.value?.user) {
     participants.push({
       userId: chatClient.value.user,
       userName: callStateStore.getUserInfo(chatClient.value.user)?.nickname || chatClient.value.user,
       avatar: callStateStore.getUserInfo(chatClient.value.user)?.avatarURL,
-      isMuted: false
+      isMuted: false,
+      isInviting: false,
+      hasJoined: true
     })
   }
   
-  // 添加主叫方
-  if (state.callerUserId) {
+  // 添加主叫方（如果不是当前用户）
+  if (state.callerUserId && state.callerUserId !== chatClient.value?.user) {
+    const hasJoined = rtcChannelStore.isUserInRtc(state.callerUserId)
     participants.push({
       userId: state.callerUserId,
       userName: callStateStore.getUserInfo(state.callerUserId)?.nickname || state.callerUserId,
       avatar: callStateStore.getUserInfo(state.callerUserId)?.avatarURL,
-      isMuted: false
+      isMuted: false,
+      isInviting: !hasJoined, // 根据RTC状态决定是否还在邀请中
+      hasJoined: hasJoined
     })
   }
   
@@ -146,17 +162,32 @@ const mockParticipants = computed(() => {
     state.invitedMembers.forEach(userId => {
       // 避免重复添加
       if (userId !== chatClient.value?.user && userId !== state.callerUserId) {
+        const hasJoined = rtcChannelStore.isUserInRtc(userId)
         participants.push({
           userId,
           userName: callStateStore.getUserInfo(userId)?.nickname || userId,
           avatar: callStateStore.getUserInfo(userId)?.avatarURL,
-          isMuted: false
+          isMuted: false,
+          isInviting: !hasJoined, // 根据RTC状态决定是否还在邀请中
+          hasJoined: hasJoined
         })
       }
     })
   }
   
-  return participants
+  // 只返回当前仍在RTC频道中的用户，以及那些还在邀请中的用户
+  const result = participants.filter(p => p.hasJoined || p.isInviting)
+  
+  console.log('[App DEBUG] mockParticipants 结果:', {
+    totalCount: result.length,
+    participants: result.map(p => ({
+      userId: p.userId,
+      isInviting: p.isInviting,
+      hasJoined: p.hasJoined
+    }))
+  })
+  
+  return result
 })
 
 // 初始化环信客户端
@@ -185,13 +216,25 @@ watch(
       // 判断是否为群组通话
       if (callType === CALL_TYPE.VIDEO_MULTI || callType === CALL_TYPE.AUDIO_MULTI) {
         console.log('检测到群组通话已接通，显示群组通话界面')
+        
+        // 先更新群组信息
+        const storeGroupId = callStateStore.getCallState.groupId || ''
+        const storeGroupName = callStateStore.getCallState.groupName || ''
+        const storeGroupAvatar = callStateStore.getCallState.groupAvatar || ''
+        
+        groupId.value = storeGroupId
+        groupName.value = storeGroupName
+        groupAvatar.value = storeGroupAvatar
+        
+        console.log('群组信息已更新:', { 
+          groupId: groupId.value, 
+          groupName: groupName.value,
+          groupAvatar: groupAvatar.value 
+        })
+        
+        // 再显示群组通话界面
         showMultiCall.value = true
         showSingleCall.value = false
-        
-        // 更新群组信息
-        groupId.value = callStateStore.getCallState.groupId || ''
-        groupName.value = callStateStore.getCallState.groupName || ''
-        groupAvatar.value = callStateStore.getCallState.groupAvatar || ''
         
         const callTypeText = callType === CALL_TYPE.AUDIO_MULTI ? '语音' : '视频'
         currentCallInfo.value = `群组${callTypeText}通话: ${groupName.value || groupId.value}`
@@ -255,9 +298,7 @@ const startMultiCall = async (type: 'audio' | 'video') => {
   }
   
   multiCallType.value = type
-  showMultiCall.value = true
   showSingleCall.value = false
-  currentCallInfo.value = `群组${type === 'audio' ? '语音' : '视频'}通话: ${groupId.value}`
   
   // 解析群组成员ID（逗号分隔）
   const members = groupMembers.value.split(',').map((id) => id.trim()).filter((id) => id.length > 0)
@@ -265,6 +306,8 @@ const startMultiCall = async (type: 'audio' | 'video') => {
   // 发送群组通话邀请信令
   const inviteMessage = type === 'audio' ? '邀请您加入群组语音通话' : '邀请您加入群组视频通话'
   try {
+    console.log('开始发起群组通话，groupId:', groupId.value)
+    // 先发送邀请并初始化状态
     await startGroupCall(
       groupId.value,
       members,
@@ -273,7 +316,15 @@ const startMultiCall = async (type: 'audio' | 'video') => {
       groupName.value || undefined,
       groupAvatar.value || undefined
     )
-    console.log('群组通话邀请已发送')
+    console.log('群组通话邀请已发送，状态已初始化')
+    
+    // 确认 store 中的 groupId 已设置
+    const storeGroupId = callStateStore.getCallState.groupId
+    console.log('Store 中的 groupId:', storeGroupId)
+    
+    // 状态初始化完成后再显示组件
+    showMultiCall.value = true
+    currentCallInfo.value = `群组${type === 'audio' ? '语音' : '视频'}通话: ${groupId.value}`
   } catch (error) {
     console.error('发起群组通话失败:', error)
     alert('发起群组通话失败')
@@ -300,6 +351,22 @@ const handleMultiCallEnd = () => {
   console.log('群组通话结束')
   showMultiCall.value = false
   currentCallInfo.value = ''
+}
+
+// 处理用户离开RTC
+const handleUserLeft = (userId: string) => {
+  console.log('[App] 用户离开RTC:', userId)
+  
+  // 从invitedMembers中移除该用户
+  const callStateStore = useCallStateStore()
+  const currentInvitedMembers = callStateStore.getInvitedMembers
+  const updatedInvitedMembers = currentInvitedMembers.filter(id => id !== userId)
+  callStateStore.updateInvitedMembers(updatedInvitedMembers)
+  
+  console.log('[App] 已从invitedMembers移除用户:', { 
+    userId, 
+    remainingMembers: updatedInvitedMembers 
+  })
 }
 
 // 登录处理函数

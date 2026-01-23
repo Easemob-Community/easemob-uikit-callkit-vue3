@@ -1,9 +1,10 @@
 import { useChatClientStore } from "../store/chatClient";
 import type { UseCallKitReturn } from "../types";
 import { useCallStateStore } from "../store/callState";
-import { CALL_TYPE } from "../types/callstate.types";
+import { CALL_STATUS, CALL_TYPE } from "../types/callstate.types";
 import { logger } from "../utils/logger";
 import { useSignalManager } from "./useSignalManager";
+import { useJoinChannel } from "./useJoinChannel";
 
 // 组合式API：useCallKit
 export function useCallKit(): UseCallKitReturn {
@@ -96,6 +97,15 @@ export function useCallKit(): UseCallKitReturn {
           `startGroupCall: 发送群组通话邀请信息成功，消息ID: ${message.serverMsgId}`
         );
         logger.verbose(`startGroupCall: 邀请消息详情:`, message);
+        
+        // 主叫方发送邀请后，立即将状态更新为IN_CALL并加入RTC频道
+        logger.info('startGroupCall: 主叫方立即加入RTC频道')
+        callStateStore.setCallStatus(CALL_STATUS.IN_CALL)
+        
+        // 加入RTC频道
+        const { joinChannel } = useJoinChannel()
+        await joinChannel()
+        logger.info('startGroupCall: 主叫方已成功加入RTC频道')
       } catch (error) {
         logger.error(`startGroupCall: 发送群组通话邀请信息失败:`, error);
         throw error;

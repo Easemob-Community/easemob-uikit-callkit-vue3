@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import type { RtcChannelState, RtcChannelInfo } from './types'
 import { RtcService } from '../services/RtcService'
 import { logger } from '../utils/logger'
+import { useChatClientStore } from './chatClient'
 
 export const useRtcChannelStore = defineStore('rtcChannel', {
   /**
@@ -19,7 +20,10 @@ export const useRtcChannelStore = defineStore('rtcChannel', {
     agoraAppId: null as string | null, // Agora AppId
     callDuration: 0, // 通话时长（秒）
     callStartTime: 0, // 通话开始时间戳
-    _timer: null as any // 内部定时器
+    _timer: null as any, // 内部定时器
+    uidToUserIdMap: new Map<string, string>(), // Agora UID 到环信 userId 的映射
+    joinedRtcUsers: new Set<string>(), // 已加入RTC频道的userId集合
+    pendingUserIds: new Set<string>() // 待加入RTC的userId集合
   }),
   
   /**
@@ -85,7 +89,15 @@ export const useRtcChannelStore = defineStore('rtcChannel', {
       try {
         logger.info('初始化RTC服务...')
         this.agoraAppId = agoraAppId
-        const service = new RtcService({ appId: agoraAppId })
+        
+        // 获取环信客户端
+        const chatClientStore = useChatClientStore()
+        const chatClient = chatClientStore.getChatClient
+        
+        const service = new RtcService({ 
+          appId: agoraAppId,
+          chatClient: chatClient // 传入环信客户端用于获取userId映射
+        })
         await service.initialize()
         this.rtcService = service
         logger.info('RTC服务初始化成功')
@@ -259,6 +271,79 @@ export const useRtcChannelStore = defineStore('rtcChannel', {
     },
     
     /**
+     * 添加UID到userId的映射
+     */
+    setUidToUserIdMapping(uid: string, userId: string) {
+      this.uidToUserIdMap.set(uid, userId)
+      logger.debug('RTC UID映射已更新:', { uid, userId })
+    },
+    
+    /**
+     * 根据UID获取userId
+     */
+    getUserIdByUid(uid: string): string | null {
+      return this.uidToUserIdMap.get(uid) || null
+    },
+    
+    /**
+     * 标记用户已加入RTC频道
+     */
+    markUserJoinedRtc(userId: string) {
+      this.joinedRtcUsers.add(userId)
+      // 强制触发响应式更新
+      this.joinedRtcUsers = new Set(this.joinedRtcUsers)
+      logger.debug('用户已加入RTC频道:', userId)
+    },
+    
+    /**
+     * 标记用户离开RTC频道
+     */
+    markUserLeftRtc(userId: string) {
+      this.joinedRtcUsers.delete(userId)
+      // 强制触发响应式更新
+      this.joinedRtcUsers = new Set(this.joinedRtcUsers)
+      logger.debug('用户已离开RTC频道:', userId)
+    },
+    
+    /**
+     * 检查用户是否已加入RTC频道
+     */
+    isUserInRtc(userId: string): boolean {
+      return this.joinedRtcUsers.has(userId)
+    },
+    
+    /**
+     * 添加待加入RTC的userId（收到answerCall但尚未加入RTC）
+     */
+    addPendingUserId(userId: string) {
+      this.pendingUserIds.add(userId)
+      logger.debug('用户已标记为待加入RTC:', userId)
+    },
+    
+    /**
+     * 移除待加入RTC的userId
+     */
+    removePendingUserId(userId: string) {
+      this.pendingUserIds.delete(userId)
+      logger.debug('用户已从待加入列表移除:', userId)
+    },
+    
+    /**
+     * 获取第一个待加入的userId并移除（用于匹配RTC uid）
+     */
+    popPendingUserId(): string | null {
+      const iter = this.pendingUserIds.values()
+      const first = iter.next()
+      if (!first.done) {
+        const userId = first.value
+        this.pendingUserIds.delete(userId)
+        logger.debug('从待加入列表中取出userId:', userId)
+        return userId
+      }
+      return null
+    },
+    
+    /**
      * 重置所有RTC频道状态
      */
     reset() {
@@ -288,6 +373,9 @@ export const useRtcChannelStore = defineStore('rtcChannel', {
       this.videoEnabled = true
       this.callDuration = 0
       this.callStartTime = 0
+      this.uidToUserIdMap.clear()
+      this.joinedRtcUsers.clear()
+      this.pendingUserIds.clear()
       if (this._timer) {
         clearInterval(this._timer)
         this._timer = null

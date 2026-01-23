@@ -1,7 +1,7 @@
 import { type App } from "vue";
 import EasemobChatCallKitProvider from "./components/EasemobChatCallKitProvider.vue";
 import EasemobChatSingleCall from "./components/singleCall/EasemobChatSingleCall.vue";
-import EasemobChatMultiCall from "./components/EasemobChatMultiCall.vue";
+import EasemobChatMultiCall from "./components/multiCall/EasemobChatMultiCall.vue";
 import InvitationNotification from "./components/InvitationNotification.vue";
 import EasemobChatMiniWindow from "./components/EasemobChatMiniWindow.vue";
 import { pinia, installPinia } from "./store";

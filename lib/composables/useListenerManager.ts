@@ -1,5 +1,6 @@
 import { useChatClientStore } from "../store/chatClient";
 import { useCallStateStore } from "../store/callState";
+import { useRtcChannelStore } from "../store/rtcChannel";
 import { logger } from "../utils/logger";
 import type { Chat } from "../core/sdk/imSDK";
 import {
@@ -37,6 +38,7 @@ export function useListenerManager(): ListenerManagerReturn {
   // 获取Pinia store实例
   const chatClientStore = useChatClientStore();
   const callStateStore = useCallStateStore();
+  const rtcChannelStore = useRtcChannelStore();
   // 移除静态client变量，改为在需要时动态获取
   const {
     sendBusyAnswerMessage,
@@ -408,6 +410,12 @@ export function useListenerManager(): ListenerManagerReturn {
       // 对方接受通话
       logger.info("收到对方接受，开始进入通话流程");
       
+      // 将接受者添加到待加入RTC列表（用于后续 RTC user-joined 事件匹配）
+      if (message.from) {
+        rtcChannelStore.addPendingUserId(message.from)
+        logger.debug('已将接受者添加到待加入RTC列表:', message.from)
+      }
+      
       // 发送confirmCallee信令，通知对方已确认收到接受信息
       const confirmCalleePayload = {
         callId: ext.callId,
@@ -509,7 +517,27 @@ export function useListenerManager(): ListenerManagerReturn {
       callStateStore.clearTimeoutTimer();
     }
 
-    // 对方离开通话，销毁并重置当前通话状态
+    // 群组通话：只移除离开的成员，不挂断整个通话
+    if (
+      callStateStore.type === CALL_TYPE.VIDEO_MULTI ||
+      callStateStore.type === CALL_TYPE.AUDIO_MULTI
+    ) {
+      logger.info(`群组通话：成员 ${message.from} 离开，从邀请列表中移除`);
+      
+      // 从邀请列表中移除
+      const invitedMembers = callStateStore.getInvitedMembers.filter(
+        (member) => member !== message.from
+      );
+      callStateStore.updateInvitedMembers(invitedMembers);
+      
+      // 标记用户已离开RTC
+      rtcChannelStore.markUserLeftRtc(message.from as string);
+      
+      logger.debug(`成员 ${message.from} 已从通话中移除`);
+      return;
+    }
+
+    // 一对一通话：对方离开通话，销毁并重置当前通话状态
     logger.info("收到对方离开通话信令，销毁并重置当前通话状态");
     const callService = new CallService();
     callService.hangup(HANGUP_REASON.HANGUP).catch((err) => {
