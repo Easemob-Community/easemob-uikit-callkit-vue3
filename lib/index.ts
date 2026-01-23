@@ -1,10 +1,10 @@
 import { type App } from "vue";
+import "./style.css";
 import EasemobChatCallKitProvider from "./components/EasemobChatCallKitProvider.vue";
 import EasemobChatSingleCall from "./components/singleCall/EasemobChatSingleCall.vue";
 import EasemobChatMultiCall from "./components/multiCall/EasemobChatMultiCall.vue";
 import InvitationNotification from "./components/InvitationNotification.vue";
 import EasemobChatMiniWindow from "./components/EasemobChatMiniWindow.vue";
-import { pinia, installPinia } from "./store";
 import { useCallStateStore } from "./store/callState";
 import { useRtcChannelStore } from "./store/rtcChannel";
 import { useCallKit } from "./composables/useCallKit";
@@ -23,7 +23,7 @@ export {
 };
 
 // 导出store
-export { pinia, useCallStateStore, useRtcChannelStore };
+export { useCallStateStore, useRtcChannelStore };
 // 导出部分hook
 export { useCallKit, useEndCall, useAnswerCall, useRtcService, useJoinChannel };
 // 导出RTC服务
@@ -39,12 +39,12 @@ export type {
   UseAnswerCallReturn,
 } from "./types";
 
+// 导出常量与类型
+export { HANGUP_REASON, CALL_STATUS, CALL_TYPE } from "./types/callstate.types";
+
 export default {
   install(app: App) {
-    // 先安装Pinia
-    installPinia(app);
-
-    // 再注册组件
+    // 注册组件
     app.component("EasemobChatCallKitProvider", EasemobChatCallKitProvider);
     app.component("EasemobChatSingleCall", EasemobChatSingleCall);
     app.component("EasemobChatMultiCall", EasemobChatMultiCall);

@@ -1,17 +1,20 @@
 <template>
-  <div>
-    <slot></slot>
+  <div class="easemob-callkit-provider">
+    <slot v-if="mounted"></slot>
   </div>
 </template>
 
 <script setup lang="ts">
-import { watchEffect, computed, onUnmounted } from 'vue'
+import { watchEffect, computed, onUnmounted, ref, onMounted } from 'vue'
 import type { ProviderConfig } from '../types'
 import { useListenerManager } from '../composables/useListenerManager';
 import { useChatClientStore } from '../store/chatClient';
 import { useCallStateStore } from '../store/callState';
 import { useRtcChannelStore } from '../store/rtcChannel';
 import { logger } from '../utils/logger';
+
+// 确保组件挂载完成后再渲染插槽
+const mounted = ref(false)
 
 // 定义默认的initConfig对象
 const defaultInitConfig = {
@@ -97,6 +100,11 @@ watchEffect(() => {
   } else {
     logger.verbose('CallKit Provider 未挂载事件监听器：缺少环信客户端实例');
   }
+})
+
+// 组件挂载完成
+onMounted(() => {
+  mounted.value = true
 })
 
 // 组件卸载时清理RTC服务

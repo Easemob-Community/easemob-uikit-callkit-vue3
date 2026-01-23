@@ -1,12 +1,3 @@
-import { createPinia } from 'pinia'
-import type { App } from 'vue'
-
-// 创建pinia实例
-const pinia = createPinia()
-
-// 插件安装函数
-export function installPinia(app: App) {
-  app.use(pinia)
-}
-
-export { pinia }
+// CallKit 不再创建独立的 Pinia 实例
+// 使用应用层提供的 Pinia 实例
+// 各个 store 通过 getActivePinia() 获取当前活动的 Pinia 实例
