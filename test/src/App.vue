@@ -62,8 +62,9 @@
             </button>
           </div>
 
-          <!-- 🔑 优化后：无需 v-if、participants 和事件处理，内部自动管理 -->
+          <!-- 🔑 优化后：仅群组通话时渲染，内部自动管理显示 -->
           <EasemobChatMultiCall 
+            v-if="isGroupCall"
             :group-id="groupId" 
             :group-name="groupName"
             :group-avatar="groupAvatar"
@@ -155,8 +156,8 @@ onMounted(() => {
   // 演示模式下，默认不自动登录，等待用户输入凭证
 })
 
-// 🔑 优化后：EasemobChatMultiCall 自动根据 callStatus 显示/隐藏，无需手动控制 showMultiCall
-// 保留状态监听仅用于更新界面信息显示
+// 🔑 优化后：EasemobChatMultiCall 自动根据 callStatus 显示/隐藏
+// 但仍需控制 showSingleCall 的显示（用于单人通话）
 const callStateStore = useCallStateStore()
 watch(
   () => callStateStore.getCallStatus,
@@ -170,12 +171,17 @@ watch(
         groupAvatar.value = callStateStore.getCallState.groupAvatar || ''
         const callTypeText = callType === CALL_TYPE.AUDIO_MULTI ? '语音' : '视频'
         currentCallInfo.value = `群组${callTypeText}通话: ${groupName.value || groupId.value}`
+        // 群组通话不显示单人通话组件
+        showSingleCall.value = false
       } else {
+        // 🔑 单人通话：显示单人通话组件
         const callTypeText = callType === CALL_TYPE.AUDIO_1V1 ? '语音' : '视频'
         currentCallInfo.value = `单人${callTypeText}通话: ${callStateStore.getCallState.calleeUserId}`
+        showSingleCall.value = true
       }
     } else if (newStatus === CALL_STATUS.IDLE) {
       currentCallInfo.value = ''
+      showSingleCall.value = false
     }
   }
 )
