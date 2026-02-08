@@ -126,6 +126,13 @@ const singleCallType = ref<'audio' | 'video'>('video')
 const multiCallType = ref<'audio' | 'video'>('video')
 const currentCallInfo = ref('')
 
+// 🔑 新增：判断是否群组通话（用于条件渲染 EasemobChatMultiCall）
+const callStateStore = useCallStateStore()
+const isGroupCall = computed(() => {
+  const callType = callStateStore.getCallState.type
+  return callType === CALL_TYPE.VIDEO_MULTI || callType === CALL_TYPE.AUDIO_MULTI
+})
+
 // 登录相关状态
 const loginUserId = ref('ppp')
 const loginPassword = ref('1')
@@ -158,7 +165,6 @@ onMounted(() => {
 
 // 🔑 优化后：EasemobChatMultiCall 自动根据 callStatus 显示/隐藏
 // 但仍需控制 showSingleCall 的显示（用于单人通话）
-const callStateStore = useCallStateStore()
 watch(
   () => callStateStore.getCallStatus,
   (newStatus) => {

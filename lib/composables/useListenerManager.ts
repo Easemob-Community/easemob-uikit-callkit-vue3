@@ -68,8 +68,10 @@ export function useListenerManager(): ListenerManagerReturn {
     }
     const ext = message.ext;
     //校验当前用户的通话状态是否为idle
-    if (callStateStore.getCallStatus > CALL_STATUS.IDLE) {
-      logger.warn("当前通话状态不是idle，应答拒绝通话邀请");
+    const currentStatus = callStateStore.getCallStatus;
+    logger.info(`[邀请处理] 当前通话状态: ${currentStatus}, 目标状态IDLE: ${CALL_STATUS.IDLE}`);
+    if (currentStatus > CALL_STATUS.IDLE) {
+      logger.warn(`[邀请处理] 当前通话状态不是idle (${currentStatus})，应答拒绝通话邀请，callId: ${ext?.callId}`);
       if (message.from) {
         const newInvitationInfo = {
           callerUserId: message.from,
@@ -494,20 +496,25 @@ export function useListenerManager(): ListenerManagerReturn {
     // 特殊情况：如果当前状态为IDLE（可能刚被resetCallState重置），且是来自主叫方的leaveCall信令，直接忽略
     if (ext.callId !== callStateStore.getCallState.callId) {
       logger.warn(
-        `leaveCall信令消息通话callId与当前通话callId不一致，leaveCall信令消息通话callId: ${ext.callId}，当前通话callId: ${callStateStore.getCallState.callId}`
+        `[leaveCall] callId不匹配，信令callId: ${ext.callId}，当前callId: ${callStateStore.getCallState.callId}, 当前状态: ${callStateStore.getCallStatus}`
       );
       
       // 如果当前状态已经是IDLE，说明通话已经被其他信令（如cancelCall）结束，直接忽略
       if (callStateStore.getCallStatus === CALL_STATUS.IDLE) {
-        logger.info("当前通话状态已为IDLE，忽略leaveCall信令");
+        logger.info("[leaveCall] 当前通话状态已为IDLE，忽略leaveCall信令");
         return;
       }
       
-      // 如果当前还处于ALERTING状态（邀请弹窗），且leaveCall来自主叫方，也需要执行挂断关闭弹窗
-      if (callStateStore.getCallStatus === CALL_STATUS.ALERTING && message.from === callStateStore.getCallState.callerUserId) {
-        logger.info("当前处于ALERTING状态，且leaveCall来自主叫方，执行挂断关闭邀请弹窗");
+      // 🔑 关键修复：只要是在通话中（IN_CALL）且对方离开，就执行挂断，不强制要求callId匹配
+      // 这解决了一些边界情况下callId不一致导致状态无法重置的问题
+      if (callStateStore.getCallStatus === CALL_STATUS.IN_CALL) {
+        logger.info("[leaveCall] 当前在通话中且对方离开，执行挂断（callId可能因重连等原因不一致）");
+        // 继续执行下面的挂断逻辑
+      } else if (callStateStore.getCallStatus === CALL_STATUS.ALERTING && message.from === callStateStore.getCallState.callerUserId) {
+        logger.info("[leaveCall] 当前处于ALERTING状态，且leaveCall来自主叫方，执行挂断关闭邀请弹窗");
         // 继续执行下面的挂断逻辑
       } else {
+        logger.warn(`[leaveCall] callId不匹配且状态不符，忽略信令`);
         return;
       }
     }
@@ -538,10 +545,12 @@ export function useListenerManager(): ListenerManagerReturn {
     }
 
     // 一对一通话：对方离开通话，销毁并重置当前通话状态
-    logger.info("收到对方离开通话信令，销毁并重置当前通话状态");
+    logger.info(`[挂断处理] 收到对方离开通话信令，当前状态: ${callStateStore.getCallStatus}, callId: ${callStateStore.getCallState.callId}`);
     const callService = new CallService();
-    callService.hangup(HANGUP_REASON.HANGUP).catch((err) => {
-      logger.error("执行挂断失败:", err);
+    callService.hangup(HANGUP_REASON.HANGUP).then(() => {
+      logger.info(`[挂断处理] 挂断完成，当前状态: ${callStateStore.getCallStatus}`);
+    }).catch((err) => {
+      logger.error("[挂断处理] 执行挂断失败:", err);
     });
   };
 

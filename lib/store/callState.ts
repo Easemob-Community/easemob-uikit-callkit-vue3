@@ -164,6 +164,8 @@ export const useCallStateStore = defineStore("callState", {
       this.channel = "";
       this.calleeUserId = "";
       this.calleeDevId = "";
+      this.callerDevId = "";  // 🔑 修复：重置callerDevId，避免多端场景下id不匹配
+      this.callerUserId = ""; // 🔑 修复：重置callerUserId
       this.inviteMessageId = "";
       this.duration = "";
       
@@ -183,8 +185,6 @@ export const useCallStateStore = defineStore("callState", {
       
       // 重置窗口模式
       this.isMinimized = false;
-      
-      // 保持caller相关信息，因为这些通常不会改变
     },
 
     /**

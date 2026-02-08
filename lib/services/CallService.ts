@@ -265,9 +265,13 @@ export class CallService {
         return;
       }
 
+      logger.info(`[CallService] 重置通话状态，原因: ${reason}, 重置前状态: ${callStateStore.getCallStatus}`);
+      
       // 使用 resetCallState 方法重置状态
       callStateStore.resetCallState();
 
+      logger.info(`[CallService] 通话状态重置完成，当前状态: ${callStateStore.getCallStatus}`);
+      
       // 使用logger记录事件
       logger.log("call-ended event:", { reason });
     } catch (error) {
