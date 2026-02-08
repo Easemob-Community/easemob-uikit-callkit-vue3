@@ -24,9 +24,11 @@
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
     "build:lib": "vite build --config vite.lib.config.ts",
-    "build:pack": "rm -rf release && pnpm build:lib && pnpm pack --pack-destination release",
+    "build:pack": "pnpm build:lib && pnpm pack --pack-destination release",
     "preview": "vite preview",
-    "test": "cd test && pnpm dev"
+    "test": "pnpm run test:source",
+    "test:source": "cd test && pnpm run switch:source && pnpm run dev:source",
+    "test:tgz": "pnpm run build:pack && cd test && pnpm run switch:tgz && pnpm run dev:tgz"
   },
   "peerDependencies": {
     "vue": "^3.0.0"

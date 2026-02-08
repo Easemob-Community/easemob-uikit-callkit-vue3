@@ -2,18 +2,22 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
 
-// https://vite.dev/config/
+// 源码模式：直接引入 lib 目录下的源代码
 export default defineConfig({
   plugins: [vue()],
+  root: '.',
+  define: {
+    'import.meta.env.VITE_IMPORT_MODE': JSON.stringify('source')
+  },
   resolve: {
     alias: [
       {
         find: /^easemob-chat-callkit-vue3\/style\.css$/,
-        replacement: resolve(__dirname, './lib/style.css')
+        replacement: resolve(__dirname, '../lib/style.css')
       },
       {
         find: /^easemob-chat-callkit-vue3$/,
-        replacement: resolve(__dirname, './lib/index.ts')
+        replacement: resolve(__dirname, '../lib/index.ts')
       }
     ]
   }

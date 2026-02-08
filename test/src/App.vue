@@ -1,6 +1,12 @@
 <template>
   <div id="app">
-    <h1>Easemob Chat CallKit Vue3 演示</h1>
+    <div class="header">
+      <h1>Easemob Chat CallKit Vue3 演示</h1>
+      <div class="mode-indicator" :class="importMode">
+        <span class="mode-label">当前模式</span>
+        <span class="mode-value">{{ importModeText }}</span>
+      </div>
+    </div>
 
     <!-- 使用Provider包裹应用 - 开启debug模式以测试logger -->
     <EasemobChatCallKitProvider :chat-client="chatClient" :agora-app-id="'079c29108da649439a6f0b721a4212e4'" :init-config="{ inviteTimeout: 30000, debug: true }">
@@ -97,6 +103,19 @@ import {
   EasemobChatSingleCall, 
   EasemobChatMultiCall 
 } from 'easemob-chat-callkit-vue3'
+// 引入模式检测
+const importMode = import.meta.env.VITE_IMPORT_MODE || 'unknown'
+const importModeText = computed(() => {
+  switch (importMode) {
+    case 'source':
+      return '🔧 源码引入'
+    case 'tgz':
+      return '📦 TGZ 包引入'
+    default:
+      return '❓ 未知模式'
+  }
+})
+
 // 状态管理
 const targetUserId = ref('')
 const groupId = ref('')
@@ -435,6 +454,60 @@ const handleEndCall = () => {
   margin: 0 auto;
   padding: 20px;
   font-family: Arial, sans-serif;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.mode-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.mode-indicator.source {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.mode-indicator.tgz {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+}
+
+.mode-indicator.unknown {
+  background: linear-gradient(135deg, #ccc 0%, #999 100%);
+  color: #333;
+}
+
+.mode-label {
+  font-size: 11px;
+  opacity: 0.9;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.mode-value {
+  font-size: 14px;
+  font-weight: 600;
+  margin-top: 2px;
 }
 
 .demo-section {
