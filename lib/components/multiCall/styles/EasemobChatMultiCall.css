@@ -190,6 +190,34 @@
   z-index: 2;
 }
 
+/* 🔑 音频状态指示器样式 */
+.audio-indicators {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 4px;
+}
+
+.audio-indicator {
+  width: 16px;
+  height: 16px;
+  opacity: 0.9;
+  transition: opacity 0.2s ease;
+}
+
+.audio-indicator.mic-on {
+  filter: brightness(1.2);
+}
+
+.audio-indicator.mic-off {
+  opacity: 0.5;
+}
+
+.muted-indicator {
+  margin-left: 2px;
+  font-size: 14px;
+}
+
 /* Hover 图标样式 */
 .hover-icon {
   position: absolute;

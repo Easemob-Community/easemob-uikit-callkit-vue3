@@ -44,7 +44,24 @@
             </div>
             <div class="participant-info">
               <span>{{ mainParticipant?.userName }}</span>
-              <span v-if="mainParticipant?.isMuted" class="muted-indicator">🔇</span>
+              <!-- 🔑 音频状态标识 -->
+              <div class="audio-indicators">
+                <img 
+                  v-if="!mainParticipant?.isInviting && hasAudioTrack(mainParticipant?.userId)" 
+                  src="/lib/callkit-static-assets/icons/mic_on.svg" 
+                  class="audio-indicator mic-on"
+                  title="已上麦"
+                  alt="mic on"
+                />
+                <img 
+                  v-else-if="!mainParticipant?.isInviting" 
+                  src="/lib/callkit-static-assets/icons/mic_slash.svg" 
+                  class="audio-indicator mic-off"
+                  title="未上麦"
+                  alt="mic off"
+                />
+                <span v-if="mainParticipant?.isMuted" class="muted-indicator">🔇</span>
+              </div>
             </div>
           </div>
         </div>
@@ -72,7 +89,24 @@
               </div>
               <div class="participant-info">
                 <span>{{ participant.userName }}</span>
-                <span v-if="participant.isMuted" class="muted-indicator">🔇</span>
+                <!-- 🔑 音频状态标识 -->
+                <div class="audio-indicators">
+                  <img 
+                    v-if="!participant.isInviting && hasAudioTrack(participant.userId)" 
+                    src="/lib/callkit-static-assets/icons/mic_on.svg" 
+                    class="audio-indicator mic-on"
+                    title="已上麦"
+                    alt="mic on"
+                  />
+                  <img 
+                    v-else-if="!participant.isInviting" 
+                    src="/lib/callkit-static-assets/icons/mic_slash.svg" 
+                    class="audio-indicator mic-off"
+                    title="未上麦"
+                    alt="mic off"
+                  />
+                  <span v-if="participant.isMuted" class="muted-indicator">🔇</span>
+                </div>
               </div>
             </div>
           </div>
@@ -341,6 +375,23 @@ const existingUserIds = computed(() => props.participants.map(p => p.userId))
 const invitingUserIds = computed(() => 
   props.participants.filter(p => p.isInviting).map(p => p.userId)
 )
+
+// 🔑 关键修复：检查用户是否有音频轨道（用于显示上麦状态）
+const hasAudioTrack = (userId: string | undefined): boolean => {
+  if (!userId) return false
+  
+  const rtcService = rtcChannelStore.rtcService
+  if (!rtcService) return false
+  
+  // 本地用户检查本地音频轨道
+  if (userId === currentUserId.value) {
+    return rtcService.isAudioEnabled
+  }
+  
+  // 远程用户检查远程音频轨道
+  const remoteAudioTrack = rtcService.getRemoteAudioTrack(userId)
+  return !!remoteAudioTrack
+}
 
 // 最小化窗口
 const handleMinimize = () => {
@@ -947,7 +998,21 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  // 🔑 关键修复：确保始终清理RTC资源，即使通话状态为IDLE
+  const rtcService = rtcChannelStore.rtcService
+  if (rtcService) {
+    logger.info('EasemobChatMultiCall: 组件销毁，清理RTC资源')
+    // 停止本地音视频轨道
+    try {
+      rtcService.leaveChannel()
+    } catch (error) {
+      logger.warn('EasemobChatMultiCall: 离开频道时出错:', error)
+    }
+  }
+  
+  // 尝试发送挂断信令（如果通话仍在进行）
   endCall()
+  
   window.removeEventListener('resize', updateContainerSize)
   
   // 清理所有邀请定时器

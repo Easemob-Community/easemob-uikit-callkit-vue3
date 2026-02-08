@@ -113,10 +113,20 @@ export const useCallStateStore = defineStore("callState", {
      */
     handleTimeout() {
       console.warn("通话邀请超时");
-      // 设置状态为超时
+      
+      // 🔑 关键修复：多人通话场景下，超时后不自动隐藏界面
+      // 用户需要手动挂断才能正确销毁资源
+      const isMultiCall = this.type === CALL_TYPE.VIDEO_MULTI || this.type === CALL_TYPE.AUDIO_MULTI;
+      
+      if (isMultiCall) {
+        console.log("多人通话邀请超时，保持界面等待用户手动挂断");
+        // 多人通话保持当前状态，由用户主动挂断
+        // 可以在这里触发超时提示事件
+        return;
+      }
+      
+      // 单人通话场景下，设置状态为IDLE，自动隐藏界面
       this.setCallStatus(CALL_STATUS.IDLE);
-      // 可以在这里触发超时事件或回调
-      // 实际项目中可能需要根据不同的状态进行不同的处理
     },
     /**
      * 更新部分通话状态
