@@ -383,8 +383,11 @@ const hasAudioTrack = (userId: string | undefined): boolean => {
   const rtcService = rtcChannelStore.rtcService
   if (!rtcService) return false
   
+  // 获取当前用户 ID（主叫方就是当前用户）
+  const currentUserId = callStateStore.getCallState.callerUserId
+  
   // 本地用户检查本地音频轨道
-  if (userId === currentUserId.value) {
+  if (userId === currentUserId) {
     return rtcService.isAudioEnabled
   }
   
