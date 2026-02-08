@@ -151,7 +151,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useCallStateStore } from '../../store/callState'
 import { useRtcChannelStore } from '../../store/rtcChannel'
 import { CallService } from '../../services/CallService'
-import { HANGUP_REASON, CALL_STATUS } from '../../types/callstate.types'
+import { HANGUP_REASON, CALL_STATUS, CALL_TYPE } from '../../types/callstate.types'
 import { logger } from '../../utils/logger'
 import EasemobChatMiniWindow from '../../components/EasemobChatMiniWindow.vue'
 import EasemobChatGroupMemberList from './EasemobChatGroupMemberList.vue'
@@ -218,15 +218,22 @@ const rtcChannelStore = useRtcChannelStore()
 const { participants: internalParticipants } = useParticipants(props.currentUserId)
 
 // 最终使用的 participants（优先使用外部传入的，否则使用内部管理的）
-const participants = computed(() => participants.value ?? internalParticipants.value)
+const participants = computed(() => props.participants ?? internalParticipants.value)
 
 // 🔑 关键优化：自动显示/隐藏控制
 const isVisible = computed(() => {
   if (!props.autoShow) return true // 不启用自动显示时，始终可见
   
-  // 只在通话中显示
+  // 只在群组通话中显示
   const status = callStateStore.getCallStatus
-  return status === CALL_STATUS.IN_CALL || status === CALL_STATUS.INVITING
+  const callType = callStateStore.getCallState.type
+  
+  // 检查是否为群组通话类型
+  const isGroupCall = callType === CALL_TYPE.VIDEO_MULTI || callType === CALL_TYPE.AUDIO_MULTI
+  const isInCall = status === CALL_STATUS.IN_CALL || status === CALL_STATUS.INVITING
+  
+  // 只有是群组通话且通话状态为 IN_CALL 或 INVITING 时才显示
+  return isGroupCall && isInCall
 })
 
 // Refs
