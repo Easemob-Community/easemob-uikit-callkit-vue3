@@ -73,6 +73,7 @@
             @call-started="handleMultiCallStart" 
             @call-ended="handleMultiCallEnd"
             @user-left="handleUserLeft"
+            @user-joined="handleUserJoined"
           />
         </div>
 
@@ -127,6 +128,9 @@ const showMultiCall = ref(false)
 const singleCallType = ref<'audio' | 'video'>('video')
 const multiCallType = ref<'audio' | 'video'>('video')
 const currentCallInfo = ref('')
+
+// 🔑 关键修复：跟踪已明确离开的用户（避免挂断后显示"邀请中"）
+const leftUsers = ref<Set<string>>(new Set())
 // 登录相关状态
 const loginUserId = ref('ppp')
 const loginPassword = ref('1')
@@ -148,11 +152,14 @@ const mockParticipants = computed(() => {
   const state = callStateStore.getCallState
   const participants: any[] = []
   
+  // 访问 joinedRtcUsers 确保计算属性响应其变化
+  const joinedUsers = Array.from(rtcChannelStore.joinedRtcUsers)
+  
   console.log('[App DEBUG] mockParticipants 计算:', {
     currentUser: chatClient.value?.user,
     callerUserId: state.callerUserId,
     invitedMembers: JSON.parse(JSON.stringify(state.invitedMembers)),
-    joinedRtcUsers: Array.from(rtcChannelStore.joinedRtcUsers),
+    joinedRtcUsers: joinedUsers,
     uidToUserIdMap: JSON.parse(JSON.stringify(Array.from(rtcChannelStore.uidToUserIdMap.entries())))
   })
   
@@ -169,23 +176,35 @@ const mockParticipants = computed(() => {
   }
   
   // 添加主叫方（如果不是当前用户）
+  // 主叫方始终添加，直到明确离开（通过 userLeft 事件标记）
   if (state.callerUserId && state.callerUserId !== chatClient.value?.user) {
     const hasJoined = rtcChannelStore.isUserInRtc(state.callerUserId)
-    participants.push({
-      userId: state.callerUserId,
-      userName: callStateStore.getUserInfo(state.callerUserId)?.nickname || state.callerUserId,
-      avatar: callStateStore.getUserInfo(state.callerUserId)?.avatarURL,
-      isMuted: false,
-      isInviting: !hasJoined, // 根据RTC状态决定是否还在邀请中
-      hasJoined: hasJoined
-    })
+    const isInInvitedList = state.invitedMembers?.includes(state.callerUserId)
+    const hasExplicitlyLeft = leftUsers.value.has(state.callerUserId) // 🔑 检查是否已明确离开
+    
+    // 主叫方在以下情况显示：
+    // 1. 已加入RTC (hasJoined = true)
+    // 2. 还在邀请列表中 (isInInvitedList = true)  
+    // 3. 被叫方刚加入时（invitedMembers可能已清空，但还没有人标记为joined，且未明确离开）
+    const shouldShowCaller = !hasExplicitlyLeft && (hasJoined || isInInvitedList || rtcChannelStore.joinedRtcUsers.size === 0)
+    
+    if (shouldShowCaller) {
+      participants.push({
+        userId: state.callerUserId,
+        userName: callStateStore.getUserInfo(state.callerUserId)?.nickname || state.callerUserId,
+        avatar: callStateStore.getUserInfo(state.callerUserId)?.avatarURL,
+        isMuted: false,
+        isInviting: !hasJoined, // 根据RTC状态决定是否还在邀请中
+        hasJoined: hasJoined
+      })
+    }
   }
   
-  // 添加其他被邀请成员
+  // 添加其他被邀请成员（排除已明确离开的用户）
   if (state.invitedMembers && state.invitedMembers.length > 0) {
     state.invitedMembers.forEach(userId => {
-      // 避免重复添加
-      if (userId !== chatClient.value?.user && userId !== state.callerUserId) {
+      // 避免重复添加，且排除已明确离开的用户
+      if (userId !== chatClient.value?.user && userId !== state.callerUserId && !leftUsers.value.has(userId)) {
         const hasJoined = rtcChannelStore.isUserInRtc(userId)
         participants.push({
           userId,
@@ -376,11 +395,16 @@ const handleMultiCallEnd = () => {
   console.log('群组通话结束')
   showMultiCall.value = false
   currentCallInfo.value = ''
+  // 🔑 关键修复：清空已离开用户列表
+  leftUsers.value.clear()
 }
 
 // 处理用户离开RTC
 const handleUserLeft = (userId: string) => {
   console.log('[App] 用户离开RTC:', userId)
+  
+  // 🔑 关键修复：将用户标记为已明确离开（避免挂断后显示"邀请中"）
+  leftUsers.value.add(userId)
   
   // 从invitedMembers中移除该用户
   const callStateStore = useCallStateStore()
@@ -388,9 +412,28 @@ const handleUserLeft = (userId: string) => {
   const updatedInvitedMembers = currentInvitedMembers.filter(id => id !== userId)
   callStateStore.updateInvitedMembers(updatedInvitedMembers)
   
-  console.log('[App] 已从invitedMembers移除用户:', { 
+  // 从RTC joined 列表中移除
+  const rtcChannelStore = useRtcChannelStore()
+  rtcChannelStore.markUserLeftRtc(userId)
+  
+  console.log('[App] 已处理用户离开:', { 
     userId, 
+    leftUsers: Array.from(leftUsers.value),
     remainingMembers: updatedInvitedMembers 
+  })
+}
+
+// 处理用户视频已播放（用于更新 isInviting 状态）
+const handleUserJoined = (userId: string) => {
+  console.log('[App] 用户视频已播放，标记为已加入:', userId)
+  
+  // 标记用户已加入RTC，这样 mockParticipants 会更新 isInviting 为 false
+  const rtcChannelStore = useRtcChannelStore()
+  rtcChannelStore.markUserJoinedRtc(userId)
+  
+  console.log('[App] 已标记用户加入RTC:', { 
+    userId, 
+    joinedRtcUsers: Array.from(rtcChannelStore.joinedRtcUsers) 
   })
 }
 
@@ -426,6 +469,8 @@ const handleResetState = () => {
   showSingleCall.value = false
   showMultiCall.value = false
   currentCallInfo.value = ''
+  // 🔑 关键修复：清空已离开用户列表
+  leftUsers.value.clear()
   console.log('通话状态已重置')
   alert('通话状态已重置')
 }
@@ -439,6 +484,8 @@ const handleEndCall = () => {
       showSingleCall.value = false
       showMultiCall.value = false
       currentCallInfo.value = ''
+      // 🔑 关键修复：清空已离开用户列表
+      leftUsers.value.clear()
       alert('通话已结束')
     })
     .catch((error) => {

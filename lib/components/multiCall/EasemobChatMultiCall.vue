@@ -157,6 +157,7 @@ const emit = defineEmits<{
   addParticipant: []
   participantTimeout: [userId: string]
   userLeft: [userId: string] // 新增：用户离开RTC事件
+  userJoined: [userId: string] // 新增：用户视频已播放事件（用于更新 isInviting 状态）
 }>()
 
 const callStateStore = useCallStateStore()
@@ -194,6 +195,104 @@ const { sendInviteMessage } = useSignalManager()
 // 邀请超时管理
 const invitationTimers = ref<Map<string, number>>(new Map())
 const INVITATION_TIMEOUT = 30000 // 30秒超时
+
+// 远程用户检查轮询
+const remoteUserCheckInterval = ref<number | null>(null)
+const REMOTE_USER_CHECK_INTERVAL = 1000 // 每秒检查一次
+const REMOTE_USER_CHECK_MAX_ATTEMPTS = 30 // 最多检查30次（30秒）
+let remoteUserCheckAttempts = 0
+
+// 开始轮询检查远程用户
+const startRemoteUserCheck = () => {
+  // 清除之前的轮询
+  if (remoteUserCheckInterval.value) {
+    clearInterval(remoteUserCheckInterval.value)
+    remoteUserCheckInterval.value = null
+  }
+  
+  remoteUserCheckAttempts = 0
+  
+  remoteUserCheckInterval.value = window.setInterval(async () => {
+    remoteUserCheckAttempts++
+    
+    const rtcService = rtcChannelStore.rtcService
+    if (!rtcService) return
+    
+    const client = rtcService.getClient()
+    if (!client) return
+    
+    const remoteUsers = client.remoteUsers
+    if (remoteUsers && remoteUsers.length > 0) {
+      logger.info(`【轮询检查】发现${remoteUsers.length}个远程用户，尝试订阅`, {
+        attempt: remoteUserCheckAttempts,
+        users: remoteUsers.map((u: any) => ({ uid: u.uid, hasVideo: u.hasVideo, hasTrack: !!u.videoTrack }))
+      })
+      
+      // 尝试订阅所有未订阅的远程用户
+      let hasNewSubscription = false
+      for (const user of remoteUsers) {
+        if (user.hasVideo && !user.videoTrack) {
+          try {
+            await rtcService.subscribeRemoteUser(user, 'video')
+            hasNewSubscription = true
+            logger.info('【轮询检查】订阅视频成功:', user.uid)
+            
+            // 🔑 关键修复：通知父组件该用户已加入
+            let userId = rtcChannelStore.getUserIdByUid(user.uid.toString())
+            
+            // 如果没有映射，尝试从 callerUserId 推断
+            if (!userId) {
+              const callStateStore = useCallStateStore()
+              const state = callStateStore.getCallState
+              if (state.callerUserId && state.callerUserId !== callStateStore.getCurrentUserId) {
+                userId = state.callerUserId
+                rtcChannelStore.setUidToUserIdMapping(user.uid.toString(), userId)
+              }
+            }
+            
+            if (userId && !rtcChannelStore.isUserInRtc(userId)) {
+              logger.info('【轮询检查】标记用户已加入:', userId)
+              emit('userJoined', userId)
+            }
+          } catch (error) {
+            logger.error('【轮询检查】订阅视频失败:', error)
+          }
+        }
+        if (user.hasAudio && !user.audioTrack) {
+          try {
+            await rtcService.subscribeRemoteUser(user, 'audio')
+            hasNewSubscription = true
+          } catch (error) {
+            logger.error('【轮询检查】订阅音频失败:', error)
+          }
+        }
+      }
+      
+      // 如果有新订阅，触发重新渲染
+      if (hasNewSubscription) {
+        scheduleRender(300)
+      }
+    }
+    
+    // 检查是否达到最大尝试次数
+    if (remoteUserCheckAttempts >= REMOTE_USER_CHECK_MAX_ATTEMPTS) {
+      logger.info('【轮询检查】达到最大尝试次数，停止轮询')
+      if (remoteUserCheckInterval.value) {
+        clearInterval(remoteUserCheckInterval.value)
+        remoteUserCheckInterval.value = null
+      }
+    }
+  }, REMOTE_USER_CHECK_INTERVAL)
+}
+
+// 停止轮询检查
+const stopRemoteUserCheck = () => {
+  if (remoteUserCheckInterval.value) {
+    clearInterval(remoteUserCheckInterval.value)
+    remoteUserCheckInterval.value = null
+    logger.info('【轮询检查】已停止')
+  }
+}
 
 // 清理指定用户的邀请定时器
 const clearInvitationTimer = (userId: string) => {
@@ -369,7 +468,26 @@ const renderVideoStreams = () => {
       }
     } else {
       // 渲染远程视频流
-      const remoteTrack = rtcService.getRemoteVideoTrack(userId)
+      let remoteTrack = rtcService.getRemoteVideoTrack(userId)
+      
+      // 如果通过userId找不到，尝试查找所有远程用户
+      if (!remoteTrack) {
+        const client = rtcService.getClient()
+        if (client && client.remoteUsers) {
+          // 找到第一个有视频轨道的远程用户（备选方案）
+          for (const remoteUser of client.remoteUsers) {
+            if (remoteUser.videoTrack) {
+              remoteTrack = remoteUser.videoTrack
+              logger.info('通过备选方案找到远程视频轨道', { 
+                userId, 
+                remoteUid: remoteUser.uid,
+                hasVideo: remoteUser.hasVideo 
+              })
+              break
+            }
+          }
+        }
+      }
       
       if (remoteTrack) {
         const trackId = remoteTrack.getTrackId?.()
@@ -383,10 +501,30 @@ const renderVideoStreams = () => {
           
           remoteTrack.play(videoElement)
           videoElement.dataset.playedTrackId = trackId
-          logger.debug('远程视频流已播放', { userId, trackId })
+          logger.info('✅ 远程视频流已播放', { userId, trackId })
+          
+          // **关键修复**：通知父组件该用户视频已播放，更新 isInviting 状态
+          const participant = props.participants.find(p => p.userId === userId)
+          if (participant?.isInviting) {
+            logger.info('通知父组件用户视频已播放，更新状态:', userId)
+            emit('userJoined', userId)
+          }
+        } else {
+          logger.debug('远程视频轨道已播放过，跳过', { userId, trackId })
         }
       } else {
-        logger.warn('远程视频轨道不存在', { userId })
+        // 添加更详细的调试信息
+        const client = rtcService.getClient()
+        logger.warn('❌ 远程视频轨道不存在', { 
+          userId,
+          remoteUsersCount: client?.remoteUsers?.length || 0,
+          remoteUsers: client?.remoteUsers?.map((u: any) => ({ 
+            uid: u.uid, 
+            hasVideo: u.hasVideo, 
+            hasTrack: !!u.videoTrack 
+          })),
+          uidToUserIdMap: Array.from(rtcChannelStore.uidToUserIdMap.entries())
+        })
       }
     }
   })
@@ -419,6 +557,41 @@ const startCall = async () => {
     rtcChannelStore.startCallTimer()
     
     console.log(`Starting ${props.type} group call in ${props.groupId || props.groupName}`)
+    
+    // 延迟检查已存在的远程用户（给 joinChannel 完成和 remoteUsers 更新留出时间）
+    setTimeout(async () => {
+      const rtcService = rtcChannelStore.rtcService
+      if (rtcService) {
+        const client = rtcService.getClient()
+        if (client && client.remoteUsers && client.remoteUsers.length > 0) {
+          logger.info('【startCall延迟检查】检测到已存在的远程用户:', 
+            client.remoteUsers.map((u: any) => ({ uid: u.uid, hasVideo: u.hasVideo, hasTrack: !!u.videoTrack })))
+          
+          for (const user of client.remoteUsers) {
+            if (user.hasVideo && !user.videoTrack) {
+              logger.info('【startCall延迟检查】订阅用户视频:', user.uid)
+              try {
+                await rtcService.subscribeRemoteUser(user, 'video')
+              } catch (error) {
+                logger.error('【startCall延迟检查】订阅视频失败:', error)
+              }
+            }
+            if (user.hasAudio && !user.audioTrack) {
+              try {
+                await rtcService.subscribeRemoteUser(user, 'audio')
+              } catch (error) {
+                logger.error('【startCall延迟检查】订阅音频失败:', error)
+              }
+            }
+          }
+          
+          // 订阅完成后重新渲染
+          scheduleRender(500)
+        } else {
+          logger.info('【startCall延迟检查】暂无远程用户')
+        }
+      }
+    }, 2000) // 2秒后检查，确保 joinChannel 已完成
   } catch (error) {
     console.error('Failed to start group call:', error)
   }
@@ -562,7 +735,16 @@ const updateContainerSize = () => {
 }
 
 // 监听参与者列表变化，自动渲染视频流
-watch(() => props.participants, () => {
+watch(() => props.participants, (newParticipants) => {
+  // 🔑 关键修复：如果当前选中的主视频用户已不在参与者列表中，切换回本地视频
+  if (selectedVideoId.value) {
+    const stillExists = newParticipants.some(p => p.userId === selectedVideoId.value)
+    if (!stillExists) {
+      logger.info('选中的主视频用户已不在参与者列表中，自动切换回本地视频:', selectedVideoId.value)
+      selectedVideoId.value = null
+    }
+  }
+  
   // 清空并重新收集 videoRefs
   videoRefs.value = []
   
@@ -594,7 +776,15 @@ watch(isMinimized, (minimized) => {
   }
 })
 
-onMounted(() => {
+// 监听已加入RTC的用户列表变化，当有新用户加入时重新渲染
+watch(() => rtcChannelStore.joinedRtcUsers, (newJoinedUsers) => {
+  logger.info('已加入RTC用户列表变化:', Array.from(newJoinedUsers))
+  nextTick(() => {
+    scheduleRender(300)
+  })
+}, { deep: true })
+
+onMounted(async () => {
   startCall()
   updateContainerSize()
   
@@ -606,18 +796,68 @@ onMounted(() => {
   if (rtcService) {
     const client = rtcService.getClient()
     if (client) {
-      // 监听远程用户发布视频
+      // 🔑 关键修复：监听远程用户发布流（audio 或 video 任一发布就结束 loading）
       client.on('user-published', async (user: any, mediaType: 'audio' | 'video') => {
         logger.info('远程用户发布流:', user.uid, mediaType)
-        if (mediaType === 'video') {
-          // 获取userId映射
-          const userId = rtcChannelStore.getUserIdByUid(user.uid.toString())
-          if (userId) {
-            // 清除邀请定时器，用户已加入
-            clearInvitationTimer(userId)
+        
+        // 获取userId映射（优先使用已存储的映射）
+        let userId = rtcChannelStore.getUserIdByUid(user.uid.toString())
+        
+        // 如果没有映射，尝试从 callerUserId 推断（主叫方）
+        if (!userId) {
+          const callStateStore = useCallStateStore()
+          const state = callStateStore.getCallState
+          // 如果是群组通话且 callerUserId 存在，假设远程用户就是主叫方
+          if (state.callerUserId && state.callerUserId !== callStateStore.getCurrentUserId) {
+            userId = state.callerUserId
+            // 建立映射以便后续使用
+            rtcChannelStore.setUidToUserIdMapping(user.uid.toString(), userId)
+            logger.info('通过 callerUserId 推断 userId 映射:', { uid: user.uid, userId })
+          }
+        }
+        
+        if (userId) {
+          // 清除邀请定时器，用户已加入
+          clearInvitationTimer(userId)
+          
+          // 🔑 关键修复：audio 或 video 任一发布就通知父组件用户已加入
+          if (!rtcChannelStore.isUserInRtc(userId)) {
+            logger.info('远程用户发布流，标记为已加入:', { userId, mediaType })
+            emit('userJoined', userId)
+          }
+        }
+        
+        scheduleRender(500)
+      })
+      
+      // 🔑 关键修复：监听远程用户取消发布流（视频结束时销毁窗口）
+      client.on('user-unpublished', (user: any, mediaType: 'audio' | 'video') => {
+        logger.info('远程用户取消发布流:', user.uid, mediaType)
+        
+        // 获取userId映射
+        let userId = rtcChannelStore.getUserIdByUid(user.uid.toString())
+        
+        // 如果没有映射，尝试从 callerUserId 推断
+        if (!userId) {
+          const callStateStore = useCallStateStore()
+          const state = callStateStore.getCallState
+          if (state.callerUserId && state.callerUserId !== callStateStore.getCurrentUserId) {
+            userId = state.callerUserId
+          }
+        }
+        
+        // 当视频流结束时，直接销毁窗口（而不是回到邀请中）
+        if (mediaType === 'video' && userId) {
+          logger.info('远程用户视频流结束，销毁窗口:', { uid: user.uid, userId })
+          
+          // 如果当前主视频是该用户，自动切换回本地视频
+          if (selectedVideoId.value === userId) {
+            logger.info('当前主视频用户视频结束，自动切换回本地视频:', userId)
+            selectedVideoId.value = null
           }
           
-          scheduleRender(500)
+          // 🔑 关键修复：通知父组件用户已离开（直接销毁，不回到邀请中）
+          emit('userLeft', userId)
         }
       })
       
@@ -626,14 +866,72 @@ onMounted(() => {
         logger.info('用户离开RTC:', user.uid, reason)
         
         // 获取userId映射
-        const userId = rtcChannelStore.getUserIdByUid(user.uid.toString())
+        let userId = rtcChannelStore.getUserIdByUid(user.uid.toString())
+        
+        // 如果没有映射，尝试从 callerUserId 推断
+        if (!userId) {
+          const callStateStore = useCallStateStore()
+          const state = callStateStore.getCallState
+          if (state.callerUserId && state.callerUserId !== callStateStore.getCurrentUserId) {
+            userId = state.callerUserId
+          }
+        }
+        
         if (userId) {
           // 清除邀请定时器
           clearInvitationTimer(userId)
+          
+          // 如果当前主视频是该用户，自动切换回本地视频
+          if (selectedVideoId.value === userId) {
+            logger.info('当前主视频用户离开，自动切换回本地视频:', userId)
+            selectedVideoId.value = null
+          }
+          
           // 通知父组件移除该用户
           emit('userLeft', userId)
         }
       })
+      
+      // **关键修复**：检查已存在的远程用户（可能在我们监听之前就已加入）
+      const remoteUsers = client.remoteUsers
+      logger.info('【onMounted】检查已存在远程用户:', { 
+        count: remoteUsers?.length || 0,
+        users: remoteUsers?.map((u: any) => ({ 
+          uid: u.uid, 
+          hasVideo: u.hasVideo, 
+          hasTrack: !!u.videoTrack,
+          videoTrackReady: u.videoTrack?.getMediaStreamTrack?.() ? 'yes' : 'no'
+        }))
+      })
+      
+      if (remoteUsers && remoteUsers.length > 0) {
+        for (const user of remoteUsers) {
+          logger.info('【onMounted】处理远程用户:', { uid: user.uid, hasVideo: user.hasVideo, hasTrack: !!user.videoTrack })
+          
+          // 如果用户已发布视频但未订阅，进行订阅
+          if (user.hasVideo && !user.videoTrack) {
+            logger.info('【onMounted】订阅用户视频:', user.uid)
+            try {
+              await rtcService.subscribeRemoteUser(user, 'video')
+              logger.info('【onMounted】视频订阅成功:', user.uid)
+            } catch (error) {
+              logger.error('【onMounted】视频订阅失败:', error)
+            }
+          } else if (user.videoTrack) {
+            logger.info('【onMounted】用户已有视频轨道:', user.uid)
+          }
+          
+          if (user.hasAudio && !user.audioTrack) {
+            try {
+              await rtcService.subscribeRemoteUser(user, 'audio')
+            } catch (error) {
+              logger.error('【onMounted】音频订阅失败:', error)
+            }
+          }
+        }
+      } else {
+        logger.info('【onMounted】暂无远程用户，将在 startCall 中延迟检查')
+      }
     }
   }
   
@@ -643,6 +941,9 @@ onMounted(() => {
     // 延迟渲染视频流，确保DOM已准备好
     scheduleRender(500)
   })
+  
+  // 启动轮询检查远程用户（关键修复）
+  startRemoteUserCheck()
 })
 
 onUnmounted(() => {
@@ -657,6 +958,9 @@ onUnmounted(() => {
     clearTimeout(renderTimer)
     renderTimer = null
   }
+  
+  // 停止远程用户检查轮询
+  stopRemoteUserCheck()
 })
 </script>
 
