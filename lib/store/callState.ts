@@ -3,6 +3,7 @@ import type { CallState, INVITE_INFO } from "./types";
 import { CALL_STATUS, CALL_TYPE } from "../types/callstate.types";
 import type { Chat } from "../core/sdk/imSDK";
 import { generateRandomChannel } from "../utils";
+import { useRtcChannelStore } from "./rtcChannel";
 export const useCallStateStore = defineStore("callState", {
   /**
    * 通话状态数据
@@ -139,7 +140,14 @@ export const useCallStateStore = defineStore("callState", {
      * 设置通话状态
      */
     setCallStatus(status: CALL_STATUS) {
+      const oldStatus = this.status;
       this.status = status;
+      
+      // 🔑 关键逻辑：当从IDLE状态转换为其他状态时，清空leftUsers（新通话开始）
+      if (oldStatus === CALL_STATUS.IDLE && status !== CALL_STATUS.IDLE) {
+        const rtcChannelStore = useRtcChannelStore();
+        rtcChannelStore.clearLeftUsers();
+      }
     },
 
     /**

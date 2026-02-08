@@ -8,7 +8,7 @@ export const useRtcChannelStore = defineStore('rtcChannel', {
   /**
    * RTC频道状态数据
    */
-  state: (): RtcChannelState => ({
+ state: (): RtcChannelState => ({
     channels: {},
     activeChannelId: null,
     isConnected: false,
@@ -23,7 +23,8 @@ export const useRtcChannelStore = defineStore('rtcChannel', {
     _timer: null as any, // 内部定时器
     uidToUserIdMap: new Map<string, string>(), // Agora UID 到环信 userId 的映射
     joinedRtcUsers: new Set<string>(), // 已加入RTC频道的userId集合
-    pendingUserIds: new Set<string>() // 待加入RTC的userId集合
+    pendingUserIds: new Set<string>(), // 待加入RTC的userId集合
+    leftUsers: new Set<string>() // 已明确离开的userId集合（避免挂断后显示"邀请中"）
   }),
   
   /**
@@ -290,19 +291,27 @@ export const useRtcChannelStore = defineStore('rtcChannel', {
      */
     markUserJoinedRtc(userId: string) {
       this.joinedRtcUsers.add(userId)
+      // 从离开列表中移除（用户重新加入）
+      if (this.leftUsers.has(userId)) {
+        this.leftUsers.delete(userId)
+        logger.debug('用户重新加入RTC，从leftUsers中移除:', userId)
+      }
       // 强制触发响应式更新
       this.joinedRtcUsers = new Set(this.joinedRtcUsers)
       logger.debug('用户已加入RTC频道:', userId)
     },
     
-    /**
+   /**
      * 标记用户离开RTC频道
      */
     markUserLeftRtc(userId: string) {
       this.joinedRtcUsers.delete(userId)
+      // 标记为已明确离开（避免挂断后显示"邀请中"）
+      this.leftUsers.add(userId)
       // 强制触发响应式更新
       this.joinedRtcUsers = new Set(this.joinedRtcUsers)
-      logger.debug('用户已离开RTC频道:', userId)
+      this.leftUsers = new Set(this.leftUsers)
+      logger.debug('用户已离开RTC频道并标记为leftUser:', userId)
     },
     
     /**
@@ -310,6 +319,21 @@ export const useRtcChannelStore = defineStore('rtcChannel', {
      */
     isUserInRtc(userId: string): boolean {
       return this.joinedRtcUsers.has(userId)
+    },
+    
+    /**
+     * 检查用户是否已明确离开（用于判断是否应该显示在参与者列表中）
+     */
+    hasUserLeft(userId: string): boolean {
+      return this.leftUsers.has(userId)
+    },
+    
+    /**
+     * 清空已离开用户列表（新通话开始时调用）
+     */
+    clearLeftUsers() {
+      this.leftUsers.clear()
+      logger.debug('已清空leftUsers列表')
     },
     
     /**
@@ -376,6 +400,7 @@ export const useRtcChannelStore = defineStore('rtcChannel', {
       this.uidToUserIdMap.clear()
       this.joinedRtcUsers.clear()
       this.pendingUserIds.clear()
+      this.leftUsers.clear()
       if (this._timer) {
         clearInterval(this._timer)
         this._timer = null

@@ -12,6 +12,7 @@ import { useEndCall } from "./composables/useEndCall";
 import { useAnswerCall } from "./composables/useAnswerCall";
 import { useRtcService } from "./composables/useRtcService";
 import { useJoinChannel } from "./composables/useJoinChannel";
+import { useParticipants } from "./composables/useParticipants";
 import { RtcService } from "./services/RtcService";
 // 导出组件
 export {
@@ -25,7 +26,7 @@ export {
 // 导出store
 export { useCallStateStore, useRtcChannelStore };
 // 导出部分hook
-export { useCallKit, useEndCall, useAnswerCall, useRtcService, useJoinChannel };
+export { useCallKit, useEndCall, useAnswerCall, useRtcService, useJoinChannel, useParticipants };
 // 导出RTC服务
 export { RtcService };
 
@@ -38,6 +39,8 @@ export type {
   UseEndCallReturn,
   UseAnswerCallReturn,
 } from "./types";
+
+export type { Participant } from "./composables/useParticipants";
 
 // 导出常量与类型
 export { HANGUP_REASON, CALL_STATUS, CALL_TYPE } from "./types/callstate.types";
