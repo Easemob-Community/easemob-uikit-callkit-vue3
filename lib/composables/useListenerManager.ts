@@ -102,6 +102,8 @@ export function useListenerManager(): ListenerManagerReturn {
       groupName: ext?.callkitGroupInfo?.groupName,
       groupAvatar: ext?.callkitGroupInfo?.groupAvatar,
       inviteMessageId: message.id,
+      // 群组通话时，从邀请消息中获取被邀请成员列表
+      invitedMembers: ext?.invitedMembers || [],
     });
     logger.info("通话邀请已更新至store", callStateStore.getCallState);
     //发送alerting 信令
@@ -467,7 +469,27 @@ export function useListenerManager(): ListenerManagerReturn {
       logger.warn(
         `cancelCall信令消息通话callId与当前通话callId不一致，cancelCall信令消息通话callId: ${ext.callId}，当前通话callId: ${callStateStore.getCallState.callId}`
       );
-      return;
+      
+      // 🔑 关键修复：如果当前状态是IDLE，说明通话已经结束，直接忽略
+      if (callStateStore.getCallStatus === CALL_STATUS.IDLE) {
+        logger.info("[cancelCall] 当前通话状态已为IDLE，忽略cancelCall信令");
+        return;
+      }
+      
+      // 🔑 关键修复：对于群组通话，如果当前处于ALERTING/INVITING状态，且cancelCall来自主叫方，执行挂断
+      const currentStatus = callStateStore.getCallStatus;
+      const isFromCaller = message.from === callStateStore.getCallState.callerUserId;
+      const isGroupCall = callStateStore.type === CALL_TYPE.VIDEO_MULTI || 
+                          callStateStore.type === CALL_TYPE.AUDIO_MULTI;
+      
+      if (isGroupCall && isFromCaller && 
+          (currentStatus === CALL_STATUS.ALERTING || currentStatus === CALL_STATUS.INVITING)) {
+        logger.info("[cancelCall] 群组通话中收到主叫方取消，执行挂断（callId可能因网络等原因不一致）");
+        // 继续执行下面的挂断逻辑
+      } else {
+        logger.warn(`[cancelCall] callId不匹配且不符合容错条件，忽略信令`);
+        return;
+      }
     }
 
     // 对方取消了通话，执行挂断
@@ -524,11 +546,26 @@ export function useListenerManager(): ListenerManagerReturn {
       callStateStore.clearTimeoutTimer();
     }
 
-    // 群组通话：只移除离开的成员，不挂断整个通话
+    // 群组通话逻辑
     if (
       callStateStore.type === CALL_TYPE.VIDEO_MULTI ||
       callStateStore.type === CALL_TYPE.AUDIO_MULTI
     ) {
+      const currentStatus = callStateStore.getCallStatus;
+      const isFromCaller = message.from === callStateStore.getCallState.callerUserId;
+      
+      // 🔑 关键修复：如果被叫方处于ALERTING/INVITING状态，且收到主叫方的leaveCall，挂断整个通话
+      // 这解决主叫方在邀请阶段挂断，被叫方邀请弹窗无法关闭的问题
+      if ((currentStatus === CALL_STATUS.ALERTING || currentStatus === CALL_STATUS.INVITING) && isFromCaller) {
+        logger.info(`[群组通话] 被叫方收到主叫方(${message.from})离开信令，挂断整个通话`);
+        const callService = new CallService();
+        callService.hangup(HANGUP_REASON.HANGUP).catch((err) => {
+          logger.error("[群组通话] 执行挂断失败:", err);
+        });
+        return;
+      }
+      
+      // 通话中状态：只移除离开的成员，不挂断整个通话
       logger.info(`群组通话：成员 ${message.from} 离开，从邀请列表中移除`);
       
       // 从邀请列表中移除

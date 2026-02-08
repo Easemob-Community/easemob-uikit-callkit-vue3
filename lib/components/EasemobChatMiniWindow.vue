@@ -35,7 +35,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, type CSSProperties } from 'vue'
 import { useCallStateStore } from '../store/callState'
 import { useRtcChannelStore } from '../store/rtcChannel'
 import { useCornerDraggable } from '../composables/useDraggable'
@@ -99,9 +99,9 @@ const {
 )
 
 // 组合样式
-const windowStyle = computed(() => {
+const windowStyle = computed<CSSProperties>(() => {
   return {
-    ...draggableStyle.value,
+    ...(draggableStyle.value as CSSProperties),
     width: `${currentWidth.value}px`,
     height: `${currentHeight.value}px`,
     zIndex: 9999,

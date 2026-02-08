@@ -99,6 +99,8 @@ export interface InviteSignalingExt extends BaseSignalingExt {
   };
   /** 自定义扩展字段 */
   ext?: Record<string, any>;
+  /** 被邀请成员列表（群组通话时使用） */
+  invitedMembers?: string[];
 }
 
 /**

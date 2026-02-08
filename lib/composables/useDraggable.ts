@@ -1,4 +1,4 @@
-import { ref, computed, onMounted, onUnmounted, type Ref } from 'vue'
+import { ref, computed, onMounted, onUnmounted, type Ref, type CSSProperties } from 'vue'
 
 export interface DraggableOptions {
   /** 初始 X 坐标 */
@@ -23,7 +23,7 @@ export interface DraggableOptions {
 
 export interface DraggableReturn {
   /** 元素引用 */
-  elementRef: Ref<HTMLElement | undefined>
+  elementRef: Ref<HTMLElement | null>
   /** 是否正在拖拽 */
   isDragging: Ref<boolean>
   /** 是否发生过拖拽 */
@@ -31,7 +31,7 @@ export interface DraggableReturn {
   /** 当前位置（左上角坐标） */
   position: Ref<{ x: number; y: number }>
   /** 样式对象（用于绑定到元素） */
-  style: ReturnType<typeof computed>
+  style: Ref<CSSProperties>
   /** 开始拖拽事件处理 */
   startDrag: (e: MouseEvent | TouchEvent) => void
   /** 停止拖拽 */
@@ -88,7 +88,7 @@ export function useDraggable(options: DraggableOptions = {}): DraggableReturn {
     onDragEnd
   } = options
 
-  const elementRef = ref<HTMLElement>()
+  const elementRef = ref<HTMLElement | null>(null)
   const isDragging = ref(false)
   const hasDragged = ref(false)
   const position = ref({ x: initialX, y: initialY })
@@ -127,7 +127,7 @@ export function useDraggable(options: DraggableOptions = {}): DraggableReturn {
     }
   }
 
-  // 初始化位置（组件挂载后执行）
+  // 初始化位置（立即执行，确保首次渲染就在正确位置）
   const initPosition = () => {
     if (isInitialized.value) return
     
@@ -140,6 +140,9 @@ export function useDraggable(options: DraggableOptions = {}): DraggableReturn {
     
     isInitialized.value = true
   }
+  
+  // 立即初始化位置（用于 SSR/首次渲染）
+  initPosition()
 
   // 计算样式 - 统一使用 left/top，不使用 transform
   const style = computed(() => {

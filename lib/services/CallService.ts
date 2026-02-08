@@ -124,16 +124,32 @@ export class CallService {
           return;
         }
         
+        // 获取已加入RTC的成员列表，如果没有则使用被邀请成员列表
+        const joinedMembers = callState.joinedMembers || [];
+        const invitedMembers = callState.invitedMembers || [];
+        // 优先使用 joinedMembers，如果没有则使用 invitedMembers
+        const targetMembers = joinedMembers.length > 0 ? joinedMembers : invitedMembers;
+        
+        // 获取当前用户ID
+        const currentUserId = this.chatClientStore.getChatClient?.user;
+        // 过滤掉自己，只通知其他成员
+        const receiverList = targetMembers.filter(id => id !== currentUserId);
+        
         logger.info(
-          `CallService: 发送群组离开通话信令，群组: ${callState.groupId}`
+          `CallService: 发送群组离开通话信令，群组: ${callState.groupId}，接收者: ${receiverList.join(',') || '无'}`
         );
         
-        await sendLeaveMessage(
-          callState.groupId,
-          "groupChat"
-          // TODO: 这里应该传递 joinedMembers 的 userId 列表作为 receiverList
-          // 目前暂不实现，后续 RTC 接入后补充
-        );
+        // 如果有需要通知的成员，发送群定向消息
+        if (receiverList.length > 0) {
+          await sendLeaveMessage(
+            callState.groupId,
+            "groupChat",
+            receiverList
+          );
+          logger.info("CallService: 群组离开通话信令发送成功");
+        } else {
+          logger.info("CallService: 没有需要通知的成员，跳过发送 leaveCall");
+        }
       } else {
         // 一对一通话：发送单聊消息
         const targetUserId = 
@@ -154,9 +170,9 @@ export class CallService {
           targetUserId,
           "singleChat"
         );
+        
+        logger.info("CallService: 离开通话信令发送成功");
       }
-      
-      logger.info("CallService: 离开通话信令发送成功");
     } catch (error) {
       logger.error("CallService: 发送离开通话信令失败:", error);
       // 发送失败不影响后续流程
@@ -167,24 +183,65 @@ export class CallService {
   private async handleCancelStrategy(): Promise<void> {
     try {
       const callState = this.callStateStore.getCallState;
-      if (!callState || !callState.calleeUserId) {
-        logger.warn("CallService: 取消通话失败，缺少被叫方信息");
+      if (!callState) {
+        logger.warn("CallService: 取消通话失败，通话状态为空");
         return;
       }
 
       // 使用 useSignalManager 发送 cancelCall 信令
       const { sendCancelMessage } = useSignalManager();
       
-      logger.info(
-        `CallService: 发送取消通话信令，目标用户: ${callState.calleeUserId}`
-      );
+      // 判断是群组通话还是一对一通话
+      const isGroupCall = 
+        callState.type === CALL_TYPE.VIDEO_MULTI || 
+        callState.type === CALL_TYPE.AUDIO_MULTI;
       
-      await sendCancelMessage(
-        callState.calleeUserId,
-        "singleChat"
-      );
-      
-      logger.info("CallService: 取消通话信令发送成功");
+      if (isGroupCall) {
+        // 群组通话：发送群定向消息给所有被邀请的成员
+        if (!callState.groupId) {
+          logger.warn("CallService: 群组通话取消失败，groupId 为空");
+          return;
+        }
+        
+        // 获取被邀请的成员列表（排除自己）
+        const invitedMembers = callState.invitedMembers || [];
+        const currentUserId = this.chatClientStore.getChatClient?.user;
+        const receiverList = invitedMembers.filter(id => id !== currentUserId);
+        
+        if (receiverList.length === 0) {
+          logger.warn("CallService: 群组通话取消失败，没有需要通知的被邀请成员");
+          return;
+        }
+        
+        logger.info(
+          `CallService: 发送群组取消通话信令，群组: ${callState.groupId}，接收者: ${receiverList.join(',')}`
+        );
+        
+        await sendCancelMessage(
+          callState.groupId,
+          "groupChat",
+          receiverList
+        );
+        
+        logger.info("CallService: 群组取消通话信令发送成功");
+      } else {
+        // 一对一通话：发送单聊消息
+        if (!callState.calleeUserId) {
+          logger.warn("CallService: 取消通话失败，缺少被叫方信息");
+          return;
+        }
+        
+        logger.info(
+          `CallService: 发送取消通话信令，目标用户: ${callState.calleeUserId}`
+        );
+        
+        await sendCancelMessage(
+          callState.calleeUserId,
+          "singleChat"
+        );
+        
+        logger.info("CallService: 取消通话信令发送成功");
+      }
     } catch (error) {
       logger.error("CallService: 发送取消通话信令失败:", error);
       // 发送失败不影响后续流程

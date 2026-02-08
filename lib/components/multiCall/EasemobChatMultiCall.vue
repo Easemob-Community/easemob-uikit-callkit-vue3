@@ -3,21 +3,24 @@
     <!-- 大窗口模式 -->
     <div 
       v-if="!isMinimized"
-      ref="containerRef" 
+      ref="elementRef"
       class="easemob-chat-multi-call"
-      :style="backgroundStyle"
+      :class="{ 'is-dragging': isDragging, 'has-dragged': hasDragged }"
+      :style="[style, backgroundStyle]"
       @click="handleClearScreen"
     >
-    <!-- Header 区域 -->
-    <CallHeader 
-      v-if="!isClearScreen"
-      :group-id="groupId"
-      :group-name="groupName"
-      :group-avatar="groupAvatar"
-      :duration="callDuration"
-      @add-participant="handleAddParticipant"
-      @minimize="handleMinimize"
-    />
+    <!-- Header 区域（可拖拽） -->
+    <div @mousedown="startDrag" class="header-drag-area">
+      <CallHeader 
+        v-if="!isClearScreen"
+        :group-id="groupId"
+        :group-name="groupName"
+        :group-avatar="groupAvatar"
+        :duration="callDuration"
+        @add-participant="handleAddParticipant"
+        @minimize="handleMinimize"
+      />
+    </div>
 
     <!-- 视频内容区域 -->
     <div class="video-content" ref="contentRef">
@@ -147,7 +150,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch, type CSSProperties } from 'vue'
 import { useCallStateStore } from '../../store/callState'
 import { useRtcChannelStore } from '../../store/rtcChannel'
 import { CallService } from '../../services/CallService'
@@ -158,6 +161,7 @@ import EasemobChatMiniWindow from '../../components/EasemobChatMiniWindow.vue'
 import EasemobChatGroupMemberList from './EasemobChatGroupMemberList.vue'
 import { useSignalManager } from '../../composables/useSignalManager'
 import { useParticipants } from '../../composables/useParticipants'
+import { useDraggable } from '../../composables/useDraggable'
 import CallHeader from './CallHeader.vue'
 import MultiCallControls from './MultiCallControls.vue'
 
@@ -238,10 +242,28 @@ const isVisible = computed(() => {
 })
 
 // Refs
-const containerRef = ref<HTMLDivElement>()
 const contentRef = ref<HTMLDivElement>()
 const thumbnailScrollRef = ref<HTMLDivElement>()
 const videoRefs = ref<HTMLVideoElement[]>([])
+
+// 窗口尺寸常量
+const CONTAINER_WIDTH = 800
+const CONTAINER_HEIGHT = 600
+
+// ========== 使用拖拽 Composable ==========
+const {
+  elementRef,
+  isDragging,
+  hasDragged,
+  style,
+  startDrag
+} = useDraggable({
+  centered: true,
+  width: CONTAINER_WIDTH,
+  height: CONTAINER_HEIGHT,
+  boundary: true,
+  boundaryPadding: 20
+})
 
 // 状态
 const isMuted = ref(false)
@@ -447,7 +469,7 @@ const handleExpand = () => {
 }
 
 // 计算属性
-const backgroundStyle = computed(() => {
+const backgroundStyle = computed<CSSProperties>(() => {
   const bgUrl = getAssetUrl(props.backgroundImage, DEFAULT_BACKGROUND_IMAGE)
   if (props.backgroundImage) {
     // 用户自定义背景图
@@ -731,9 +753,36 @@ const endCall = async () => {
   try {
     logger.info('EasemobChatMultiCall: 用户点击挂断按钮，开始挂断流程')
     
-    // 调用 CallService 发送 leaveCall 信令并清理资源
+    // 根据当前通话状态选择挂断原因
+    const currentStatus = callStateStore.getCallStatus
+    const callState = callStateStore.getCallState
+    
+    // 🔑 关键修复：群组通话主叫方状态是 IN_CALL，但可能还没有人加入
+    // 需要判断是否有人真正加入了 RTC 通话
+    const isGroupCall = callState.type === CALL_TYPE.VIDEO_MULTI || callState.type === CALL_TYPE.AUDIO_MULTI
+    const currentUserId = callState.callerUserId
+    // 使用 rtcChannelStore.joinedRtcUsers 获取真正加入 RTC 的成员
+    const joinedRtcUsers = Array.from(rtcChannelStore.joinedRtcUsers)
+    const otherJoinedMembers = joinedRtcUsers.filter((id: string) => id !== currentUserId)
+    
+    // 对于群组通话：
+    // - 如果状态是 INVITING，或者状态是 IN_CALL 但还没有其他成员加入，使用 CANCEL
+    // - 如果已经有其他成员加入，使用 HANGUP
+    let isInviting = currentStatus === CALL_STATUS.INVITING
+    if (isGroupCall && currentStatus === CALL_STATUS.IN_CALL && otherJoinedMembers.length === 0) {
+      isInviting = true
+      logger.info('EasemobChatMultiCall: 群组通话主叫方，状态 IN_CALL 但无其他成员加入，视为邀请中')
+    }
+    
+    // 邀请中状态使用 CANCEL 原因（发送取消邀请信令）
+    // 通话中状态使用 HANGUP 原因（发送离开通话信令）
+    const hangupReason = isInviting ? HANGUP_REASON.CANCEL : HANGUP_REASON.HANGUP
+    
+    logger.info(`EasemobChatMultiCall: 当前状态: ${currentStatus}，已加入RTC成员: ${joinedRtcUsers.length}，其他成员: ${otherJoinedMembers.length}，使用挂断原因: ${hangupReason}`)
+    
+    // 调用 CallService 发送信令并清理资源
     const callService = new CallService()
-    await callService.hangup(HANGUP_REASON.HANGUP)
+    await callService.hangup(hangupReason)
     
     logger.info('EasemobChatMultiCall: 挂断流程完成')
   } catch (error) {
@@ -797,13 +846,13 @@ const handleInviteMembers = async (userIds: string[]) => {
 }
 
 // 拖动状态（避免清屏误触发）
-const isDragging = ref(false)
+const isUserDragging = ref(false)
 const justFinishedDrag = ref(false)
 
 // 清屏模式切换
 const handleClearScreen = () => {
   // 拖动中或拖动刚结束时不触发清屏
-  if (isDragging.value || justFinishedDrag.value) return
+  if (isUserDragging.value || justFinishedDrag.value) return
   isClearScreen.value = !isClearScreen.value
 }
 

@@ -37,7 +37,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, type CSSProperties } from 'vue'
 import { useCallStateStore } from '../../store/callState'
 import { CALL_STATUS } from '../../types/callstate.types'
 import { DEFAULT_BACKGROUND_IMAGE, getAssetUrl } from '../../config/assets'
@@ -143,7 +143,7 @@ const handleEndCall = () => {
 }
 
 // ========== 背景图配置 ==========
-const backgroundStyle = computed(() => {
+const backgroundStyle = computed<CSSProperties>(() => {
   const bgUrl = getAssetUrl(props.backgroundImage, DEFAULT_BACKGROUND_IMAGE)
   return {
     backgroundImage: `url(${bgUrl})`
