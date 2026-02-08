@@ -251,7 +251,15 @@ onMounted(() => {
 const callStateStore = useCallStateStore()
 watch(
   () => callStateStore.getCallStatus,
-  (newStatus) => {
+  (newStatus, oldStatus) => {
+    // 🔑 关键修复：当从 IDLE 状态变为其他状态时，清空 leftUsers（新通话开始）
+    if (oldStatus === CALL_STATUS.IDLE && newStatus !== CALL_STATUS.IDLE) {
+      if (leftUsers.value.size > 0) {
+        console.log('[App] 新通话开始，清空 leftUsers:', Array.from(leftUsers.value))
+        leftUsers.value.clear()
+      }
+    }
+    
     // 当状态变为 IN_CALL 时
     if (newStatus === CALL_STATUS.IN_CALL) {
       const callType = callStateStore.getCallState.type
@@ -427,13 +435,20 @@ const handleUserLeft = (userId: string) => {
 const handleUserJoined = (userId: string) => {
   console.log('[App] 用户视频已播放，标记为已加入:', userId)
   
+  // 🔑 关键修复：从 leftUsers 中移除（用户重新加入通话）
+  if (leftUsers.value.has(userId)) {
+    leftUsers.value.delete(userId)
+    console.log('[App] 用户重新加入，从 leftUsers 中移除:', userId)
+  }
+  
   // 标记用户已加入RTC，这样 mockParticipants 会更新 isInviting 为 false
   const rtcChannelStore = useRtcChannelStore()
   rtcChannelStore.markUserJoinedRtc(userId)
   
   console.log('[App] 已标记用户加入RTC:', { 
     userId, 
-    joinedRtcUsers: Array.from(rtcChannelStore.joinedRtcUsers) 
+    joinedRtcUsers: Array.from(rtcChannelStore.joinedRtcUsers),
+    leftUsers: Array.from(leftUsers.value)
   })
 }
 
