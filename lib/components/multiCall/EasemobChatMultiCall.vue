@@ -48,14 +48,14 @@
               <div class="audio-indicators">
                 <img 
                   v-if="!mainParticipant?.isInviting && hasAudioTrack(mainParticipant?.userId)" 
-                  src="/lib/callkit-static-assets/icons/mic_on.svg" 
+                  :src="ICONS.MIC_ON" 
                   class="audio-indicator mic-on"
                   title="已上麦"
                   alt="mic on"
                 />
                 <img 
                   v-else-if="!mainParticipant?.isInviting" 
-                  src="/lib/callkit-static-assets/icons/mic_slash.svg" 
+                  :src="ICONS.MIC_OFF" 
                   class="audio-indicator mic-off"
                   title="未上麦"
                   alt="mic off"
@@ -93,14 +93,14 @@
                 <div class="audio-indicators">
                   <img 
                     v-if="!participant.isInviting && hasAudioTrack(participant.userId)" 
-                    src="/lib/callkit-static-assets/icons/mic_on.svg" 
+                    :src="ICONS.MIC_ON" 
                     class="audio-indicator mic-on"
                     title="已上麦"
                     alt="mic on"
                   />
                   <img 
                     v-else-if="!participant.isInviting" 
-                    src="/lib/callkit-static-assets/icons/mic_slash.svg" 
+                    :src="ICONS.MIC_OFF" 
                     class="audio-indicator mic-off"
                     title="未上麦"
                     alt="mic off"
@@ -153,6 +153,7 @@ import { useRtcChannelStore } from '../../store/rtcChannel'
 import { CallService } from '../../services/CallService'
 import { HANGUP_REASON, CALL_STATUS, CALL_TYPE } from '../../types/callstate.types'
 import { logger } from '../../utils/logger'
+import { DEFAULT_BACKGROUND_IMAGE, ICONS, getAssetUrl } from '../../config/assets'
 import EasemobChatMiniWindow from '../../components/EasemobChatMiniWindow.vue'
 import EasemobChatGroupMemberList from './EasemobChatGroupMemberList.vue'
 import { useSignalManager } from '../../composables/useSignalManager'
@@ -447,9 +448,11 @@ const handleExpand = () => {
 
 // 计算属性
 const backgroundStyle = computed(() => {
+  const bgUrl = getAssetUrl(props.backgroundImage, DEFAULT_BACKGROUND_IMAGE)
   if (props.backgroundImage) {
+    // 用户自定义背景图
     return {
-      backgroundImage: `url(${props.backgroundImage})`,
+      backgroundImage: `url(${bgUrl})`,
       backgroundSize: '100% 100%',
       backgroundPosition: '0px 0px',
       backgroundRepeat: 'no-repeat'
@@ -457,7 +460,7 @@ const backgroundStyle = computed(() => {
   }
   // 使用默认背景图
   return {
-    backgroundImage: 'url(/lib/callkit-static-assets/images/callkit_bg.png)',
+    backgroundImage: `url(${bgUrl})`,
     backgroundSize: 'cover',
     backgroundPosition: 'center',
     backgroundRepeat: 'no-repeat'

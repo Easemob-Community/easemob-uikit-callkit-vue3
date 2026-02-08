@@ -5,11 +5,9 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: white;
-  background-image: url(/lib/callkit-static-assets/images/callkit_bg.png);
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
+  color: #1a1a1a;
+  /* 背景图由父组件 EasemobChatSingleCall 提供 */
+  background: transparent;
 }
 
 .caller-info {
@@ -47,7 +45,7 @@
 
 .call-type-indicator {
   font-size: 18px;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(0, 0, 0, 0.6);
 }
 
 .waiting-controls {
@@ -92,5 +90,5 @@
 
 .waiting-timer {
   font-size: 20px;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(0, 0, 0, 0.6);
 }

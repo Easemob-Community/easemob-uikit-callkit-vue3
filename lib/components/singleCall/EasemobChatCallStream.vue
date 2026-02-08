@@ -2,15 +2,20 @@
   <div class="call-stream-container">
     <!-- 远程视频 - 全屏背景 -->
     <div class="remote-video-container">
-      <video ref="remoteVideo" class="remote-video" autoplay></video>
-      <div v-if="!hasRemoteVideo" class="remote-placeholder">
+      <!-- 只有视频通话才显示远程视频元素 -->
+      <video v-if="props.type === 'video'" ref="remoteVideo" class="remote-video" autoplay></video>
+      
+      <!-- 占位符：视频通话等待视频流 或 语音通话显示对方信息 -->
+      <div v-if="props.type === 'audio' || !hasRemoteVideo" class="remote-placeholder">
         <div class="avatar-placeholder">
           <svg class="user-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
             <path fill-rule="evenodd" clip-rule="evenodd" d="M8 8.90816C8 9.63672 8.16477 10.3145 8.4943 10.9414C8.83953 11.5683 9.30245 12.0681 9.88305 12.4409C10.4637 12.8136 11.0992 13 11.7896 13C12.4801 13 13.1156 12.8136 13.6962 12.4409C14.2768 12.0681 14.7319 11.5683 15.0615 10.9414C15.4067 10.3145 15.5793 9.63672 15.5793 8.90816V7.09184C15.5793 6.34633 15.4067 5.66012 15.0615 5.03321C14.7319 4.40631 14.2768 3.91495 13.6962 3.55913C13.1156 3.18638 12.4801 3 11.7896 3C11.0992 3 10.4637 3.18638 9.88305 3.55913C9.30245 3.91495 8.83953 4.40631 8.4943 5.03321C8.16477 5.66012 8 6.34633 8 7.09184V8.90816ZM12 14C13.4313 14 14.7194 14.1986 15.8644 14.5957C16.8286 14.9267 17.6648 15.3901 18.3729 15.9858C18.9605 16.4657 19.4124 16.987 19.7288 17.5496C19.9096 17.8972 20 18.3522 20 18.9149C20 19.4775 19.8117 19.9657 19.435 20.3794C19.0734 20.7931 18.629 21 18.1017 21H5.89831C5.371 21 4.91902 20.7931 4.54237 20.3794C4.18079 19.9657 4 19.4775 4 18.9149C4 18.3522 4.0904 17.8972 4.27119 17.5496C4.58757 16.987 5.03955 16.4657 5.62712 15.9858C6.33522 15.3901 7.17137 14.9267 8.13559 14.5957C9.2806 14.1986 10.5687 14 12 14Z" />
           </svg>
         </div>
         <p class="remote-name">{{ remoteUserName || '对方' }}</p>
-        <p class="connecting-text">连接中...</p>
+        <!-- 只有视频通话才显示"连接中"，语音通话显示通话时长 -->
+        <p v-if="props.type === 'video'" class="connecting-text">连接中...</p>
+        <p v-else class="call-status-text">语音通话中</p>
       </div>
     </div>
 

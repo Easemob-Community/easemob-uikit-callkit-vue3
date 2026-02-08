@@ -3,10 +3,8 @@
   width: 100%;
   height: 100%;
   position: relative;
-  background-image: url(/lib/callkit-static-assets/images/callkit_bg.png);
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
+  /* 背景图由父组件 EasemobChatSingleCall 提供 */
+  background: transparent;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -19,7 +17,8 @@
   left: 0;
   width: 100%;
   height: 100%;
-  background: #1a1a2e;
+  /* 背景图由父组件提供，如无视频则显示背景 */
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -37,7 +36,7 @@
   left: 50%;
   transform: translate(-50%, -50%);
   text-align: center;
-  color: white;
+  color: #1a1a1a;
   z-index: 1;
 }
 
@@ -57,14 +56,14 @@
 .user-icon {
   width: 60px;
   height: 60px;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(0, 0, 0, 0.6);
 }
 
 .remote-name {
   font-size: 24px;
   font-weight: 600;
   margin: 0 0 8px;
-  color: white;
+  color: #1a1a1a;
 }
 
 .connecting-text {
@@ -72,6 +71,12 @@
   color: rgba(255, 255, 255, 0.7);
   margin: 0;
   animation: pulse 2s ease-in-out infinite;
+}
+
+.call-status-text {
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.6);
+  margin: 0;
 }
 
 @keyframes pulse {
@@ -86,12 +91,11 @@
   right: 24px;
   width: 160px;
   height: 120px;
-  background: #000;
+  background: transparent;
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   z-index: 10;
-  border: 2px solid rgba(255, 255, 255, 0.1);
 }
 
 .local-video {

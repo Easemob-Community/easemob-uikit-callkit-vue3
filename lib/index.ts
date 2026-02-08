@@ -45,6 +45,9 @@ export type { Participant } from "./composables/useParticipants";
 // 导出常量与类型
 export { HANGUP_REASON, CALL_STATUS, CALL_TYPE } from "./types/callstate.types";
 
+// 导出静态资源配置
+export { DEFAULT_BACKGROUND_IMAGE, ICONS, getAssetUrl } from "./config/assets";
+
 export default {
   install(app: App) {
     // 注册组件

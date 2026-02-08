@@ -59,8 +59,8 @@ const isDragging = ref(false)
 const hasDragged = ref(false) // 标记是否发生过拖拽
 const dragStartX = ref(0)
 const dragStartY = ref(0)
-const windowX = ref(window.innerWidth - 240) // 默认右下角
-const windowY = ref(window.innerHeight - 200)
+const windowX = ref(window.innerWidth - 240) // 默认右上角
+const windowY = ref(20)
 
 // 窗口尺寸
 const AUDIO_WIDTH = 200

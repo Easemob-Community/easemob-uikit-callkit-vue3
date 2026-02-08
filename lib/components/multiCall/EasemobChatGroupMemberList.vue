@@ -54,6 +54,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { ICONS } from '../../config/assets'
 import { useChatClientStore } from '../../store/chatClient'
 import { logger } from '../../utils/logger'
 
@@ -78,7 +79,7 @@ const chatClientStore = useChatClientStore()
 const members = ref<Member[]>([])
 const selectedUsers = ref<string[]>([])
 const loading = ref(false)
-const defaultAvatar = '/lib/callkit-static-assets/images/default_avatar.png'
+const defaultAvatar = ICONS.DEFAULT_AVATAR
 
 const fetchGroupMembers = async () => {
   const client = chatClientStore.getChatClient
