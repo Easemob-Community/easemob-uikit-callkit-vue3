@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div v-if="isVisible">
     <!-- 大窗口模式 -->
     <div 
       v-if="!isMinimized"
@@ -151,11 +151,12 @@ import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useCallStateStore } from '../../store/callState'
 import { useRtcChannelStore } from '../../store/rtcChannel'
 import { CallService } from '../../services/CallService'
-import { HANGUP_REASON } from '../../types/callstate.types'
+import { HANGUP_REASON, CALL_STATUS } from '../../types/callstate.types'
 import { logger } from '../../utils/logger'
 import EasemobChatMiniWindow from '../../components/EasemobChatMiniWindow.vue'
 import EasemobChatGroupMemberList from './EasemobChatGroupMemberList.vue'
 import { useSignalManager } from '../../composables/useSignalManager'
+import { useParticipants } from '../../composables/useParticipants'
 import CallHeader from './CallHeader.vue'
 import MultiCallControls from './MultiCallControls.vue'
 
@@ -173,29 +174,60 @@ interface Props {
   groupId?: string
   groupName?: string
   groupAvatar?: string
-  participants: Participant[]
+  participants?: Participant[] // 🔑 改为可选，内部自动管理
   type: 'audio' | 'video'
   maxParticipants?: number
   backgroundImage?: string
   currentUserId?: string
+  autoShow?: boolean // 🔑 新增：自动根据通话状态显示/隐藏
 }
 
 const props = withDefaults(defineProps<Props>(), {
   maxParticipants: 18,
-  type: 'video'
+  type: 'video',
+  autoShow: true // 默认启用自动显示
 })
 
 const emit = defineEmits<{
+  /** 通话开始（可选监听） */
   callStarted: []
+  /** 通话结束（可选监听） */
   callEnded: []
+  /** 添加参与者按钮点击（可选监听，不监听时内部自动打开成员列表） */
   addParticipant: []
+  /** 邀请超时（可选监听） */
   participantTimeout: [userId: string]
-  userLeft: [userId: string] // 新增：用户离开RTC事件
-  userJoined: [userId: string] // 新增：用户视频已播放事件（用于更新 isInviting 状态）
+  /** 
+   * 用户离开RTC（可选监听）
+   * @deprecated 内部已自动处理，无需监听
+   */
+  userLeft: [userId: string]
+  /** 
+   * 用户视频已播放（可选监听）
+   * @deprecated 内部已自动处理，无需监听
+   */
+  userJoined: [userId: string]
+  /** 发生错误（可选监听） */
+  error: [error: Error]
 }>()
 
 const callStateStore = useCallStateStore()
 const rtcChannelStore = useRtcChannelStore()
+
+// 🔑 关键优化：内部自动管理 participants
+const { participants: internalParticipants } = useParticipants(props.currentUserId)
+
+// 最终使用的 participants（优先使用外部传入的，否则使用内部管理的）
+const participants = computed(() => participants.value ?? internalParticipants.value)
+
+// 🔑 关键优化：自动显示/隐藏控制
+const isVisible = computed(() => {
+  if (!props.autoShow) return true // 不启用自动显示时，始终可见
+  
+  // 只在通话中显示
+  const status = callStateStore.getCallStatus
+  return status === CALL_STATUS.IN_CALL || status === CALL_STATUS.INVITING
+})
 
 // Refs
 const containerRef = ref<HTMLDivElement>()
@@ -278,7 +310,7 @@ const startRemoteUserCheck = () => {
             if (!userId) {
               const callStateStore = useCallStateStore()
               const state = callStateStore.getCallState
-              if (state.callerUserId && state.callerUserId !== callStateStore.getCurrentUserId) {
+              if (state.callerUserId && state.callerUserId !== props.currentUserId) {
                 userId = state.callerUserId
                 rtcChannelStore.setUidToUserIdMapping(user.uid.toString(), userId)
               }
@@ -359,7 +391,7 @@ const handleInvitationTimeout = (userId: string) => {
   logger.warn('EasemobChatMultiCall: 邀请超时', userId)
   
   // 从 participants 中移除该用户
-  const index = props.participants.findIndex(p => p.userId === userId)
+  const index = participants.value.findIndex(p => p.userId === userId)
   if (index > -1) {
     // 直接修改 props 是不允许的，需要通过 emit 通知父组件
     emit('participantTimeout', userId)
@@ -369,11 +401,11 @@ const handleInvitationTimeout = (userId: string) => {
 }
 
 // 已经在通话中的用户ID列表
-const existingUserIds = computed(() => props.participants.map(p => p.userId))
+const existingUserIds = computed(() => participants.value.map(p => p.userId))
 
 // 邀请中的用户ID列表
 const invitingUserIds = computed(() => 
-  props.participants.filter(p => p.isInviting).map(p => p.userId)
+  participants.value.filter(p => p.isInviting).map(p => p.userId)
 )
 
 // 🔑 关键修复：检查用户是否有音频轨道（用于显示上麦状态）
@@ -427,23 +459,23 @@ const backgroundStyle = computed(() => {
 
 // 主视频参与者（左侧大窗）
 const mainParticipant = computed(() => {
-  const result = !selectedVideoId.value ? props.participants[0] : (props.participants.find(p => p.userId === selectedVideoId.value) || props.participants[0])
+  const result = !selectedVideoId.value ? participants.value[0] : (participants.value.find(p => p.userId === selectedVideoId.value) || participants.value[0])
   logger.debug('mainParticipant 计算', { 
     selectedVideoId: selectedVideoId.value,
     mainParticipant: result?.userId,
-    totalParticipants: props.participants.length 
+    totalParticipants: participants.value.length 
   })
   return result
 })
 
 // 右侧列表参与者
 const sideParticipants = computed(() => {
-  const result = props.participants.filter(p => p.userId !== mainParticipant.value?.userId)
+  const result = participants.value.filter(p => p.userId !== mainParticipant.value?.userId)
   logger.debug('sideParticipants 计算', { 
     mainUserId: mainParticipant.value?.userId,
     sideCount: result.length,
     sideUserIds: result.map(p => p.userId),
-    allParticipants: props.participants.map(p => ({
+    allParticipants: participants.value.map(p => ({
       userId: p.userId,
       isInviting: p.isInviting,
       hasJoined: p.hasJoined
@@ -473,7 +505,7 @@ const renderVideoStreams = () => {
   
   logger.debug('开始渲染视频流', { 
     videoElementCount: videoRefs.value.length,
-    participants: props.participants.map(p => p.userId)
+    participants: participants.value.map(p => p.userId)
   })
   
   // 去重：使用Set记录已处理的video元素
@@ -558,7 +590,7 @@ const renderVideoStreams = () => {
           logger.info('✅ 远程视频流已播放', { userId, trackId })
           
           // **关键修复**：通知父组件该用户视频已播放，更新 isInviting 状态
-          const participant = props.participants.find(p => p.userId === userId)
+          const participant = participants.value.find(p => p.userId === userId)
           if (participant?.isInviting) {
             logger.info('通知父组件用户视频已播放，更新状态:', userId)
             emit('userJoined', userId)
@@ -789,7 +821,7 @@ const updateContainerSize = () => {
 }
 
 // 监听参与者列表变化，自动渲染视频流
-watch(() => props.participants, (newParticipants) => {
+watch(() => participants.value, (newParticipants) => {
   // 🔑 关键修复：如果当前选中的主视频用户已不在参与者列表中，切换回本地视频
   if (selectedVideoId.value) {
     const stillExists = newParticipants.some(p => p.userId === selectedVideoId.value)
@@ -862,7 +894,7 @@ onMounted(async () => {
           const callStateStore = useCallStateStore()
           const state = callStateStore.getCallState
           // 如果是群组通话且 callerUserId 存在，假设远程用户就是主叫方
-          if (state.callerUserId && state.callerUserId !== callStateStore.getCurrentUserId) {
+          if (state.callerUserId && state.callerUserId !== props.currentUserId) {
             userId = state.callerUserId
             // 建立映射以便后续使用
             rtcChannelStore.setUidToUserIdMapping(user.uid.toString(), userId)
@@ -895,7 +927,7 @@ onMounted(async () => {
         if (!userId) {
           const callStateStore = useCallStateStore()
           const state = callStateStore.getCallState
-          if (state.callerUserId && state.callerUserId !== callStateStore.getCurrentUserId) {
+          if (state.callerUserId && state.callerUserId !== props.currentUserId) {
             userId = state.callerUserId
           }
         }
@@ -926,7 +958,7 @@ onMounted(async () => {
         if (!userId) {
           const callStateStore = useCallStateStore()
           const state = callStateStore.getCallState
-          if (state.callerUserId && state.callerUserId !== callStateStore.getCurrentUserId) {
+          if (state.callerUserId && state.callerUserId !== props.currentUserId) {
             userId = state.callerUserId
           }
         }

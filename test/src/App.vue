@@ -62,18 +62,13 @@
             </button>
           </div>
 
+          <!-- 🔑 优化后：无需 v-if、participants 和事件处理，内部自动管理 -->
           <EasemobChatMultiCall 
-            v-if="showMultiCall" 
             :group-id="groupId" 
             :group-name="groupName"
             :group-avatar="groupAvatar"
-            :participants="mockParticipants"
             :type="multiCallType" 
             :current-user-id="chatClient?.user"
-            @call-started="handleMultiCallStart" 
-            @call-ended="handleMultiCallEnd"
-            @user-left="handleUserLeft"
-            @user-joined="handleUserJoined"
           />
         </div>
 
@@ -99,7 +94,7 @@ import {
   CALL_TYPE, 
   useCallKit, 
   useEndCall,
-  useParticipants,
+  // useParticipants, // 🔑 优化后：无需手动管理 participants
   EasemobChatCallKitProvider,
   InvitationNotification, 
   EasemobChatSingleCall, 
@@ -125,7 +120,7 @@ const groupMembers = ref('') // 群组成员ID，逗号分隔
 const groupName = ref('') // 群组名称
 const groupAvatar = ref('') // 群组头像
 const showSingleCall = ref(false)
-const showMultiCall = ref(false)
+// 🔑 优化后：showMultiCall 不再需要，EasemobChatMultiCall 自动根据 callStatus 显示
 const singleCallType = ref<'audio' | 'video'>('video')
 const multiCallType = ref<'audio' | 'video'>('video')
 const currentCallInfo = ref('')
@@ -144,8 +139,7 @@ const callConfig = {
   debug: true
 }
 
-// 🔑 使用新的 useParticipants composable 自动管理参与者列表（内置leftUsers逻辑）
-const { participants: mockParticipants } = useParticipants(computed(() => chatClient.value?.user))
+// 🔑 优化后：无需手动管理 participants，EasemobChatMultiCall 内部自动处理
 
 // 初始化环信客户端
 onMounted(() => {
@@ -161,56 +155,26 @@ onMounted(() => {
   // 演示模式下，默认不自动登录，等待用户输入凭证
 })
 
-// 监听通话状态变化，自动显示群组通话界面
+// 🔑 优化后：EasemobChatMultiCall 自动根据 callStatus 显示/隐藏，无需手动控制 showMultiCall
+// 保留状态监听仅用于更新界面信息显示
 const callStateStore = useCallStateStore()
 watch(
   () => callStateStore.getCallStatus,
   (newStatus) => {
-    // 当状态变为 IN_CALL 时
     if (newStatus === CALL_STATUS.IN_CALL) {
       const callType = callStateStore.getCallState.type
-      
-      // 判断是否为群组通话
       if (callType === CALL_TYPE.VIDEO_MULTI || callType === CALL_TYPE.AUDIO_MULTI) {
-        console.log('检测到群组通话已接通，显示群组通话界面')
-        
-        // 先更新群组信息
-        const storeGroupId = callStateStore.getCallState.groupId || ''
-        const storeGroupName = callStateStore.getCallState.groupName || ''
-        const storeGroupAvatar = callStateStore.getCallState.groupAvatar || ''
-        
-        groupId.value = storeGroupId
-        groupName.value = storeGroupName
-        groupAvatar.value = storeGroupAvatar
-        
-        console.log('群组信息已更新:', { 
-          groupId: groupId.value, 
-          groupName: groupName.value,
-          groupAvatar: groupAvatar.value 
-        })
-        
-        // 再显示群组通话界面
-        showMultiCall.value = true
-        showSingleCall.value = false
-        
+        // 同步群组信息到本地状态（用于显示）
+        groupId.value = callStateStore.getCallState.groupId || ''
+        groupName.value = callStateStore.getCallState.groupName || ''
+        groupAvatar.value = callStateStore.getCallState.groupAvatar || ''
         const callTypeText = callType === CALL_TYPE.AUDIO_MULTI ? '语音' : '视频'
         currentCallInfo.value = `群组${callTypeText}通话: ${groupName.value || groupId.value}`
-      }
-      // 判断是否为单人通话
-      else if (callType === CALL_TYPE.VIDEO_1V1 || callType === CALL_TYPE.AUDIO_1V1) {
-        console.log('检测到单人通话已接通，显示单人通话界面')
-        showSingleCall.value = true
-        showMultiCall.value = false
-        
+      } else {
         const callTypeText = callType === CALL_TYPE.AUDIO_1V1 ? '语音' : '视频'
         currentCallInfo.value = `单人${callTypeText}通话: ${callStateStore.getCallState.calleeUserId}`
       }
-    }
-    // 当状态变为 IDLE 时，隐藏所有通话界面
-    else if (newStatus === CALL_STATUS.IDLE) {
-      console.log('通话状态变为IDLE，隐藏通话界面')
-      showSingleCall.value = false
-      showMultiCall.value = false
+    } else if (newStatus === CALL_STATUS.IDLE) {
       currentCallInfo.value = ''
     }
   }
@@ -230,7 +194,7 @@ const startCall = async (type: 'audio' | 'video') => {
   }
   
   singleCallType.value = type
-  showMultiCall.value = false
+  // showMultiCall 已移除
   currentCallInfo.value = `单人${type === 'audio' ? '语音' : '视频'}通话: ${targetUserId.value}`
   
   // 先发送通话邀请信令，初始化状态
@@ -281,12 +245,12 @@ const startMultiCall = async (type: 'audio' | 'video') => {
     console.log('Store 中的 groupId:', storeGroupId)
     
     // 状态初始化完成后再显示组件
-    showMultiCall.value = true
+    // showMultiCall 已移除，组件自动显示
     currentCallInfo.value = `群组${type === 'audio' ? '语音' : '视频'}通话: ${groupId.value}`
   } catch (error) {
     console.error('发起群组通话失败:', error)
     alert('发起群组通话失败')
-    showMultiCall.value = false
+    // showMultiCall 已移除
     currentCallInfo.value = ''
   }
 }
@@ -305,41 +269,13 @@ const handleMultiCallStart = () => {
   console.log('群组通话开始')
 }
 
+// 🔑 优化后：无需手动控制 showMultiCall，组件自动隐藏
 const handleMultiCallEnd = () => {
   console.log('群组通话结束')
-  showMultiCall.value = false
   currentCallInfo.value = ''
 }
 
-// 处理用户离开RTC
-const handleUserLeft = (userId: string) => {
-  console.log('[App] 用户离开RTC:', userId)
-  
-  // 从 invitedMembers 中移除该用户
-  const callStateStore = useCallStateStore()
-  const currentInvitedMembers = callStateStore.getInvitedMembers
-  const updatedInvitedMembers = currentInvitedMembers.filter(id => id !== userId)
-  callStateStore.updateInvitedMembers(updatedInvitedMembers)
-  
-  console.log('[App] 已处理用户离开:', { 
-    userId, 
-    remainingMembers: updatedInvitedMembers 
-  })
-}
-
-// 处理用户视频已播放（用于更新 isInviting 状态）
-const handleUserJoined = (userId: string) => {
-  console.log('[App] 用户视频已播放，标记为已加入:', userId)
-  
-  // 标记用户已加入RTC，这样 mockParticipants 会更新 isInviting 为 false
-  const rtcChannelStore = useRtcChannelStore()
-  rtcChannelStore.markUserJoinedRtc(userId)
-  
-  console.log('[App] 已标记用户加入RTC:', { 
-    userId, 
-    joinedRtcUsers: Array.from(rtcChannelStore.joinedRtcUsers)
-  })
-}
+// 🔑 优化后：userLeft/userJoined 内部自动处理，无需在 App.vue 中监听
 
 // 登录处理函数
 const handleLogin = () => {
@@ -371,7 +307,7 @@ const handleResetState = () => {
   const callStateStore = useCallStateStore()
   callStateStore.resetCallState()
   showSingleCall.value = false
-  showMultiCall.value = false
+  // showMultiCall 已移除
   currentCallInfo.value = ''
   console.log('通话状态已重置')
   alert('通话状态已重置')
@@ -384,7 +320,7 @@ const handleEndCall = () => {
     .then(() => {
       console.log('通话已结束')
       showSingleCall.value = false
-      showMultiCall.value = false
+      // showMultiCall 已移除
       currentCallInfo.value = ''
       alert('通话已结束')
     })
