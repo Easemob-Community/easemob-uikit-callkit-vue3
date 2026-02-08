@@ -1,8 +1,9 @@
 <template>
   <div
     v-if="isVisible"
-    ref="miniWindowRef"
+    ref="elementRef"
     class="easemob-mini-window"
+    :class="{ 'is-dragging': isDragging }"
     :style="windowStyle"
     @mousedown="startDrag"
     @click="handleWindowClick"
@@ -30,8 +31,6 @@
       </div>
       <div class="mini-duration">{{ callDuration }}</div>
     </div>
-
-
   </div>
 </template>
 
@@ -39,6 +38,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useCallStateStore } from '../store/callState'
 import { useRtcChannelStore } from '../store/rtcChannel'
+import { useCornerDraggable } from '../composables/useDraggable'
 import { CALL_TYPE } from '../types/callstate.types'
 import { logger } from '../utils/logger'
 
@@ -51,16 +51,7 @@ const callStateStore = useCallStateStore()
 const rtcChannelStore = useRtcChannelStore()
 
 // 小窗口引用
-const miniWindowRef = ref<HTMLElement>()
 const miniRemoteVideo = ref<HTMLVideoElement>()
-
-// 拖拽状态
-const isDragging = ref(false)
-const hasDragged = ref(false) // 标记是否发生过拖拽
-const dragStartX = ref(0)
-const dragStartY = ref(0)
-const windowX = ref(window.innerWidth - 240) // 默认右上角
-const windowY = ref(20)
 
 // 窗口尺寸
 const AUDIO_WIDTH = 200
@@ -81,6 +72,47 @@ const shouldShowDurationOnly = computed(() => {
          callType.value === CALL_TYPE.VIDEO_MULTI
 })
 
+// 当前窗口尺寸
+const currentWidth = computed(() => 
+  shouldShowDurationOnly.value ? AUDIO_WIDTH : VIDEO_WIDTH
+)
+const currentHeight = computed(() => 
+  shouldShowDurationOnly.value ? AUDIO_HEIGHT : VIDEO_HEIGHT
+)
+
+// 使用角落定位的拖拽 Hook（默认右上角）
+const {
+  elementRef,
+  isDragging,
+  hasDragged,
+  style: draggableStyle,
+  startDrag
+} = useCornerDraggable(
+  'top-right',
+  currentWidth.value,
+  currentHeight.value,
+  20,
+  {
+    boundary: true,
+    boundaryPadding: 10
+  }
+)
+
+// 组合样式
+const windowStyle = computed(() => {
+  return {
+    ...draggableStyle.value,
+    width: `${currentWidth.value}px`,
+    height: `${currentHeight.value}px`,
+    zIndex: 9999,
+    borderRadius: '12px',
+    overflow: 'hidden',
+    boxShadow: isDragging.value 
+      ? '0 12px 48px rgba(0, 0, 0, 0.6)' 
+      : '0 8px 32px rgba(0, 0, 0, 0.4)'
+  }
+})
+
 // 通话时长（从 store 获取格式化后的字符串）
 const callDuration = computed(() => rtcChannelStore.formattedCallDuration)
 
@@ -97,59 +129,6 @@ const hasRemoteVideo = ref(false)
 const retryCount = ref(0) // 重试计数
 const MAX_RETRY = 5 // 最大重试次数
 
-// 窗口样式
-const windowStyle = computed(() => {
-  const width = shouldShowDurationOnly.value ? AUDIO_WIDTH : VIDEO_WIDTH
-  const height = shouldShowDurationOnly.value ? AUDIO_HEIGHT : VIDEO_HEIGHT
-  
-  return {
-    left: `${windowX.value}px`,
-    top: `${windowY.value}px`,
-    width: `${width}px`,
-    height: `${height}px`,
-    cursor: isDragging.value ? 'grabbing' : 'grab'
-  }
-})
-
-// 开始拖拽
-const startDrag = (e: MouseEvent) => {
-  isDragging.value = true
-  hasDragged.value = false // 重置拖拽标记
-  dragStartX.value = e.clientX - windowX.value
-  dragStartY.value = e.clientY - windowY.value
-  
-  document.addEventListener('mousemove', onDrag)
-  document.addEventListener('mouseup', stopDrag)
-}
-
-// 拖拽中
-const onDrag = (e: MouseEvent) => {
-  if (!isDragging.value) return
-  
-  // 标记已发生拖拽
-  hasDragged.value = true
-  
-  const width = shouldShowDurationOnly.value ? AUDIO_WIDTH : VIDEO_WIDTH
-  const height = shouldShowDurationOnly.value ? AUDIO_HEIGHT : VIDEO_HEIGHT
-  
-  let newX = e.clientX - dragStartX.value
-  let newY = e.clientY - dragStartY.value
-  
-  // 限制在窗口边界内
-  newX = Math.max(0, Math.min(newX, window.innerWidth - width))
-  newY = Math.max(0, Math.min(newY, window.innerHeight - height))
-  
-  windowX.value = newX
-  windowY.value = newY
-}
-
-// 停止拖拽
-const stopDrag = () => {
-  isDragging.value = false
-  document.removeEventListener('mousemove', onDrag)
-  document.removeEventListener('mouseup', stopDrag)
-}
-
 // 点击窗口展开（仅在未拖拽时生效）
 const handleWindowClick = () => {
   // 只有点击且没有拖拽时才展开
@@ -157,20 +136,6 @@ const handleWindowClick = () => {
     emit('expand')
   }
 }
-
-// 监听窗口大小变化，确保小窗口始终在可见区域
-const handleResize = () => {
-  const width = shouldShowDurationOnly.value ? AUDIO_WIDTH : VIDEO_WIDTH
-  const height = shouldShowDurationOnly.value ? AUDIO_HEIGHT : VIDEO_HEIGHT
-  
-  windowX.value = Math.max(0, Math.min(windowX.value, window.innerWidth - width))
-  windowY.value = Math.max(0, Math.min(windowY.value, window.innerHeight - height))
-}
-
-// 监听通话类型变化，调整窗口位置
-watch(shouldShowDurationOnly, () => {
-  handleResize()
-})
 
 // 播放远程视频
 const playRemoteVideo = () => {
@@ -217,9 +182,6 @@ const playRemoteVideo = () => {
 }
 
 onMounted(() => {
-  // 小窗口不启动定时器，直接使用 store 中的时长
-  window.addEventListener('resize', handleResize)
-  
   // 如果是视频通话，延迟后尝试播放远程视频
   if (!shouldShowDurationOnly.value) {
     // 重置重试计数
@@ -282,10 +244,6 @@ watch(isVisible, (visible) => {
 })
 
 onUnmounted(() => {
-  window.removeEventListener('resize', handleResize)
-  document.removeEventListener('mousemove', onDrag)
-  document.removeEventListener('mouseup', stopDrag)
-  
   // 组件销毁时停止所有视频轨道
   if (miniRemoteVideo.value) {
     const rtcService = rtcChannelStore.rtcService
@@ -307,10 +265,6 @@ onUnmounted(() => {
 <style scoped>
 .easemob-mini-window {
   position: fixed;
-  z-index: 9999;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   transition: box-shadow 0.3s;
   user-select: none;
 }
@@ -418,7 +372,4 @@ onUnmounted(() => {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
-
-/* 关闭按钮 */
-
 </style>

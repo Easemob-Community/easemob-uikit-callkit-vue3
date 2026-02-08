@@ -13,6 +13,7 @@ import { useAnswerCall } from "./composables/useAnswerCall";
 import { useRtcService } from "./composables/useRtcService";
 import { useJoinChannel } from "./composables/useJoinChannel";
 import { useParticipants } from "./composables/useParticipants";
+import { useDraggable, useCenteredDraggable, useCornerDraggable } from "./composables/useDraggable";
 import { RtcService } from "./services/RtcService";
 // 导出组件
 export {
@@ -27,6 +28,8 @@ export {
 export { useCallStateStore, useRtcChannelStore };
 // 导出部分hook
 export { useCallKit, useEndCall, useAnswerCall, useRtcService, useJoinChannel, useParticipants };
+// 导出拖拽hook
+export { useDraggable, useCenteredDraggable, useCornerDraggable };
 // 导出RTC服务
 export { RtcService };
 

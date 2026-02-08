@@ -1,10 +1,6 @@
 /* 通话窗口容器 - 仿微信比例 */
 .easemob-chat-single-call {
-  position: fixed;
-  /* 默认居中显示，使用微信-like 的宽高比例 */
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  /* 位置由 JS 控制 (useDraggable)，这里只定义尺寸和样式 */
   width: 360px;
   height: 640px;
   max-width: 90vw;
@@ -21,8 +17,8 @@
   justify-content: center;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   overflow: hidden;
-  cursor: grab;
-  user-select: none;
+  /* 拖拽时禁用过渡，确保丝滑流畅 */
+  will-change: left, top;
 }
 
 .easemob-chat-single-call:active {
@@ -42,6 +38,13 @@
   height: 100%;
   position: relative;
   cursor: default;
+  pointer-events: none;
+}
+
+/* 通话内容区域内需要交互的元素恢复点击 */
+.call-content > *,
+.call-content ::v-deep(*) {
+  pointer-events: auto;
 }
 
 .minimize-btn {
