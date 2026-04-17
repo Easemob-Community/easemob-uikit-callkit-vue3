@@ -144,6 +144,9 @@ const handleAccept = async () => {
   } catch (error) {
     logger.error('InvitationNotification: 接听失败:', error)
     console.error('接听失败:', error)
+    // 兜底：信令发送失败也要关闭弹窗并清理状态
+    visible.value = false
+    callStateStore.resetCallState()
   } finally {
     processing.value = false
   }
@@ -168,6 +171,9 @@ const handleReject = async () => {
   } catch (error) {
     logger.error('InvitationNotification: 拒绝失败:', error)
     console.error('拒绝失败:', error)
+    // 兜底：信令发送失败也要关闭弹窗并清理状态
+    visible.value = false
+    callStateStore.resetCallState()
   } finally {
     processing.value = false
   }

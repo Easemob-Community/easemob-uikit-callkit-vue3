@@ -5,9 +5,8 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #1a1a1a;
-  /* 背景图由父组件 EasemobChatSingleCall 提供 */
-  background: transparent;
+  color: white;
+  background: #1a1a1a;
 }
 
 .caller-info {
@@ -45,7 +44,7 @@
 
 .call-type-indicator {
   font-size: 18px;
-  color: rgba(0, 0, 0, 0.6);
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .waiting-controls {
@@ -90,5 +89,5 @@
 
 .waiting-timer {
   font-size: 20px;
-  color: rgba(0, 0, 0, 0.6);
+  color: rgba(255, 255, 255, 0.7);
 }

@@ -71,6 +71,8 @@ export function useAnswerCall(): UseAnswerCallReturn {
       // 实际应该调用类似: rtcService.joinChannel(callState.channel)
     } catch (error) {
       logger.error("useAnswerCall: 接受通话失败:", error);
+      // 兜底：发送信令失败时（如被拉黑 blocked）也要重置状态，避免弹窗卡住
+      callStateStore.resetCallState();
       throw error;
     }
   }
@@ -113,6 +115,8 @@ export function useAnswerCall(): UseAnswerCallReturn {
       callStateStore.resetCallState();
     } catch (error) {
       logger.error("useAnswerCall: 拒绝通话失败:", error);
+      // 兜底：发送信令失败时（如被拉黑 blocked）也要重置状态，避免弹窗卡住
+      callStateStore.resetCallState();
       throw error;
     }
   }
@@ -155,6 +159,8 @@ export function useAnswerCall(): UseAnswerCallReturn {
       callStateStore.resetCallState();
     } catch (error) {
       logger.error("useAnswerCall: 忙碌拒绝通话失败:", error);
+      // 兜底：发送信令失败时也要重置状态，避免弹窗卡住
+      callStateStore.resetCallState();
       throw error;
     }
   }

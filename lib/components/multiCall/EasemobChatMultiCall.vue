@@ -34,7 +34,7 @@
         <div class="main-video-wrapper">
           <div class="participant-video video-appearing" :key="'main-' + mainParticipant?.userId">
             <video
-              :ref="el => { if (el) videoRefs.push(el as HTMLVideoElement) }"
+              :ref="el => setVideoRef(el as HTMLVideoElement | null, mainParticipant?.userId)"
               :data-user-id="mainParticipant?.userId"
               autoplay
               playsinline
@@ -79,7 +79,7 @@
           >
             <div class="participant-video">
               <video
-                :ref="el => { if (el) videoRefs.push(el as HTMLVideoElement) }"
+                :ref="el => setVideoRef(el as HTMLVideoElement | null, participant.userId)"
                 :data-user-id="participant.userId"
                 autoplay
                 playsinline
@@ -244,7 +244,16 @@ const isVisible = computed(() => {
 // Refs
 const contentRef = ref<HTMLDivElement>()
 const thumbnailScrollRef = ref<HTMLDivElement>()
-const videoRefs = ref<HTMLVideoElement[]>([])
+const videoRefs = ref<Map<string, HTMLVideoElement>>(new Map())
+
+const setVideoRef = (el: HTMLVideoElement | null, userId: string | undefined) => {
+  if (!userId) return
+  if (el) {
+    videoRefs.value.set(userId, el)
+  } else {
+    videoRefs.value.delete(userId)
+  }
+}
 
 // 窗口尺寸常量
 const CONTAINER_WIDTH = 800
@@ -267,7 +276,7 @@ const {
 
 // 状态
 const isMuted = ref(false)
-const isVideoEnabled = ref(true)
+const isVideoEnabled = ref(rtcChannelStore.videoEnabled)
 const isCallActive = ref(false)
 const isClearScreen = ref(false)
 
@@ -522,40 +531,26 @@ let renderTimer: ReturnType<typeof setTimeout> | null = null
 
 // 渲染视频流到video元素
 const renderVideoStreams = () => {
-  if (!videoRefs.value || videoRefs.value.length === 0) {
+  if (!videoRefs.value || videoRefs.value.size === 0) {
     logger.warn('无video元素可渲染')
     return
   }
-  
+
   // 如果正在渲染，跳过
   if (isRendering.value) {
     logger.debug('渲染中，跳过本次调用')
     return
   }
-  
+
   isRendering.value = true
-  
-  logger.debug('开始渲染视频流', { 
-    videoElementCount: videoRefs.value.length,
+
+  logger.debug('开始渲染视频流', {
+    videoElementCount: videoRefs.value.size,
     participants: participants.value.map(p => p.userId)
   })
-  
-  // 去重：使用Set记录已处理的video元素
-  const processedElements = new Set<HTMLVideoElement>()
-  
-  videoRefs.value.forEach((videoElement: HTMLVideoElement) => {
+
+  videoRefs.value.forEach((videoElement, userId) => {
     if (!videoElement) return
-    
-    // 跳过已处理的元素
-    if (processedElements.has(videoElement)) {
-      logger.debug('video元素已处理，跳过', { 
-        userId: videoElement.getAttribute('data-user-id') 
-      })
-      return
-    }
-    processedElements.add(videoElement)
-    
-    const userId = videoElement.getAttribute('data-user-id')
     if (!userId) {
       logger.warn('video元素缺少data-user-id属性')
       return
@@ -586,26 +581,7 @@ const renderVideoStreams = () => {
       }
     } else {
       // 渲染远程视频流
-      let remoteTrack = rtcService.getRemoteVideoTrack(userId)
-      
-      // 如果通过userId找不到，尝试查找所有远程用户
-      if (!remoteTrack) {
-        const client = rtcService.getClient()
-        if (client && client.remoteUsers) {
-          // 找到第一个有视频轨道的远程用户（备选方案）
-          for (const remoteUser of client.remoteUsers) {
-            if (remoteUser.videoTrack) {
-              remoteTrack = remoteUser.videoTrack
-              logger.info('通过备选方案找到远程视频轨道', { 
-                userId, 
-                remoteUid: remoteUser.uid,
-                hasVideo: remoteUser.hasVideo 
-              })
-              break
-            }
-          }
-        }
-      }
+      const remoteTrack = rtcService.getRemoteVideoTrack(userId)
       
       if (remoteTrack) {
         const trackId = remoteTrack.getTrackId?.()
@@ -633,16 +609,23 @@ const renderVideoStreams = () => {
       } else {
         // 添加更详细的调试信息
         const client = rtcService.getClient()
-        logger.warn('❌ 远程视频轨道不存在', { 
+        logger.warn('❌ 远程视频轨道不存在', {
           userId,
           remoteUsersCount: client?.remoteUsers?.length || 0,
-          remoteUsers: client?.remoteUsers?.map((u: any) => ({ 
-            uid: u.uid, 
-            hasVideo: u.hasVideo, 
-            hasTrack: !!u.videoTrack 
+          remoteUsers: client?.remoteUsers?.map((u: any) => ({
+            uid: u.uid,
+            hasVideo: u.hasVideo,
+            hasTrack: !!u.videoTrack
           })),
           uidToUserIdMap: Array.from(rtcChannelStore.uidToUserIdMap.entries())
         })
+        // 清除旧的画面和 trackId，以便重新发布时能重新播放
+        if (videoElement.srcObject) {
+          videoElement.srcObject = null
+        }
+        if (videoElement.dataset.playedTrackId) {
+          videoElement.dataset.playedTrackId = ''
+        }
       }
     }
   })
@@ -827,6 +810,11 @@ const handleInviteMembers = async (userIds: string[]) => {
     
     logger.debug('已更新invitedMembers:', updatedInvitedMembers)
     
+    // 🔑 关键修复：将新邀请的用户标记为待加入RTC，确保他们加入后能正确建立 uid->userId 映射
+    userIds.forEach(userId => {
+      rtcChannelStore.addPendingUserId(userId)
+    })
+    
     await sendInviteMessage(
       userIds,
       'groupChat',
@@ -862,7 +850,7 @@ const switchMainVideo = (userId: string) => {
   selectedVideoId.value = userId
   
   // 清空videoRefs，避免引用混乱
-  videoRefs.value = []
+  videoRefs.value = new Map()
   
   nextTick(() => {
     scheduleRender(150)
@@ -891,7 +879,7 @@ watch(() => participants.value, (newParticipants) => {
   }
   
   // 清空并重新收集 videoRefs
-  videoRefs.value = []
+  videoRefs.value = new Map()
   
   nextTick(() => {
     scheduleRender(300)
@@ -913,7 +901,7 @@ watch(isMinimized, (minimized) => {
   if (!minimized) {
     logger.info('小窗模式恢复到大窗，重新渲染视频流')
     // 清空videoRefs，避免引用旧元素
-    videoRefs.value = []
+    videoRefs.value = new Map()
     nextTick(() => {
       // 延迟渲染，确保DOM已完全恢复
       scheduleRender(300)
@@ -965,9 +953,10 @@ onMounted(async () => {
           // 清除邀请定时器，用户已加入
           clearInvitationTimer(userId)
           
-          // 🔑 关键修复：audio 或 video 任一发布就通知父组件用户已加入
+          // 🔑 关键修复：audio 或 video 任一发布就标记用户已加入RTC
           if (!rtcChannelStore.isUserInRtc(userId)) {
             logger.info('远程用户发布流，标记为已加入:', { userId, mediaType })
+            rtcChannelStore.markUserJoinedRtc(userId)
             emit('userJoined', userId)
           }
         }
@@ -991,18 +980,24 @@ onMounted(async () => {
           }
         }
         
-        // 当视频流结束时，直接销毁窗口（而不是回到邀请中）
+        // 当视频流结束时，只清除视频画面，不视为离开通话
         if (mediaType === 'video' && userId) {
-          logger.info('远程用户视频流结束，销毁窗口:', { uid: user.uid, userId })
-          
+          logger.info('远程用户视频流结束，清除视频画面:', { uid: user.uid, userId })
+
+          // 清除该用户 video 元素的播放状态，以便重新发布时能重新播放
+          const videoEl = videoRefs.value.get(userId)
+          if (videoEl) {
+            videoEl.srcObject = null
+            videoEl.dataset.playedTrackId = ''
+          }
+
           // 如果当前主视频是该用户，自动切换回本地视频
           if (selectedVideoId.value === userId) {
             logger.info('当前主视频用户视频结束，自动切换回本地视频:', userId)
             selectedVideoId.value = null
           }
-          
-          // 🔑 关键修复：通知父组件用户已离开（直接销毁，不回到邀请中）
-          emit('userLeft', userId)
+
+          scheduleRender(200)
         }
       })
       

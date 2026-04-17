@@ -1,6 +1,7 @@
 import { computed } from 'vue'
 import { useCallStateStore } from '../store/callState'
 import { useRtcChannelStore } from '../store/rtcChannel'
+import { useChatClientStore } from '../store/chatClient'
 import { logger } from '../utils/logger'
 
 export interface Participant {
@@ -19,6 +20,7 @@ export interface Participant {
 export function useParticipants(currentUserId?: string) {
   const callStateStore = useCallStateStore()
   const rtcChannelStore = useRtcChannelStore()
+  const chatClientStore = useChatClientStore()
 
   /**
    * 动态生成群组参与者列表
@@ -28,8 +30,8 @@ export function useParticipants(currentUserId?: string) {
     const state = callStateStore.getCallState
     const participantList: Participant[] = []
     
-    // 获取当前用户ID（优先使用传入的，否则使用store中的callerUserId）
-    const currentUser = currentUserId || callStateStore.getCallState.callerUserId
+    // 获取当前用户ID（优先使用传入的，其次从 chatClient 获取，最后兜底 callerUserId）
+    const currentUser = currentUserId || chatClientStore.getChatClient?.user || state.callerUserId
     
     // 访问 joinedRtcUsers 确保计算属性响应其变化
     const joinedUsers = Array.from(rtcChannelStore.joinedRtcUsers)

@@ -67,6 +67,25 @@ export function useListenerManager(): ListenerManagerReturn {
       return; // 忽略自己发送的消息
     }
     const ext = message.ext;
+    // 校验当前用户是否为该邀请的预期接收者（防止切换账号后收到前账号的离线邀请）
+    const currentUserId = chatClientStore.getChatClient?.context?.userId || chatClientStore.getChatClient?.user;
+    if (currentUserId) {
+      const isGroupCall = ext?.type === CALL_TYPE.VIDEO_MULTI || ext?.type === CALL_TYPE.AUDIO_MULTI;
+      if (!isGroupCall) {
+        // 单聊：校验消息接收者是否为当前用户
+        if (message.to && message.to !== currentUserId) {
+          logger.warn(`[邀请处理] 单聊邀请接收者(${message.to})与当前用户(${currentUserId})不一致，忽略该离线邀请`);
+          return;
+        }
+      } else {
+        // 群聊：校验当前用户是否在被邀请成员列表中（如果列表存在）
+        const invitedMembers = ext?.invitedMembers || [];
+        if (invitedMembers.length > 0 && !invitedMembers.includes(currentUserId)) {
+          logger.warn(`[邀请处理] 当前用户不在群聊邀请列表中，忽略该离线邀请，当前用户: ${currentUserId}`);
+          return;
+        }
+      }
+    }
     //校验当前用户的通话状态是否为idle
     const currentStatus = callStateStore.getCallStatus;
     logger.info(`[邀请处理] 当前通话状态: ${currentStatus}, 目标状态IDLE: ${CALL_STATUS.IDLE}`);

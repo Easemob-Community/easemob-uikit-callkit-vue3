@@ -91,13 +91,19 @@ export function useJoinChannel(): UseJoinChannelReturn {
     if (client) {
       const connectionState = client.connectionState
       if (connectionState === 'CONNECTING' || connectionState === 'CONNECTED') {
-        logger.warn(`RTC客户端已处于${connectionState}状态,无需重复加入频道`)
-        return
+        // 检查是否已经在目标频道中
+        if (client.channelName === callState.channel) {
+          logger.warn(`RTC客户端已在目标频道${callState.channel}中,无需重复加入`)
+          return
+        }
+        // 如果在其他频道，需要先离开
+        logger.warn(`RTC客户端已在其他频道(${client.channelName})中，先离开当前频道`)
+        await rtcService.leaveChannel()
       }
     }
     
-    // 检查store中的连接状态
-    if (rtcChannelStore.isConnected) {
+    // 检查store中的连接状态（仅作为兜底，channel不同时不拦截）
+    if (rtcChannelStore.isConnected && rtcChannelStore.activeChannelId === callState.channel) {
       logger.warn('已经在RTC频道中,无需重复加入')
       return
     }
@@ -164,6 +170,19 @@ export function useJoinChannel(): UseJoinChannelReturn {
       // 更新store状态
       rtcChannelStore.isConnected = true
       rtcChannelStore.setActiveChannel(callState.channel)
+      
+      // 标记自己已加入RTC（确保 useParticipants 能正确识别当前用户状态）
+      const currentUserId = chatClientStore.getChatClient?.user
+      if (currentUserId) {
+        rtcChannelStore.markUserJoinedRtc(currentUserId)
+      }
+      
+      // 🔑 关键修复：被叫方场景下，将主叫方加入 pending 列表
+      // 这样当主叫方加入RTC时，RtcService 的 user-joined 事件能正确将 uid 映射到 callerUserId
+      if (callState.callerUserId && callState.callerUserId !== currentUserId) {
+        rtcChannelStore.addPendingUserId(callState.callerUserId)
+        logger.info('joinChannel: 已将主叫方加入 pending 列表:', callState.callerUserId)
+      }
       
       // 启动通话计时
       rtcChannelStore.startCallTimer()
