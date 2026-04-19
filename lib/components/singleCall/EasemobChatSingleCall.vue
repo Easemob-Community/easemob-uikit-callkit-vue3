@@ -40,7 +40,7 @@
 import { ref, onMounted, onUnmounted, computed, type CSSProperties } from 'vue'
 import { useCallStateStore } from '../../store/callState'
 import { useGlobalCallStore } from '../../store/globalCall'
-import { CALL_STATUS } from '../../types/callstate.types'
+import { CALL_STATUS, CALL_TYPE } from '../../types/callstate.types'
 import { DEFAULT_BACKGROUND_IMAGE, getAssetUrl } from '../../config/assets'
 import { useDraggable } from '../../composables/useDraggable'
 import { logger } from '../../utils/logger'
@@ -81,19 +81,31 @@ const isCallActive = ref(false)
 // 计算属性 - 获取当前通话状态
 const callStatus = computed(() => callStateStore.status)
 
+// 判断当前是否为群通话类型（单人通话组件在群通话场景下完全不显示）
+const isGroupCall = computed(() =>
+  callStateStore.type === CALL_TYPE.VIDEO_MULTI ||
+  callStateStore.type === CALL_TYPE.AUDIO_MULTI
+)
+
 // 判断是否处于通话中状态（IN_CALL 及接听中的中间态都算，避免黑屏）
+// 群通话场景下始终为 false，避免与 EasemobChatMultiCall / GroupCallShell 竞争
 const isInCall = computed(() =>
-  callStateStore.status === CALL_STATUS.IN_CALL ||
-  callStateStore.status === CALL_STATUS.ANSWER_CALL ||
-  callStateStore.status === CALL_STATUS.CONFIRM_CALLEE
+  !isGroupCall.value && (
+    callStateStore.status === CALL_STATUS.IN_CALL ||
+    callStateStore.status === CALL_STATUS.ANSWER_CALL ||
+    callStateStore.status === CALL_STATUS.CONFIRM_CALLEE
+  )
 )
 
 // 组件是否可见：
 // - INVITING：主叫方等待接听（显示 CallWaiting）
 // - IN_CALL / ANSWER_CALL / CONFIRM_CALLEE：通话中（显示 CallStream）
 // - ALERTING：被叫响铃中，完全由 InvitationNotification 接管，此处不显示
+// - 群通话（VIDEO_MULTI / AUDIO_MULTI）：完全由 EasemobChatMultiCall 接管，此处不显示
 const isCallVisible = computed(() =>
-  callStateStore.status === CALL_STATUS.INVITING || isInCall.value
+  !isGroupCall.value && (
+    callStateStore.status === CALL_STATUS.INVITING || isInCall.value
+  )
 )
 
 // 目标用户：优先使用 props，否则从 store 自动推断
