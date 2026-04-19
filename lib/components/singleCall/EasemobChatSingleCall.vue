@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div v-if="isCallVisible">
     <!-- 大窗口模式 -->
     <div 
       v-if="!isMinimized" 
@@ -12,7 +12,7 @@
       <!-- 通话内容区域 -->
       <div class="call-content">
         <!-- 待接听状态子组件 - 只要不在通话中就显示等待界面 -->
-        <EasemobChatCallWaiting v-if="!isInCall" :targetUser="props.targetUser" :type="props.type"
+        <EasemobChatCallWaiting v-if="!isInCall" :targetUser="displayTargetUser" :type="props.type || 'video'"
           @cancel="handleCancelCall"/>
 
         <!-- 通话中状态子组件 -->
@@ -48,8 +48,11 @@ import EasemobChatCallStream from './EasemobChatCallStream.vue'
 import EasemobChatMiniWindow from '../EasemobChatMiniWindow.vue'
 
 interface Props {
-  targetUser: string
-  type: 'audio' | 'video'
+  /**
+   * 目标用户ID（主叫方传入）。组件内部也会自动从 callStateStore 读取
+   */
+  targetUser?: string
+  type?: 'audio' | 'video'
   enableRingtone?: boolean
   /**
    * 自定义背景图 URL
@@ -79,6 +82,14 @@ const callStatus = computed(() => callStateStore.status)
 
 // 判断是否处于通话中状态（IN_CALL 表示已接通）
 const isInCall = computed(() => callStateStore.status === CALL_STATUS.IN_CALL)
+
+// 组件是否可见：只要通话状态不是 IDLE 就显示（自动管理，用户无需外部 v-if）
+const isCallVisible = computed(() => callStateStore.status !== CALL_STATUS.IDLE)
+
+// 目标用户：优先使用 props，否则从 store 自动推断
+const displayTargetUser = computed(() => {
+  return props.targetUser || callStateStore.calleeUserId || callStateStore.callerUserId || ''
+})
 
 // 小窗口模式状态
 const isMinimized = computed(() => globalCallStore.isMinimized)
@@ -125,7 +136,7 @@ const startCall = async () => {
     emit('callStarted')
 
     // 这里应该集成实际的通话SDK
-    console.log(`Starting ${props.type} call with ${props.targetUser}`)
+    console.log(`Starting ${props.type || 'video'} call with ${displayTargetUser}`)
   } catch (error) {
     console.error('Failed to start call:', error)
     handleEndCall()

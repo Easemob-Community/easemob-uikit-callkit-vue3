@@ -42,7 +42,8 @@
             </button>
           </div>
 
-          <EasemobChatSingleCall v-if="showSingleCall" :target-user="targetUserId" :type="singleCallType"
+          <!-- 单人通话组件：自动根据 store 状态显示/隐藏，无需 v-if -->
+          <EasemobChatSingleCall :target-user="targetUserId" :type="singleCallType"
             @call-started="handleSingleCallStart" @call-ended="handleSingleCallEnd" />
         </div>
 
@@ -62,9 +63,8 @@
             </button>
           </div>
 
-          <!-- 🔑 优化后：仅群组通话时渲染，内部自动管理显示 -->
+          <!-- 群组通话组件：autoShow 默认开启，自动根据 store 状态显示/隐藏，无需 v-if -->
           <EasemobChatMultiCall 
-            v-if="isGroupCall"
             :group-id="groupId" 
             :group-name="groupName"
             :group-avatar="groupAvatar"
@@ -88,14 +88,11 @@
 import { ref, onMounted, watch, computed } from 'vue'
 import SDK from 'easemob-websdk'
 import { 
-  useCallStateStore, 
-  useRtcChannelStore, 
-  HANGUP_REASON, 
   CALL_STATUS, 
   CALL_TYPE, 
   useCallKit, 
   useEndCall,
-  // useParticipants, // 🔑 优化后：无需手动管理 participants
+  useCallStateStore,
   EasemobChatCallKitProvider,
   InvitationNotification, 
   EasemobChatSingleCall, 
@@ -117,21 +114,12 @@ const importModeText = computed(() => {
 // 状态管理
 const targetUserId = ref('')
 const groupId = ref('')
-const groupMembers = ref('') // 群组成员ID，逗号分隔
-const groupName = ref('') // 群组名称
-const groupAvatar = ref('') // 群组头像
-const showSingleCall = ref(false)
-// 🔑 优化后：showMultiCall 不再需要，EasemobChatMultiCall 自动根据 callStatus 显示
+const groupMembers = ref('')
+const groupName = ref('')
+const groupAvatar = ref('')
 const singleCallType = ref<'audio' | 'video'>('video')
 const multiCallType = ref<'audio' | 'video'>('video')
 const currentCallInfo = ref('')
-
-// 🔑 新增：判断是否群组通话（用于条件渲染 EasemobChatMultiCall）
-const callStateStore = useCallStateStore()
-const isGroupCall = computed(() => {
-  const callType = callStateStore.getCallState.type
-  return callType === CALL_TYPE.VIDEO_MULTI || callType === CALL_TYPE.AUDIO_MULTI
-})
 
 // 登录相关状态
 const loginUserId = ref('ppp')
@@ -140,54 +128,28 @@ const loginPassword = ref('1')
 // 环信客户端实例
 const chatClient = ref()
 
-// 配置信息
-const callConfig = {
-  appKey: 'your_app_key',
-  userId: 'current_user',
-  debug: true
-}
-
-// 🔑 优化后：无需手动管理 participants，EasemobChatMultiCall 内部自动处理
-
 // 初始化环信客户端
 onMounted(() => {
-  // 创建环信连接实例
-  //关闭IM日志输出
   SDK.logger.disableAll()
   const connection = new SDK.connection({
     appKey: 'easemob-demo#support',
     isFixedDeviceId: false
   })
-
   chatClient.value = connection
-  // 演示模式下，默认不自动登录，等待用户输入凭证
 })
 
-// 🔑 优化后：EasemobChatMultiCall 自动根据 callStatus 显示/隐藏
-// 但仍需控制 showSingleCall 的显示（用于单人通话）
+// 监听通话状态变化，更新提示信息
+const callStateStore = useCallStateStore()
 watch(
   () => callStateStore.getCallStatus,
   (newStatus) => {
     if (newStatus === CALL_STATUS.IN_CALL) {
       const callType = callStateStore.getCallState.type
-      if (callType === CALL_TYPE.VIDEO_MULTI || callType === CALL_TYPE.AUDIO_MULTI) {
-        // 同步群组信息到本地状态（用于显示）
-        groupId.value = callStateStore.getCallState.groupId || ''
-        groupName.value = callStateStore.getCallState.groupName || ''
-        groupAvatar.value = callStateStore.getCallState.groupAvatar || ''
-        const callTypeText = callType === CALL_TYPE.AUDIO_MULTI ? '语音' : '视频'
-        currentCallInfo.value = `群组${callTypeText}通话: ${groupName.value || groupId.value}`
-        // 群组通话不显示单人通话组件
-        showSingleCall.value = false
-      } else {
-        // 🔑 单人通话：显示单人通话组件
-        const callTypeText = callType === CALL_TYPE.AUDIO_1V1 ? '语音' : '视频'
-        currentCallInfo.value = `单人${callTypeText}通话: ${callStateStore.getCallState.calleeUserId}`
-        showSingleCall.value = true
-      }
+      const isAudio = callType === CALL_TYPE.AUDIO_1V1 || callType === CALL_TYPE.AUDIO_MULTI
+      const target = callStateStore.getCallState.calleeUserId || ''
+      currentCallInfo.value = `${isAudio ? '语音' : '视频'}通话: ${target}`
     } else if (newStatus === CALL_STATUS.IDLE) {
       currentCallInfo.value = ''
-      showSingleCall.value = false
     }
   }
 )
@@ -195,6 +157,7 @@ watch(
 // 方法
 const { startSingleCall, startGroupCall } = useCallKit()
 const { hangup } = useEndCall()
+
 const startCall = async (type: 'audio' | 'video') => {
   if (!targetUserId.value) {
     alert('请输入目标用户ID')
@@ -204,17 +167,10 @@ const startCall = async (type: 'audio' | 'video') => {
     alert('环信客户端未初始化')
     return
   }
-  
+
   singleCallType.value = type
-  // showMultiCall 已移除
   currentCallInfo.value = `单人${type === 'audio' ? '语音' : '视频'}通话: ${targetUserId.value}`
-  
-  // 先发送通话邀请信令，初始化状态
-  const inviteMessage = type === 'audio' ? '邀请您进行语音通话' : '邀请您进行视频通话'
-  await startSingleCall(targetUserId.value, type, inviteMessage)
-  
-  // 状态初始化完成后再显示组件
-  showSingleCall.value = true
+  await startSingleCall(targetUserId.value, type)
 }
 
 const startMultiCall = async (type: 'audio' | 'video') => {
@@ -230,39 +186,23 @@ const startMultiCall = async (type: 'audio' | 'video') => {
     alert('环信客户端未初始化')
     return
   }
-  
+
   multiCallType.value = type
-  showSingleCall.value = false
-  
-  // 解析群组成员ID（逗号分隔）
   const members = groupMembers.value.split(',').map((id) => id.trim()).filter((id) => id.length > 0)
-  
-  // 发送群组通话邀请信令
-  const inviteMessage = type === 'audio' ? '邀请您加入群组语音通话' : '邀请您加入群组视频通话'
+
   try {
-    console.log('开始发起群组通话，groupId:', groupId.value)
-    // 先发送邀请并初始化状态
     await startGroupCall(
       groupId.value,
       members,
       type,
-      inviteMessage,
+      undefined,
       groupName.value || undefined,
       groupAvatar.value || undefined
     )
-    console.log('群组通话邀请已发送，状态已初始化')
-    
-    // 确认 store 中的 groupId 已设置
-    const storeGroupId = callStateStore.getCallState.groupId
-    console.log('Store 中的 groupId:', storeGroupId)
-    
-    // 状态初始化完成后再显示组件
-    // showMultiCall 已移除，组件自动显示
     currentCallInfo.value = `群组${type === 'audio' ? '语音' : '视频'}通话: ${groupId.value}`
   } catch (error) {
     console.error('发起群组通话失败:', error)
     alert('发起群组通话失败')
-    // showMultiCall 已移除
     currentCallInfo.value = ''
   }
 }
@@ -273,7 +213,6 @@ const handleSingleCallStart = () => {
 
 const handleSingleCallEnd = () => {
   console.log('单人通话结束')
-  showSingleCall.value = false
   currentCallInfo.value = ''
 }
 
@@ -281,13 +220,10 @@ const handleMultiCallStart = () => {
   console.log('群组通话开始')
 }
 
-// 🔑 优化后：无需手动控制 showMultiCall，组件自动隐藏
 const handleMultiCallEnd = () => {
   console.log('群组通话结束')
   currentCallInfo.value = ''
 }
-
-// 🔑 优化后：userLeft/userJoined 内部自动处理，无需在 App.vue 中监听
 
 // 登录处理函数
 const handleLogin = () => {
@@ -301,7 +237,6 @@ const handleLogin = () => {
     return
   }
 
-  // 使用用户输入的凭证进行登录
   chatClient.value.open({
     user: loginUserId.value,
     pwd: loginPassword.value
@@ -316,10 +251,7 @@ const handleLogin = () => {
 
 // 重置通话状态
 const handleResetState = () => {
-  const callStateStore = useCallStateStore()
   callStateStore.resetCallState()
-  showSingleCall.value = false
-  // showMultiCall 已移除
   currentCallInfo.value = ''
   console.log('通话状态已重置')
   alert('通话状态已重置')
@@ -328,11 +260,9 @@ const handleResetState = () => {
 // 结束通话处理函数
 const handleEndCall = () => {
   console.log('用户主动结束通话')
-  hangup(HANGUP_REASON.HANGUP)
+  hangup()
     .then(() => {
       console.log('通话已结束')
-      showSingleCall.value = false
-      // showMultiCall 已移除
       currentCallInfo.value = ''
       alert('通话已结束')
     })

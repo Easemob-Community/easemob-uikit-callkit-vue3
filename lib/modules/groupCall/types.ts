@@ -3,8 +3,6 @@
  * 设计原则：单一事实源，UI 只做纯渲染，状态驱动媒体
  */
 
-import type { IRemoteVideoTrack, IRemoteAudioTrack, ICameraVideoTrack } from 'agora-rtc-sdk-ng'
-
 /** 参与者生命周期状态 */
 export type ParticipantState =
   | 'invited'      // 已发送邀请，等待 answer
@@ -22,8 +20,9 @@ export interface Participant {
   isLocal: boolean
 
   // RTC 轨道（由 RtcMediaBridge 写入，UI 只读）
-  videoTrack: ICameraVideoTrack | IRemoteVideoTrack | null
-  audioTrack: IRemoteAudioTrack | null
+  // 使用 any 避免 Agora SDK 内部私有字段（_events/_indexOfListener 等）导致的结构类型不匹配
+  videoTrack: any
+  audioTrack: any
   localStream: MediaStream | null   // 仅 isLocal = true 时有值
 
   // Agora uid（仅远程用户，建立映射后填充）

@@ -5,6 +5,9 @@ import { logger } from '../utils/logger'
 import { useChatClientStore } from './chatClient'
 import { useSingleCallRtcStore } from './singleCallRtc'
 
+// RtcService 实例保存在模块级变量中，避免放入 Pinia state 造成循环依赖和响应式污染
+let _rtcServiceInstance: RtcService | null = null
+
 export const useRtcChannelStore = defineStore('rtcChannel', {
   /**
    * RTC频道状态数据
@@ -17,10 +20,9 @@ export const useRtcChannelStore = defineStore('rtcChannel', {
     remoteStreams: {},
     audioEnabled: true,
     videoEnabled: true,
-    rtcService: null as RtcService | null, // RTC服务实例
     agoraAppId: null as string | null, // Agora AppId
   }),
-  
+
   /**
    * 计算属性
    */
@@ -31,52 +33,51 @@ export const useRtcChannelStore = defineStore('rtcChannel', {
     activeChannel(): RtcChannelInfo | null {
       return this.activeChannelId ? this.channels[this.activeChannelId] : null
     },
-    
+
     /**
      * 获取当前频道的参与者数量
      */
     activeChannelParticipantCount(): number {
       return this.activeChannel ? this.activeChannel.participants.length : 0
     },
-    
+
     /**
      * 获取所有频道ID列表
      */
     channelIds(): string[] {
       return Object.keys(this.channels)
     },
-    
-    /**
-     * 获取RTC服务实例
-     */
-    getRtcService(): any {
-      return this.rtcService
-    },
-    
 
   },
-  
+
   /**
    * 频道管理方法
    */
   actions: {
     /**
+     * 获取RTC服务实例（从模块级变量读取，非 state）
+     */
+    getRtcService(): RtcService | null {
+      return _rtcServiceInstance
+    },
+
+    /**
      * 初始化RTC服务
      */
     async initializeRtcService(agoraAppId: string) {
-      if (this.rtcService) {
+      if (_rtcServiceInstance) {
         logger.warn('RTC服务已经初始化,无需重复初始化')
         return
       }
-      
+
       try {
         logger.info('初始化RTC服务...')
         this.agoraAppId = agoraAppId
-        
+
         // 获取环信客户端
         const chatClientStore = useChatClientStore()
         const chatClient = chatClientStore.getChatClient
-        
+
         const singleCallRtcStore = useSingleCallRtcStore()
         const service = new RtcService({
           appId: agoraAppId,
@@ -92,22 +93,22 @@ export const useRtcChannelStore = defineStore('rtcChannel', {
           popPendingUserId: () => singleCallRtcStore.popPendingUserId(),
         })
         await service.initialize()
-        this.rtcService = service
+        _rtcServiceInstance = service
         logger.info('RTC服务初始化成功')
       } catch (error) {
         logger.error('RTC服务初始化失败:', error)
         throw error
       }
     },
-    
+
     /**
      * 销毁RTC服务
      */
     async destroyRtcService() {
-      if (this.rtcService) {
+      if (_rtcServiceInstance) {
         logger.info('销毁RTC服务...')
-        await this.rtcService.destroy()
-        this.rtcService = null
+        await _rtcServiceInstance.destroy()
+        _rtcServiceInstance = null
         this.agoraAppId = null
       }
     },
@@ -239,7 +240,7 @@ export const useRtcChannelStore = defineStore('rtcChannel', {
           logger.debug('本地轨道已停止:', track.kind)
         })
       }
-      
+
       // 停止并清理所有远程流的轨道
       Object.entries(this.remoteStreams).forEach(([userId, stream]) => {
         if (stream instanceof MediaStream) {
@@ -249,7 +250,7 @@ export const useRtcChannelStore = defineStore('rtcChannel', {
           })
         }
       })
-      
+
       this.channels = {}
       this.activeChannelId = null
       this.isConnected = false

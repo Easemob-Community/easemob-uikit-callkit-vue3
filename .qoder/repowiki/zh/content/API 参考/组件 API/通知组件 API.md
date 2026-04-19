@@ -4,6 +4,8 @@
 **本文引用的文件**
 - [lib/components/InvitationNotification.vue](file://lib/components/InvitationNotification.vue)
 - [lib/store/callState.ts](file://lib/store/callState.ts)
+- [lib/store/globalCall.ts](file://lib/store/globalCall.ts)
+- [lib/modules/groupCall/viewModel/GroupCallStore.ts](file://lib/modules/groupCall/viewModel/GroupCallStore.ts)
 - [lib/composables/useAnswerCall.ts](file://lib/composables/useAnswerCall.ts)
 - [lib/composables/useSignalManager.ts](file://lib/composables/useSignalManager.ts)
 - [lib/composables/useListenerManager.ts](file://lib/composables/useListenerManager.ts)
@@ -19,6 +21,8 @@
 - 新增错误处理增强章节，详细说明信令失败时的状态重置机制
 - 更新组件交互行为，强调兜底状态重置确保 UI 不卡住
 - 补充完整的错误处理流程图和状态重置机制说明
+- 更新架构说明，反映 GlobalCallStore 和 GroupCallStore 的引入
+- 移除对 callStateStore 的直接依赖说明
 
 ## 目录
 1. [简介](#简介)
@@ -36,12 +40,14 @@
 ## 简介
 本文件为 InvitationNotification 通知组件的详细 API 文档，聚焦于"来电通知"的接收、显示与处理机制。该组件负责在收到远端发起的通话邀请时，以右上角滑入式通知的形式展示邀请者信息、通话类型与操作按钮，并在用户交互（接听/拒绝）或超时后自动关闭。组件与通话状态管理、环信客户端状态、接听/拒绝对组合式 API 等模块协同工作，形成完整的来电通知闭环。
 
-**更新** 本版本新增了信令失败时的状态重置增强机制，确保 UI 不会因为网络异常或信令发送失败而卡住。
+**更新** 本版本新增了信令失败时的状态重置增强机制，确保 UI 不会因为网络异常或信令发送失败而卡住。组件现已重构为使用 GlobalCallStore 获取来电者信息，使用 GroupCallStore 获取群组名称，移除了对 callStateStore 的直接依赖。
 
 ## 项目结构
 与 InvitationNotification 相关的核心文件与职责概览：
 - 组件实现：lib/components/InvitationNotification.vue
 - 通话状态与常量：lib/types/callstate.types.ts、lib/store/callState.ts
+- 全局通话状态：lib/store/globalCall.ts
+- 群组通话状态：lib/modules/groupCall/viewModel/GroupCallStore.ts
 - 接听/拒绝对组合式 API：lib/composables/useAnswerCall.ts
 - 信令管理：lib/composables/useSignalManager.ts
 - 信令监听管理：lib/composables/useListenerManager.ts
@@ -57,6 +63,8 @@ IN["InvitationNotification.vue"]
 end
 subgraph "状态与类型层"
 CST["callState.ts<br/>Pinia Store"]
+GCS["globalCall.ts<br/>全局用户信息"]
+GSC["GroupCallStore.ts<br/>群组通话状态"]
 CT["callstate.types.ts<br/>CALL_STATUS/CALL_TYPE"]
 end
 subgraph "业务能力层"
@@ -64,11 +72,13 @@ UA["useAnswerCall.ts<br/>acceptCall/rejectCall"]
 USM["useSignalManager.ts<br/>信令发送"]
 ULM["useListenerManager.ts<br/>信令监听"]
 LG["logger.ts<br/>日志"]
-end
+END
 subgraph "外部依赖"
 CC["聊天客户端状态<br/>chatClientStore"]
 END
 IN --> CST
+IN --> GCS
+IN --> GSC
 IN --> CT
 IN --> UA
 IN --> USM
@@ -79,7 +89,9 @@ IN --> CC
 
 **图表来源**
 - [lib/components/InvitationNotification.vue:48-184](file://lib/components/InvitationNotification.vue#L48-L184)
-- [lib/store/callState.ts:1-263](file://lib/store/callState.ts#L1-L263)
+- [lib/store/callState.ts:1-187](file://lib/store/callState.ts#L1-L187)
+- [lib/store/globalCall.ts:1-42](file://lib/store/globalCall.ts#L1-L42)
+- [lib/modules/groupCall/viewModel/GroupCallStore.ts:1-223](file://lib/modules/groupCall/viewModel/GroupCallStore.ts#L1-L223)
 - [lib/types/callstate.types.ts:1-93](file://lib/types/callstate.types.ts#L1-L93)
 - [lib/composables/useAnswerCall.ts](file://lib/composables/useAnswerCall.ts)
 - [lib/composables/useSignalManager.ts](file://lib/composables/useSignalManager.ts)
@@ -87,8 +99,10 @@ IN --> CC
 - [lib/utils/logger.ts](file://lib/utils/logger.ts)
 
 **章节来源**
-- [lib/components/InvitationNotification.vue:1-338](file://lib/components/InvitationNotification.vue#L1-L338)
-- [lib/store/callState.ts:1-263](file://lib/store/callState.ts#L1-L263)
+- [lib/components/InvitationNotification.vue:1-342](file://lib/components/InvitationNotification.vue#L1-L342)
+- [lib/store/callState.ts:1-187](file://lib/store/callState.ts#L1-L187)
+- [lib/store/globalCall.ts:1-42](file://lib/store/globalCall.ts#L1-L42)
+- [lib/modules/groupCall/viewModel/GroupCallStore.ts:1-223](file://lib/modules/groupCall/viewModel/GroupCallStore.ts#L1-L223)
 - [lib/types/callstate.types.ts:1-93](file://lib/types/callstate.types.ts#L1-L93)
 - [USAGE.md:32-56](file://USAGE.md#L32-L56)
 
@@ -100,7 +114,7 @@ IN --> CC
 - 显示内容：邀请者头像/占位符、邀请者名称、通话类型描述（一对一/群组）、操作按钮（接听/拒绝）
 - 交互行为：点击接听/拒绝后调用对应组合式 API，期间禁用按钮；异常时记录日志并关闭通知
 
-**更新** 组件现在具备增强的错误处理能力，在信令发送失败时会自动重置状态，确保 UI 不会卡住。
+**更新** 组件现在具备增强的错误处理能力，在信令发送失败时会自动重置状态，确保 UI 不会卡住。组件现已重构为使用 GlobalCallStore 获取来电者信息，使用 GroupCallStore 获取群组名称，移除了对 callStateStore 的直接依赖。
 
 **章节来源**
 - [lib/components/InvitationNotification.vue:1-46](file://lib/components/InvitationNotification.vue#L1-L46)
@@ -119,11 +133,15 @@ participant 组件 as "InvitationNotification"
 participant 客户端 as "聊天客户端状态"
 participant 接听 as "useAnswerCall"
 participant 信令管理 as "useSignalManager"
+participant 全局状态 as "GlobalCallStore"
+participant 群组状态 as "GroupCallStore"
 远端->>信令 : 发送邀请消息
 信令->>状态 : 更新邀请状态并设置状态为 ALERTING
 信令->>客户端 : 检查登录状态
 客户端-->>组件 : isChatClientReady = true/false
 组件->>组件 : 监听状态变化，若 ALERTING 且已登录则显示
+组件->>全局状态 : 获取来电者信息
+组件->>群组状态 : 获取群组名称
 组件->>接听 : 用户点击接听/拒绝
 接听->>信令管理 : 发送answerCall信令
 信令管理-->>接听 : 成功/失败
@@ -135,6 +153,8 @@ participant 信令管理 as "useSignalManager"
 - [lib/components/InvitationNotification.vue:110-126](file://lib/components/InvitationNotification.vue#L110-L126)
 - [lib/store/callState.ts:94-131](file://lib/store/callState.ts#L94-L131)
 - [lib/composables/useAnswerCall.ts](file://lib/composables/useAnswerCall.ts)
+- [lib/store/globalCall.ts:27-40](file://lib/store/globalCall.ts#L27-L40)
+- [lib/modules/groupCall/viewModel/GroupCallStore.ts:195-222](file://lib/modules/groupCall/viewModel/GroupCallStore.ts#L195-L222)
 
 **章节来源**
 - [lib/components/InvitationNotification.vue:110-184](file://lib/components/InvitationNotification.vue#L110-L184)
@@ -150,14 +170,17 @@ participant 信令管理 as "useSignalManager"
 - [lib/components/InvitationNotification.vue:1-46](file://lib/components/InvitationNotification.vue#L1-L46)
 
 ### 数据流与计算属性
-- 邀请者名称与头像：从 callStateStore 的用户信息映射中获取，若无则回退为默认占位
+- 邀请者名称与头像：从 GlobalCallStore 的用户信息映射中获取，若无则回退为默认占位
 - 通话类型：根据 CALL_TYPE 推断为 video/audio
 - 群组判断：当类型为多人通话时，描述中包含群组名称
 - 客户端就绪：通过聊天客户端设备 ID 判断是否已登录
 
+**更新** 组件现已重构为使用 GlobalCallStore 获取来电者信息，使用 GroupCallStore 获取群组名称，移除了对 callStateStore 的直接依赖。
+
 **章节来源**
 - [lib/components/InvitationNotification.vue:63-108](file://lib/components/InvitationNotification.vue#L63-L108)
-- [lib/store/callState.ts:220-232](file://lib/store/callState.ts#L220-L232)
+- [lib/store/globalCall.ts:27-40](file://lib/store/globalCall.ts#L27-L40)
+- [lib/modules/groupCall/viewModel/GroupCallStore.ts:195-222](file://lib/modules/groupCall/viewModel/GroupCallStore.ts#L195-L222)
 
 ### 显示与交互
 - 显示条件：监听通话状态变化，仅在 ALERTING 且客户端已登录时显示
@@ -178,12 +201,14 @@ participant 信令管理 as "useSignalManager"
 - 按钮样式：绿色接听、红色拒绝，悬停缩放反馈
 
 **章节来源**
-- [lib/components/InvitationNotification.vue:187-338](file://lib/components/InvitationNotification.vue#L187-L338)
+- [lib/components/InvitationNotification.vue:187-342](file://lib/components/InvitationNotification.vue#L187-L342)
 
 ### 与状态管理的协作
 - 状态来源：callStateStore 提供当前通话状态、类型、邀请信息、用户信息映射
 - 状态变更：组件监听状态变化以决定显示/隐藏
 - 超时处理：单人通话超时自动重置状态；多人通话保持界面等待用户手动挂断
+
+**更新** 组件现已重构为使用 GlobalCallStore 获取来电者信息，使用 GroupCallStore 获取群组名称，移除了对 callStateStore 的直接依赖。
 
 **章节来源**
 - [lib/store/callState.ts:142-151](file://lib/store/callState.ts#L142-L151)
@@ -288,6 +313,8 @@ K --> L
 ```mermaid
 graph LR
 IN["InvitationNotification.vue"] --> CS["callState.ts"]
+IN --> GCS["globalCall.ts"]
+IN --> GSC["GroupCallStore.ts"]
 IN --> CT["callstate.types.ts"]
 IN --> UA["useAnswerCall.ts"]
 IN --> USM["useSignalManager.ts"]
@@ -297,7 +324,9 @@ IN --> CC["聊天客户端状态"]
 
 **图表来源**
 - [lib/components/InvitationNotification.vue:48-58](file://lib/components/InvitationNotification.vue#L48-L58)
-- [lib/store/callState.ts:1-263](file://lib/store/callState.ts#L1-L263)
+- [lib/store/callState.ts:1-187](file://lib/store/callState.ts#L1-L187)
+- [lib/store/globalCall.ts:1-42](file://lib/store/globalCall.ts#L1-L42)
+- [lib/modules/groupCall/viewModel/GroupCallStore.ts:1-223](file://lib/modules/groupCall/viewModel/GroupCallStore.ts#L1-L223)
 - [lib/types/callstate.types.ts:1-93](file://lib/types/callstate.types.ts#L1-L93)
 - [lib/composables/useAnswerCall.ts](file://lib/composables/useAnswerCall.ts)
 - [lib/composables/useSignalManager.ts](file://lib/composables/useSignalManager.ts)
@@ -340,7 +369,7 @@ IN --> CC["聊天客户端状态"]
 ## 结论
 InvitationNotification 以简洁的卡片形式实现了来电通知的核心能力：在合适的时机显示、展示必要的邀请信息、提供直观的操作入口，并与状态管理、客户端状态、业务能力与日志系统紧密协作。其设计遵循"组件专注展示与交互、状态与业务逻辑集中管理"的原则，具备良好的可维护性与扩展性。
 
-**更新** 本版本通过引入信令失败时的状态重置增强机制，进一步提升了组件的健壮性和用户体验，确保在各种异常情况下 UI 都能保持正常响应。
+**更新** 本版本通过引入信令失败时的状态重置增强机制，进一步提升了组件的健壮性和用户体验，确保在各种异常情况下 UI 都能保持正常响应。组件现已重构为使用 GlobalCallStore 获取来电者信息，使用 GroupCallStore 获取群组名称，移除了对 callStateStore 的直接依赖。
 
 ## 附录
 
@@ -357,9 +386,9 @@ InvitationNotification 以简洁的卡片形式实现了来电通知的核心能
   - 监听通话状态变化，仅在 ALERTING 且客户端已登录时显示
   - 组件挂载时检查当前状态，必要时立即显示
 - 计算属性
-  - 邀请者名称与头像
+  - 邀请者名称与头像（使用 GlobalCallStore）
   - 通话类型（video/audio）
-  - 群组判断与描述
+  - 群组判断与描述（使用 GroupCallStore）
   - 客户端就绪判断
 - 交互方法
   - 接听：调用 acceptCall，异常时记录日志并调用 `resetCallState()` 关闭通知
@@ -370,11 +399,13 @@ InvitationNotification 以简洁的卡片形式实现了来电通知的核心能
 - 样式
   - 固定定位、圆角、阴影、模糊背景、滑入/滑出动画
 
-**更新** 新增了错误处理增强机制的 API 说明。
+**更新** 新增了错误处理增强机制的 API 说明，以及 GlobalCallStore 和 GroupCallStore 的使用说明。
 
 **章节来源**
 - [lib/components/InvitationNotification.vue:63-108](file://lib/components/InvitationNotification.vue#L63-L108)
 - [lib/components/InvitationNotification.vue:110-184](file://lib/components/InvitationNotification.vue#L110-L184)
-- [lib/components/InvitationNotification.vue:187-338](file://lib/components/InvitationNotification.vue#L187-L338)
+- [lib/components/InvitationNotification.vue:187-342](file://lib/components/InvitationNotification.vue#L187-L342)
 - [lib/composables/useAnswerCall.ts:72-77](file://lib/composables/useAnswerCall.ts#L72-L77)
 - [lib/store/callState.ts:155-188](file://lib/store/callState.ts#L155-L188)
+- [lib/store/globalCall.ts:27-40](file://lib/store/globalCall.ts#L27-L40)
+- [lib/modules/groupCall/viewModel/GroupCallStore.ts:195-222](file://lib/modules/groupCall/viewModel/GroupCallStore.ts#L195-L222)

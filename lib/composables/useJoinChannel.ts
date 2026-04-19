@@ -78,7 +78,7 @@ export function useJoinChannel(): UseJoinChannelReturn {
    */
   const joinChannel = async (): Promise<void> => {
     // 从 store 获取 RtcService 实例
-    const rtcService = rtcChannelStore.rtcService
+    const rtcService = rtcChannelStore.getRtcService()
     if (!rtcService) {
       logger.error('加入频道失败: RtcService未初始化')
       return

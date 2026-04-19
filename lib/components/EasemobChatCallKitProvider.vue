@@ -79,7 +79,7 @@ watchEffect(() => {
 // 初始化RTC服务（在日志配置之后）
 // 注意：appId 将从环信服务器动态获取，这里传入的 agoraAppId 仅用于初始化占位
 watchEffect(async () => {
-  if (!rtcChannelStore.rtcService) {
+  if (!rtcChannelStore.getRtcService()) {
     try {
       // 使用占位 appId 初始化 RtcService，实际 appId 在 joinChannel 时动态设置
       const placeholderAppId = props.agoraAppId || 'placeholder'

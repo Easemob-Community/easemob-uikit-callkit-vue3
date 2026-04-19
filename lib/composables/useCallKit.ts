@@ -14,7 +14,7 @@ export function useCallKit(): UseCallKitReturn {
   const startSingleCall = async (
     targetId: string,
     type: "audio" | "video",
-    msg: string
+    msg: string = type === 'audio' ? '邀请您进行语音通话' : '邀请您进行视频通话'
   ) => {
     logger.debug(
       `startSingleCall: 开始发起单人${type}通话，目标用户ID: ${targetId}`
@@ -53,7 +53,7 @@ export function useCallKit(): UseCallKitReturn {
     groupId: string,
     members: string[],
     type: "audio" | "video",
-    msg: string,
+    msg: string = type === 'audio' ? '邀请您加入群组语音通话' : '邀请您加入群组视频通话',
     groupName?: string,
     groupAvatar?: string
   ) => {

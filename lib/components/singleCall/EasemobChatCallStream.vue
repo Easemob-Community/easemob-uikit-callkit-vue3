@@ -71,7 +71,7 @@ const callStateStore = useCallStateStore()
 const rtcChannelStore = useRtcChannelStore()
 const callTimerStore = useCallTimerStore()
 const globalCallStore = useGlobalCallStore()
-const rtcService = computed(() => rtcChannelStore.rtcService)
+const rtcService = computed(() => rtcChannelStore.getRtcService())
 
 const localVideo = ref<HTMLVideoElement>()
 const remoteVideo = ref<HTMLVideoElement>()

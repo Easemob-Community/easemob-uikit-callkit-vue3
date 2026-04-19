@@ -252,7 +252,7 @@ export class CallService {
   // 清理媒体资源
   private async cleanupMediaResources(): Promise<void> {
     try {
-      const rtcService = this.rtcChannelStore.rtcService
+      const rtcService = this.rtcChannelStore.getRtcService()
       if (!rtcService) {
         logger.debug('CallService: RtcService 未初始化，无需清理媒体资源')
         return
@@ -289,7 +289,7 @@ export class CallService {
   // 清理连接
   private async cleanupConnection(): Promise<void> {
     try {
-      const rtcService = this.rtcChannelStore.rtcService
+      const rtcService = this.rtcChannelStore.getRtcService()
       if (!rtcService) {
         logger.debug('CallService: RtcService 未初始化，无需清理连接')
         return

@@ -225,7 +225,6 @@ export class RtcMediaBridge {
       isMuted: temp.isMuted,
       isCameraOn: temp.isCameraOn,
       isSpeaking: temp.isSpeaking,
-      invitedAt: temp.invitedAt,
       joinedAt: temp.joinedAt,
     })
 
@@ -238,7 +237,7 @@ export class RtcMediaBridge {
       if (!chatClient || typeof chatClient.getUserIdByRTCUIds !== 'function') {
         return null
       }
-      const res = await chatClient.getUserIdByRTCUIds([uid])
+      const res = await (chatClient as any).getUserIdByRTCUIds([uid])
       const userId = res?.data?.[uid]
       if (userId) {
         logger.info('[RtcMediaBridge] 通过 API 获取 userId 映射成功', { uid, userId })

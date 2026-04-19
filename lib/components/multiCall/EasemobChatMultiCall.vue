@@ -7,7 +7,7 @@
     :current-user-id="props.currentUserId || chatClientStore.getChatClient?.user || ''"
     :current-nickname="globalCallStore.getUserInfo(chatClientStore.getChatClient?.user)?.nickname"
     :current-avatar-url="globalCallStore.getUserInfo(chatClientStore.getChatClient?.user)?.avatarURL"
-    :rtc-service="rtcChannelStore.rtcService"
+    :rtc-service="rtcChannelStore.getRtcService()"
     @hangup="handleHangup"
     @add-participant="handleAddParticipant"
   />
