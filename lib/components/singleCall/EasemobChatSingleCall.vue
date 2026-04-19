@@ -39,6 +39,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, type CSSProperties } from 'vue'
 import { useCallStateStore } from '../../store/callState'
+import { useGlobalCallStore } from '../../store/globalCall'
 import { CALL_STATUS } from '../../types/callstate.types'
 import { DEFAULT_BACKGROUND_IMAGE, getAssetUrl } from '../../config/assets'
 import { useDraggable } from '../../composables/useDraggable'
@@ -70,6 +71,7 @@ const emit = defineEmits<{
 
 // 通话状态管理 - 直接使用store
 const callStateStore = useCallStateStore()
+const globalCallStore = useGlobalCallStore()
 const isCallActive = ref(false)
 
 // 计算属性 - 获取当前通话状态
