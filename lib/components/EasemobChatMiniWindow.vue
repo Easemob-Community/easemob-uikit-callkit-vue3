@@ -38,6 +38,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, type CSSProperties } from 'vue'
 import { useCallStateStore } from '../store/callState'
 import { useRtcChannelStore } from '../store/rtcChannel'
+import { useCallTimerStore } from '../store/callTimer'
 import { useGlobalCallStore } from '../store/globalCall'
 import { useCornerDraggable } from '../composables/useDraggable'
 import { CALL_TYPE } from '../types/callstate.types'
@@ -50,6 +51,7 @@ const emit = defineEmits<{
 
 const callStateStore = useCallStateStore()
 const rtcChannelStore = useRtcChannelStore()
+const callTimerStore = useCallTimerStore()
 const globalCallStore = useGlobalCallStore()
 
 // 小窗口引用
@@ -116,7 +118,7 @@ const windowStyle = computed<CSSProperties>(() => {
 })
 
 // 通话时长（从 store 获取格式化后的字符串）
-const callDuration = computed(() => rtcChannelStore.formattedCallDuration)
+const callDuration = computed(() => callTimerStore.formattedCallDuration)
 
 // 状态文本
 const statusText = computed(() => {

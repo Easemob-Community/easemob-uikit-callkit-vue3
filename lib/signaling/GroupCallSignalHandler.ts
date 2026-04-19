@@ -1,6 +1,6 @@
 import { useChatClientStore } from '../store/chatClient'
 import { useCallStateStore } from '../store/callState'
-import { useRtcChannelStore } from '../store/rtcChannel'
+import { useSingleCallRtcStore } from '../store/singleCallRtc'
 import { useGroupCallStore } from '../modules/groupCall'
 import { CallService } from '../services/CallService'
 import { CALL_STATUS, CALL_TYPE, HANGUP_REASON } from '../types/callstate.types'
@@ -17,7 +17,7 @@ import type { SignalHandler } from './SignalRouter'
 export class GroupCallSignalHandler implements SignalHandler {
   private chatClientStore = useChatClientStore()
   private callStateStore = useCallStateStore()
-  private rtcChannelStore = useRtcChannelStore()
+  private singleCallRtcStore = useSingleCallRtcStore()
   private groupCallStore = useGroupCallStore()
 
   handle(message: CmdMsgBody) {
@@ -147,7 +147,7 @@ export class GroupCallSignalHandler implements SignalHandler {
       // 群聊接受：标记为 accepted，添加到 pending RTC 列表
       logger.info('[GroupCallSignalHandler] 群聊成员接受，标记为 accepted', message.from)
       if (message.from) {
-        this.rtcChannelStore.addPendingUserId(message.from)
+        this.singleCallRtcStore.addPendingUserId(message.from)
       }
       this.groupCallStore.markAccepted(message.from as string)
     }
@@ -251,7 +251,7 @@ export class GroupCallSignalHandler implements SignalHandler {
     logger.info(`[GroupCallSignalHandler] 群聊成员 ${message.from} 离开`)
 
     // 标记用户已离开 RTC
-    this.rtcChannelStore.markUserLeftRtc(message.from as string)
+    this.singleCallRtcStore.markUserLeftRtc(message.from as string)
 
     // 标记用户为 left
     this.groupCallStore.setParticipantState(message.from as string, 'left')

@@ -8,6 +8,8 @@ import EasemobChatMiniWindow from "./components/EasemobChatMiniWindow.vue";
 import { GroupCallShell } from "./modules/groupCall";
 import { useCallStateStore } from "./store/callState";
 import { useRtcChannelStore } from "./store/rtcChannel";
+import { useSingleCallRtcStore } from "./store/singleCallRtc";
+import { useCallTimerStore } from "./store/callTimer";
 import { useGlobalCallStore } from "./store/globalCall";
 import { useCallKit } from "./composables/useCallKit";
 import { useEndCall } from "./composables/useEndCall";
@@ -28,7 +30,7 @@ export {
 };
 
 // 导出store
-export { useCallStateStore, useRtcChannelStore, useGlobalCallStore };
+export { useCallStateStore, useRtcChannelStore, useGlobalCallStore, useSingleCallRtcStore, useCallTimerStore };
 // 导出部分hook
 export { useCallKit, useEndCall, useAnswerCall, useRtcService, useJoinChannel, useParticipants };
 // 导出拖拽hook

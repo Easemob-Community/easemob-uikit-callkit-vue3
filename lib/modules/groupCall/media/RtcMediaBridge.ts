@@ -1,7 +1,6 @@
 import type { IAgoraRTCRemoteUser, IRemoteVideoTrack, IRemoteAudioTrack } from 'agora-rtc-sdk-ng'
 import type { RtcService } from '../../../services/RtcService'
 import { useGroupCallStore } from '../viewModel/GroupCallStore'
-import { useRtcChannelStore } from '../../../store/rtcChannel'
 import { useChatClientStore } from '../../../store/chatClient'
 import { logger } from '../../../utils/logger'
 
@@ -13,13 +12,11 @@ import { logger } from '../../../utils/logger'
 export class RtcMediaBridge {
   private rtcService: RtcService
   private store: ReturnType<typeof useGroupCallStore>
-  private rtcChannelStore: ReturnType<typeof useRtcChannelStore>
   private client: any
 
   constructor(rtcService: RtcService) {
     this.rtcService = rtcService
     this.store = useGroupCallStore()
-    this.rtcChannelStore = useRtcChannelStore()
     this.client = rtcService.getClient()
     // 关闭 RtcService 内部自动订阅，由本桥接器统一处理订阅逻辑，避免重复订阅导致 INVALID_REMOTE_USER 错误
     this.rtcService.setAutoSubscribe(false)
@@ -71,16 +68,7 @@ export class RtcMediaBridge {
     // 1. 查 GroupCallStore 已建立的映射
     let userId = this.store.uidToUserIdMap.get(uid)
 
-    // 2. 查 RtcChannelStore（旧架构可能已建立映射，如 callerUserId 推断）
-    if (!userId) {
-      userId = this.rtcChannelStore.getUserIdByUid(uid)
-      if (userId) {
-        logger.info('[RtcMediaBridge] 从 RtcChannelStore 获取映射', { uid, userId })
-        this.store.setUidMapping(uid, userId)
-      }
-    }
-
-    // 3. 兜底：尝试 API
+    // 2. 兜底：尝试 API
     if (!userId) {
       userId = await this.fetchUserIdByUid(uid)
       if (userId) {
@@ -120,10 +108,6 @@ export class RtcMediaBridge {
   private handleUserLeft = (user: IAgoraRTCRemoteUser) => {
     const uid = user.uid.toString()
     let userId = this.store.uidToUserIdMap.get(uid)
-    // 兼容旧架构映射
-    if (!userId) {
-      userId = this.rtcChannelStore.getUserIdByUid(uid)
-    }
     logger.info('[RtcMediaBridge] user-left', { uid, userId })
     if (userId) {
       this.store.setParticipantState(userId, 'left')
@@ -155,16 +139,7 @@ export class RtcMediaBridge {
 
     let userId = this.store.uidToUserIdMap.get(uidStr)
 
-    // 如果还没有映射，查 RtcChannelStore（旧架构可能已建立映射）
-    if (!userId) {
-      userId = this.rtcChannelStore.getUserIdByUid(uidStr)
-      if (userId) {
-        logger.info('[RtcMediaBridge] 从 RtcChannelStore 获取映射', { uid: uidStr, userId })
-        this.store.setUidMapping(uidStr, userId)
-      }
-    }
-
-    // 最后兜底：尝试 API（可能 publish 比 joined 先到）
+    // 兜底：尝试 API（可能 publish 比 joined 先到）
     if (!userId) {
       userId = await this.fetchUserIdByUid(uidStr)
       if (userId) {
@@ -206,10 +181,6 @@ export class RtcMediaBridge {
   private handleUserUnpublished = (user: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => {
     const uid = user.uid.toString()
     let userId = this.store.uidToUserIdMap.get(uid)
-    // 兼容旧架构映射
-    if (!userId) {
-      userId = this.rtcChannelStore.getUserIdByUid(uid)
-    }
     logger.info('[RtcMediaBridge] user-unpublished', { uid, userId, mediaType })
     if (!userId) return
 
@@ -224,7 +195,7 @@ export class RtcMediaBridge {
     // 批量更新说话状态
     const speakingIds = volumes.filter(v => v.level > 0).map(v => {
       const uid = v.uid.toString()
-      return this.store.uidToUserIdMap.get(uid) || this.rtcChannelStore.getUserIdByUid(uid)
+      return this.store.uidToUserIdMap.get(uid)
     }).filter(Boolean) as string[]
 
     this.store.activeParticipants.forEach(p => {

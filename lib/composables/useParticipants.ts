@@ -1,6 +1,7 @@
 import { computed } from 'vue'
 import { useCallStateStore } from '../store/callState'
 import { useRtcChannelStore } from '../store/rtcChannel'
+import { useSingleCallRtcStore } from '../store/singleCallRtc'
 import { useChatClientStore } from '../store/chatClient'
 import { useGlobalCallStore } from '../store/globalCall'
 import { logger } from '../utils/logger'
@@ -21,6 +22,7 @@ export interface Participant {
 export function useParticipants(currentUserId?: string) {
   const callStateStore = useCallStateStore()
   const rtcChannelStore = useRtcChannelStore()
+  const singleCallRtcStore = useSingleCallRtcStore()
   const chatClientStore = useChatClientStore()
   const globalCallStore = useGlobalCallStore()
 
@@ -36,15 +38,15 @@ export function useParticipants(currentUserId?: string) {
     const currentUser = currentUserId || chatClientStore.getChatClient?.user || state.callerUserId
     
     // 访问 joinedRtcUsers 确保计算属性响应其变化
-    const joinedUsers = Array.from(rtcChannelStore.joinedRtcUsers)
-    
+    const joinedUsers = Array.from(singleCallRtcStore.joinedRtcUsers)
+
     logger.debug('[useParticipants] 计算参与者列表:', {
       currentUser,
       callerUserId: state.callerUserId,
       invitedMembers: JSON.parse(JSON.stringify(state.invitedMembers ?? [])),
       joinedRtcUsers: joinedUsers,
-      leftUsers: Array.from(rtcChannelStore.leftUsers),
-      uidToUserIdMap: JSON.parse(JSON.stringify(Array.from(rtcChannelStore.uidToUserIdMap.entries())))
+      leftUsers: Array.from(singleCallRtcStore.leftUsers),
+      uidToUserIdMap: JSON.parse(JSON.stringify(Array.from(singleCallRtcStore.uidToUserIdMap.entries())))
     })
     
     // 添加当前用户
@@ -62,15 +64,15 @@ export function useParticipants(currentUserId?: string) {
     // 添加主叫方（如果不是当前用户）
     // 主叫方始终添加，直到明确离开（通过 userLeft 事件标记）
     if (state.callerUserId && state.callerUserId !== currentUser) {
-      const hasJoined = rtcChannelStore.isUserInRtc(state.callerUserId)
+      const hasJoined = singleCallRtcStore.isUserInRtc(state.callerUserId)
       const isInInvitedList = (state.invitedMembers ?? []).includes(state.callerUserId)
-      const hasExplicitlyLeft = rtcChannelStore.hasUserLeft(state.callerUserId) // 🔑 检查是否已明确离开
-      
+      const hasExplicitlyLeft = singleCallRtcStore.hasUserLeft(state.callerUserId) // 🔑 检查是否已明确离开
+
       // 主叫方在以下情况显示：
       // 1. 已加入RTC (hasJoined = true)
-      // 2. 还在邀请列表中 (isInInvitedList = true)  
+      // 2. 还在邀请列表中 (isInInvitedList = true)
       // 3. 被叫方刚加入时（invitedMembers可能已清空，但还没有人标记为joined，且未明确离开）
-      const shouldShowCaller = !hasExplicitlyLeft && (hasJoined || isInInvitedList || rtcChannelStore.joinedRtcUsers.size === 0)
+      const shouldShowCaller = !hasExplicitlyLeft && (hasJoined || isInInvitedList || singleCallRtcStore.joinedRtcUsers.size === 0)
       
       if (shouldShowCaller) {
         participantList.push({
@@ -89,8 +91,8 @@ export function useParticipants(currentUserId?: string) {
     if (invitedMembers.length > 0) {
       invitedMembers.forEach(userId => {
         // 避免重复添加，且排除已明确离开的用户
-        if (userId !== currentUser && userId !== state.callerUserId && !rtcChannelStore.hasUserLeft(userId)) {
-          const hasJoined = rtcChannelStore.isUserInRtc(userId)
+        if (userId !== currentUser && userId !== state.callerUserId && !singleCallRtcStore.hasUserLeft(userId)) {
+          const hasJoined = singleCallRtcStore.isUserInRtc(userId)
           participantList.push({
             userId,
             userName: globalCallStore.getUserInfo(userId)?.nickname || userId,

@@ -61,13 +61,6 @@ export interface RtcChannelState {
   videoEnabled: boolean;
   rtcService: any; // RTC服务实例(使用any避免Pinia类型推断问题)
   agoraAppId: string | null; // Agora AppId
-  callDuration: number; // 通话时长（秒）
-  callStartTime: number; // 通话开始时间戳
-  _timer?: any; // 内部定时器
-  uidToUserIdMap: Map<string, string>; // Agora UID 到环信 userId 的映射
-  joinedRtcUsers: Set<string>; // 已加入RTC频道的userId集合
-  pendingUserIds: Set<string>; // 待加入RTC的userId集合（收到answerCall但尚未加入RTC的用户）
-  leftUsers: Set<string>; // 已明确离开的userId集合（避免挂断后显示"邀请中"）
 }
 
 // RTC频道信息类型

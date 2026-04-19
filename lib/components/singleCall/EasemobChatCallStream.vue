@@ -49,6 +49,7 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import type { IAgoraRTCRemoteUser } from 'agora-rtc-sdk-ng'
 import { useCallStateStore } from '../../store/callState'
 import { useRtcChannelStore } from '../../store/rtcChannel'
+import { useCallTimerStore } from '../../store/callTimer'
 import { useGlobalCallStore } from '../../store/globalCall'
 import { useEndCall } from '../../composables/useEndCall'
 import { logger } from '../../utils/logger'
@@ -68,6 +69,7 @@ const emit = defineEmits<{
 // 从 store 获取 RtcService 实例
 const callStateStore = useCallStateStore()
 const rtcChannelStore = useRtcChannelStore()
+const callTimerStore = useCallTimerStore()
 const globalCallStore = useGlobalCallStore()
 const rtcService = computed(() => rtcChannelStore.rtcService)
 
@@ -79,7 +81,7 @@ const isMuted = computed(() => !rtcChannelStore.audioEnabled)
 const isVideoEnabled = computed(() => rtcChannelStore.videoEnabled)
 
 // 通话时长（从 store 获取格式化后的字符串）
-const callDuration = computed(() => rtcChannelStore.formattedCallDuration)
+const callDuration = computed(() => callTimerStore.formattedCallDuration)
 
 // 远程用户信息
 const remoteUserName = computed(() => {
