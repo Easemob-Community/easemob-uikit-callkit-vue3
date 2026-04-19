@@ -21,17 +21,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, type PropType } from 'vue'
 import ParticipantTile from './ParticipantTile.vue'
 import MainVideoLayout from './MainVideoLayout.vue'
 import type { Participant } from '../types'
 
-interface Props {
-  participants: Participant[]
-  selectedId?: string | null
-}
-
-const props = defineProps<Props>()
+const props = defineProps({
+  participants: { type: Array as PropType<Participant[]>, default: () => [] },
+  selectedId: { type: String as PropType<string | null>, default: null }
+})
 const emit = defineEmits<{
   select: [userId: string | null]
 }>()

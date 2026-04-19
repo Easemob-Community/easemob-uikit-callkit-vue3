@@ -145,7 +145,11 @@ const shellStyle = computed(() => {
   }
 })
 
-const participants = computed(() => vm.participants.value)
+// 防御性取值：确保 participants 始终是纯数组（避免 Pinia computed 解包不一致导致传入 ComputedRef）
+const participants = computed(() => {
+  const val = vm.participants.value
+  return Array.isArray(val) ? val : []
+})
 const localParticipant = computed(() => vm.localParticipant.value)
 const selectedParticipantId = computed(() => vm.selectedParticipantId.value)
 

@@ -80,11 +80,20 @@ const isCallActive = ref(false)
 // 计算属性 - 获取当前通话状态
 const callStatus = computed(() => callStateStore.status)
 
-// 判断是否处于通话中状态（IN_CALL 表示已接通）
-const isInCall = computed(() => callStateStore.status === CALL_STATUS.IN_CALL)
+// 判断是否处于通话中状态（IN_CALL 及接听中的中间态都算，避免黑屏）
+const isInCall = computed(() =>
+  callStateStore.status === CALL_STATUS.IN_CALL ||
+  callStateStore.status === CALL_STATUS.ANSWER_CALL ||
+  callStateStore.status === CALL_STATUS.CONFIRM_CALLEE
+)
 
-// 组件是否可见：只要通话状态不是 IDLE 就显示（自动管理，用户无需外部 v-if）
-const isCallVisible = computed(() => callStateStore.status !== CALL_STATUS.IDLE)
+// 组件是否可见：
+// - INVITING：主叫方等待接听（显示 CallWaiting）
+// - IN_CALL / ANSWER_CALL / CONFIRM_CALLEE：通话中（显示 CallStream）
+// - ALERTING：被叫响铃中，完全由 InvitationNotification 接管，此处不显示
+const isCallVisible = computed(() =>
+  callStateStore.status === CALL_STATUS.INVITING || isInCall.value
+)
 
 // 目标用户：优先使用 props，否则从 store 自动推断
 const displayTargetUser = computed(() => {

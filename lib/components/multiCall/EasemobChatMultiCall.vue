@@ -22,18 +22,13 @@ import { useGlobalCallStore } from '../../store/globalCall'
 import { CALL_STATUS, CALL_TYPE } from '../../types/callstate.types'
 import { GroupCallShell } from '../../modules/groupCall'
 
-interface Props {
-  groupId?: string
-  groupName?: string
-  groupAvatar?: string
-  type?: 'audio' | 'video'
-  currentUserId?: string
-  autoShow?: boolean
-}
-
-const props = withDefaults(defineProps<Props>(), {
-  type: 'video',
-  autoShow: true
+const props = defineProps({
+  groupId: { type: String, default: '' },
+  groupName: { type: String, default: '' },
+  groupAvatar: { type: String, default: '' },
+  type: { type: String as () => 'audio' | 'video', default: 'video' },
+  currentUserId: { type: String, default: '' },
+  autoShow: { type: Boolean, default: true }
 })
 
 const emit = defineEmits<{

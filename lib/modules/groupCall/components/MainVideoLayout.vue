@@ -48,17 +48,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, nextTick, watch } from 'vue'
+import { computed, ref, nextTick, watch, type PropType } from 'vue'
 import ParticipantTile from './ParticipantTile.vue'
 import CallKitIcon from './CallKitIcon.vue'
 import type { Participant } from '../types'
 
-interface Props {
-  participants: Participant[]
-  selectedId: string
-}
-
-const props = defineProps<Props>()
+const props = defineProps({
+  participants: { type: Array as PropType<Participant[]>, default: () => [] },
+  selectedId: { type: String, required: true }
+})
 const emit = defineEmits<{
   select: [userId: string]
   exit: []
