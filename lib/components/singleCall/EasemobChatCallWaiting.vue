@@ -24,7 +24,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { useEndCall } from '../../composables/useEndCall'
+import { useCallKit } from '../../composables/useCallKit'
 
 interface Props {
   targetUser: string
@@ -33,7 +33,7 @@ interface Props {
 
 const props = defineProps<Props>()
 
-const { cancelCall: hangupCall } = useEndCall()
+const { cancel: hangupCall } = useCallKit()
 
 const emit = defineEmits<{
   cancel: []

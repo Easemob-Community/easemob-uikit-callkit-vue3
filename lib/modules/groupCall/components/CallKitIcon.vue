@@ -5,6 +5,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { iconRegistry } from './iconRegistry'
+import { logger } from '../../../utils/logger'
 
 interface Props {
   name: string
@@ -22,7 +23,7 @@ const props = withDefaults(defineProps<Props>(), {
 const svgContent = computed(() => {
   const raw = iconRegistry[props.name]
   if (!raw) {
-    console.warn(`[CallKitIcon] unknown icon: ${props.name}`)
+    logger.warn(`[CallKitIcon] unknown icon: ${props.name}`)
     return ''
   }
   // 替换 svg 标签上的 width/height，确保响应式

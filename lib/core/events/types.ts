@@ -1,0 +1,135 @@
+import type { CALL_TYPE, HANGUP_REASON } from "../../types/callstate.types";
+
+/**
+ * CallKit 事件类型枚举
+ */
+export type CallKitEventType =
+  | "statusChanged" // 通话状态变化
+  | "incomingCall" // 收到来电邀请
+  | "callStarted" // 通话开始（双方/多方接通）
+  | "callEnded" // 通话结束
+  | "callCanceled" // 通话被取消
+  | "callRefused" // 通话被拒绝
+  | "callTimeout" // 通话邀请超时
+  | "callBusy" // 对方忙线
+  | "participantJoined" // 群通话成员加入
+  | "participantLeft"; // 群通话成员离开
+
+/**
+ * 基础通话信息（事件 payload 公共字段）
+ */
+export interface BaseCallEvent {
+  callId: string;
+  channel: string;
+  type: CALL_TYPE;
+  callerUserId: string;
+  calleeUserId?: string;
+  groupId?: string;
+}
+
+/**
+ * 通话状态变化事件
+ */
+export interface StatusChangedEvent extends BaseCallEvent {
+  from: number;
+  to: number;
+}
+
+/**
+ * 收到来电邀请事件
+ */
+export interface IncomingCallEvent extends BaseCallEvent {
+  callerDevId: string;
+  calleeDevId?: string;
+  groupName?: string;
+  groupAvatar?: string;
+  invitedMembers?: string[];
+}
+
+/**
+ * 通话开始事件
+ */
+export interface CallStartedEvent extends BaseCallEvent {
+  /** 当前用户是否是主叫方 */
+  isCaller: boolean;
+}
+
+/**
+ * 通话结束事件
+ */
+export interface CallEndedEvent extends BaseCallEvent {
+  /** 挂断原因 */
+  reason: HANGUP_REASON;
+  /** 通话时长（毫秒）。若计时器未启动则为 0 */
+  duration: number;
+}
+
+/**
+ * 通话取消事件
+ */
+export interface CallCanceledEvent extends BaseCallEvent {
+  /** 是否是远程取消 */
+  isRemote: boolean;
+}
+
+/**
+ * 通话拒绝事件
+ */
+export interface CallRefusedEvent extends BaseCallEvent {
+  /** 是否是远程拒绝 */
+  isRemote: boolean;
+}
+
+/**
+ * 通话超时事件
+ */
+export interface CallTimeoutEvent extends BaseCallEvent {}
+
+/**
+ * 对方忙线事件
+ */
+export interface CallBusyEvent extends BaseCallEvent {}
+
+/**
+ * 群通话成员加入事件
+ */
+export interface ParticipantJoinedEvent {
+  userId: string;
+  callId: string;
+  channel: string;
+  groupId?: string;
+}
+
+/**
+ * 群通话成员离开事件
+ */
+export interface ParticipantLeftEvent {
+  userId: string;
+  callId: string;
+  channel: string;
+  groupId?: string;
+  reason?: string;
+}
+
+/**
+ * 各事件对应的 payload 类型映射
+ */
+export interface CallKitEventPayloads {
+  statusChanged: StatusChangedEvent;
+  incomingCall: IncomingCallEvent;
+  callStarted: CallStartedEvent;
+  callEnded: CallEndedEvent;
+  callCanceled: CallCanceledEvent;
+  callRefused: CallRefusedEvent;
+  callTimeout: CallTimeoutEvent;
+  callBusy: CallBusyEvent;
+  participantJoined: ParticipantJoinedEvent;
+  participantLeft: ParticipantLeftEvent;
+}
+
+/**
+ * 事件处理器类型
+ */
+export type CallKitEventHandler<T extends CallKitEventType> = (
+  payload: CallKitEventPayloads[T]
+) => void;

@@ -4,6 +4,8 @@ import { CALL_STATUS, CALL_TYPE } from "../types/callstate.types";
 import type { Chat } from "../core/sdk/imSDK";
 import { generateRandomChannel } from "../utils";
 import { useSingleCallRtcStore } from "./singleCallRtc";
+import { callKitEventBus } from "../core/events/CallKitEventBus";
+import { logger } from "../utils/logger";
 export const useCallStateStore = defineStore("callState", {
   /**
    * 通话状态数据
@@ -82,7 +84,18 @@ export const useCallStateStore = defineStore("callState", {
      * 处理超时逻辑
      */
     handleTimeout() {
-      console.warn("通话邀请超时");
+      logger.warn("通话邀请超时");
+
+      const callState = this.getCallState;
+      callKitEventBus.emit("callTimeout", {
+        callId: callState.callId,
+        channel: callState.channel,
+        type: callState.type,
+        callerUserId: callState.callerUserId,
+        calleeUserId: callState.calleeUserId,
+        groupId: undefined,
+      });
+
       // 单人通话场景下，设置状态为IDLE，自动隐藏界面
       this.setCallStatus(CALL_STATUS.IDLE);
     },
@@ -98,8 +111,23 @@ export const useCallStateStore = defineStore("callState", {
      */
     setCallStatus(status: CALL_STATUS) {
       const oldStatus = this.status;
+      if (oldStatus === status) return;
+
       this.status = status;
-      
+
+      // 触发状态变化事件
+      const callState = this.getCallState;
+      callKitEventBus.emit("statusChanged", {
+        from: oldStatus,
+        to: status,
+        callId: callState.callId,
+        channel: callState.channel,
+        type: callState.type,
+        callerUserId: callState.callerUserId,
+        calleeUserId: callState.calleeUserId,
+        groupId: undefined,
+      });
+
       // 🔑 关键逻辑：当从IDLE状态转换为其他状态时，清空leftUsers（新通话开始）
       if (oldStatus === CALL_STATUS.IDLE && status !== CALL_STATUS.IDLE) {
         const singleCallRtcStore = useSingleCallRtcStore();

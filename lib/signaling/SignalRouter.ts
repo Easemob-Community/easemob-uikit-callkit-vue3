@@ -1,4 +1,5 @@
 import type { CmdMsgBody } from '../composables/useListenerManager'
+import { logger } from '../utils/logger'
 
 export interface SignalHandler {
   handle(message: CmdMsgBody): void | Promise<void>
@@ -22,12 +23,12 @@ export class SignalRouter {
   dispatch(message: CmdMsgBody) {
     const action = message.ext?.action
     if (!action) {
-      console.warn('[SignalRouter] 消息缺少 action，无法分发', message)
+      logger.warn('[SignalRouter] 消息缺少 action，无法分发', message)
       return
     }
     const handlers = this.handlers.get(action) || []
     if (handlers.length === 0) {
-      console.warn(`[SignalRouter] 未注册 action "${action}" 的处理器`)
+      logger.warn(`[SignalRouter] 未注册 action "${action}" 的处理器`)
       return
     }
     handlers.forEach(h => h.handle(message))

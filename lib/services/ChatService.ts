@@ -14,6 +14,7 @@ import {
   type CALLKIT_CMD_MSG_ACTION_TYPE,
   CALLKIT_CMD_MSG_RESULT_TYPE,
 } from "../types/callstate.types";
+import { logger } from "../utils/logger";
 export class ChatService {
   private chatClient: Chat.Connection | null = null;
   private callStateStore = useCallStateStore();
@@ -93,7 +94,7 @@ export class ChatService {
         };
       }
       case "answerCall": {
-        console.warn(">>>>>answerCall", callState);
+        logger.warn(">>>>>answerCall", callState);
         return {
           action: "answerCall",
           ts: Date.now(),

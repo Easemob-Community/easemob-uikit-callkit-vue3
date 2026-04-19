@@ -11,7 +11,7 @@ import { useListenerManager } from '../composables/useListenerManager';
 import { useChatClientStore } from '../store/chatClient';
 import { useCallStateStore } from '../store/callState';
 import { useRtcChannelStore } from '../store/rtcChannel';
-import { logger } from '../utils/logger';
+import { logger, LogLevel } from '../utils/logger';
 
 // 确保组件挂载完成后再渲染插槽
 const mounted = ref(false)
@@ -67,11 +67,15 @@ watchEffect(() => {
   const callStateStore = useCallStateStore();
   callStateStore.inviteTimeout = effectiveInitConfig.inviteTimeout;
   
-  // 设置日志级别
-  logger.setDebug(effectiveInitConfig.debug);
+  // 设置日志级别（logLevel 优先级高于 debug）
+  if (effectiveInitConfig.logLevel !== undefined) {
+    logger.setLevel(effectiveInitConfig.logLevel);
+  } else {
+    logger.setDebug(effectiveInitConfig.debug);
+  }
   
   // 实际应用场景日志
-  logger.info(`CallKit Provider 初始化完成，配置: debug=${effectiveInitConfig.debug}, enableRingtone=${effectiveInitConfig.enableRingtone}`);
+  logger.info(`CallKit Provider 初始化完成，配置: debug=${effectiveInitConfig.debug}, logLevel=${effectiveInitConfig.logLevel ?? 'auto'}, enableRingtone=${effectiveInitConfig.enableRingtone}`);
   logger.debug(`CallKit Provider 详细配置: inviteTimeout=${effectiveInitConfig.inviteTimeout}, resizable=${effectiveInitConfig.resizable}, draggable=${effectiveInitConfig.draggable}`);
   logger.verbose(`CallKit 当前日志级别: ${logger.getCurrentLevelName()}`);
 });

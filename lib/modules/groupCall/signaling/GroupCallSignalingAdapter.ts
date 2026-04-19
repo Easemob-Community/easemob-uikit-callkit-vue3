@@ -32,7 +32,7 @@ export class GroupCallSignalingAdapter {
 
   /**
    * 接受邀请（被叫方）
-   * 复用 useAnswerCall.acceptCall，但这里只做信令层封装
+   * 复用 useCallKit().accept()，但这里只做信令层封装
    * 实际接听动作在 viewModel 中 orchestrate
    */
   async sendAnswer(userId: string, groupId: string): Promise<void> {

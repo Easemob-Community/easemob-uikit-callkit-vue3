@@ -13,6 +13,7 @@ import { useGlobalCallStore } from '../store/globalCall'
 import { SignalRouter } from '../signaling/SignalRouter'
 import { SingleCallSignalHandler } from '../signaling/SingleCallSignalHandler'
 import { GroupCallSignalHandler } from '../signaling/GroupCallSignalHandler'
+import { callKitEventBus } from '../core/events/CallKitEventBus'
 
 // 定义CmdMsgBody接口以替代不存在的Chat.CmdMsgBody
 export interface CmdMsgBody {
@@ -149,6 +150,22 @@ export function useListenerManager(): ListenerManagerReturn {
     sendAlertMessage(message.from as string).catch(() => {})
     callStateStore.setCallStatus(CALL_STATUS.ALERTING)
     logger.info(`通话状态已更新至ALERTING`)
+
+    // 触发 incomingCall 事件
+    const currentCallState = callStateStore.getCallState
+    callKitEventBus.emit('incomingCall', {
+      callId: currentCallState.callId,
+      channel: currentCallState.channel,
+      type: currentCallState.type,
+      callerUserId: currentCallState.callerUserId,
+      callerDevId: currentCallState.callerDevId,
+      calleeUserId: currentCallState.calleeUserId,
+      calleeDevId: currentCallState.calleeDevId,
+      groupId: ext?.callkitGroupInfo?.groupId,
+      groupName: ext?.callkitGroupInfo?.groupName,
+      groupAvatar: ext?.callkitGroupInfo?.groupAvatar,
+      invitedMembers: ext?.invitedMembers,
+    })
 
     // 设置超时计时器
     callStateStore.startTimeoutTimer(() => {

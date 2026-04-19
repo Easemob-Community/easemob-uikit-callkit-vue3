@@ -51,7 +51,7 @@ import { useCallStateStore } from '../../store/callState'
 import { useRtcChannelStore } from '../../store/rtcChannel'
 import { useCallTimerStore } from '../../store/callTimer'
 import { useGlobalCallStore } from '../../store/globalCall'
-import { useEndCall } from '../../composables/useEndCall'
+import { useCallKit } from '../../composables/useCallKit'
 import { logger } from '../../utils/logger'
 import CallInfoBar from './CallInfoBar.vue'
 import CallControls from './CallControls.vue'
@@ -140,8 +140,8 @@ const endCall = async () => {
     logger.info('用户点击挂断按钮，开始挂断流程')
     
     // 调用 CallService 发送挂断信令并清理资源
-    const { hangupCall } = useEndCall()
-    await hangupCall()
+    const { hangup } = useCallKit()
+    await hangup()
     
     logger.info('挂断流程完成')
   } catch (error) {

@@ -57,6 +57,7 @@
 import { ref, watch, computed, onUnmounted, nextTick } from 'vue'
 import CallKitIcon from './CallKitIcon.vue'
 import type { Participant } from '../types'
+import { logger } from '../../../utils/logger'
 
 interface Props {
   participant: Participant
@@ -111,7 +112,7 @@ function safePlayTrack(track: any, el: HTMLElement) {
       try {
         track.play(el)
       } catch (e) {
-        console.warn('[ParticipantTile] track.play 失败', e)
+        logger.warn('[ParticipantTile] track.play 失败', e)
       }
     })
   })
@@ -144,7 +145,7 @@ watch(
       if (props.participant.localStream) {
         if (el.srcObject !== props.participant.localStream) {
           el.srcObject = props.participant.localStream
-          el.play().catch((err) => console.warn('本地视频播放失败', err))
+          el.play().catch((err) => logger.warn('本地视频播放失败', err))
         }
         enforceVideoSize(el)
         return

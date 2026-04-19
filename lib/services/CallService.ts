@@ -2,13 +2,15 @@
 import { useCallStateStore } from "../store/callState";
 import { useChatClientStore } from "../store/chatClient";
 import { useRtcChannelStore } from "../store/rtcChannel";
+import { useCallTimerStore } from "../store/callTimer";
 import { HANGUP_REASON, CALL_STATUS, CALL_TYPE } from "../types/callstate.types";
 import { useSignalManager } from "../composables/useSignalManager";
 import { useGroupCallStore } from "../modules/groupCall";
 import { logger } from "../utils/logger";
+import { callKitEventBus } from "../core/events/CallKitEventBus";
 
 export class CallService {
-  private logger = console;
+  private svcLogger = logger;
 
   // 延迟获取store实例，确保在Pinia激活后使用
   private get callStateStore() {
@@ -24,7 +26,7 @@ export class CallService {
   }
 
   async hangup(reason: HANGUP_REASON = HANGUP_REASON.HANGUP) {
-    this.logger.log("hangup method called:", { reason });
+    this.svcLogger.info("CallService.hangup:", { reason });
 
     try {
       // 防止重复调用
@@ -33,17 +35,17 @@ export class CallService {
         !callStateStore ||
         typeof callStateStore.getCallStatus === "undefined"
       ) {
-        this.logger.error("CallState store not properly initialized");
+        this.svcLogger.error("CallState store not properly initialized");
         return;
       }
 
       const currentStatus = callStateStore.getCallStatus;
       if (currentStatus === CALL_STATUS.IDLE) {
-        this.logger.warn("Call is not active, skip hangup");
+        this.svcLogger.warn("Call is not active, skip hangup");
         return;
       }
     } catch (error) {
-      this.logger.error("Error checking call status:", error);
+      this.svcLogger.error("Error checking call status:", error);
       return;
     }
 
@@ -56,14 +58,14 @@ export class CallService {
       await this.cleanupConnection();
       this.resetState(reason);
 
-      this.logger.info(`Hangup completed successfully with reason: ${reason}`);
+      this.svcLogger.info(`Hangup completed successfully with reason: ${reason}`);
     } catch (error) {
-      this.logger.error("Hangup process failed:", error);
+      this.svcLogger.error("Hangup process failed:", error);
       // 即使出错也要尝试重置基本状态
       try {
         this.callStateStore.setCallStatus(CALL_STATUS.IDLE);
       } catch (resetError) {
-        this.logger.error(
+        this.svcLogger.error(
           "Failed to reset state after hangup error:",
           resetError
         );
@@ -282,7 +284,7 @@ export class CallService {
   
       logger.info('CallService: 媒体资源清理完成')
     } catch (error) {
-      this.logger.error('Error cleaning up media resources:', error)
+      this.svcLogger.error('Error cleaning up media resources:', error)
     }
   }
 
@@ -310,7 +312,7 @@ export class CallService {
         
       logger.info('CallService: RTC 连接清理完成')
     } catch (error) {
-      this.logger.error('Error cleaning up connection:', error)
+      this.svcLogger.error('Error cleaning up connection:', error)
     }
   }
 
@@ -319,21 +321,56 @@ export class CallService {
     try {
       const callStateStore = this.callStateStore;
       if (!callStateStore) {
-        this.logger.error("CallState store not available for reset");
+        this.svcLogger.error("CallState store not available for reset");
         return;
       }
 
-      logger.info(`[CallService] 重置通话状态，原因: ${reason}, 重置前状态: ${callStateStore.getCallStatus}`);
+      const callState = callStateStore.getCallState;
+
+      // 计算通话时长
+      let duration = 0;
+      try {
+        const callTimerStore = useCallTimerStore();
+        if (callTimerStore.callStartTime > 0) {
+          duration = Date.now() - callTimerStore.callStartTime;
+          callTimerStore.reset();
+        }
+        // 群通话时长从 groupCallStore 计算
+        const groupCallStore = useGroupCallStore();
+        if (groupCallStore.session?.startTime && groupCallStore.session.startTime > 0) {
+          duration = Date.now() - groupCallStore.session.startTime;
+          groupCallStore.destroySession();
+        }
+      } catch (_e) {
+        // 忽略计时器获取失败
+      }
+
+      // 触发 callEnded 事件（在重置状态之前，确保能拿到 callInfo）
+      const isRemote = [
+        HANGUP_REASON.REMOTE_CANCEL,
+        HANGUP_REASON.REMOTE_REFUSE,
+        HANGUP_REASON.REMOTE_NO_RESPONSE,
+      ].includes(reason as any);
+
+      callKitEventBus.emit("callEnded", {
+        callId: callState.callId,
+        channel: callState.channel,
+        type: callState.type,
+        reason,
+        duration,
+        callerUserId: callState.callerUserId,
+        calleeUserId: callState.calleeUserId,
+        groupId: undefined,
+      });
+
+      logger.info(`[CallService] 重置通话状态，原因: ${reason}, 重置前状态: ${callStateStore.getCallStatus}, 时长: ${duration}ms`);
       
       // 使用 resetCallState 方法重置状态
       callStateStore.resetCallState();
 
       logger.info(`[CallService] 通话状态重置完成，当前状态: ${callStateStore.getCallStatus}`);
-      
-      // 使用logger记录事件
-      logger.log("call-ended event:", { reason });
     } catch (error) {
-      this.logger.error("Error resetting state:", error);
+      this.svcLogger.error("Error resetting state:", error);
     }
   }
 

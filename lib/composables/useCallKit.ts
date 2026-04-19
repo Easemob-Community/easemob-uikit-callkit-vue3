@@ -1,55 +1,45 @@
 import { useChatClientStore } from "../store/chatClient";
 import type { UseCallKitReturn } from "../types";
 import { useCallStateStore } from "../store/callState";
-import { CALL_STATUS, CALL_TYPE } from "../types/callstate.types";
+import { CALL_STATUS, CALL_TYPE, HANGUP_REASON } from "../types/callstate.types";
 import { logger } from "../utils/logger";
 import { useSignalManager } from "./useSignalManager";
 import { useJoinChannel } from "./useJoinChannel";
 import { useGroupCallStore } from "../modules/groupCall";
+import { callService } from "../services/CallService";
+import { callKitEventBus } from "../core/events/CallKitEventBus";
 
-// 组合式API：useCallKit
+// 组合式API：useCallKit —— 统一的通话控制入口
 export function useCallKit(): UseCallKitReturn {
   const chatClientStore = useChatClientStore();
   const callStateStore = useCallStateStore();
-  const startSingleCall = async (
+  const { sendInviteMessage, sendAnswerMessage } = useSignalManager();
+
+  // ─── 发起 ───
+
+  const call = async (
     targetId: string,
     type: "audio" | "video",
     msg: string = type === 'audio' ? '邀请您进行语音通话' : '邀请您进行视频通话'
   ) => {
-    logger.debug(
-      `startSingleCall: 开始发起单人${type}通话，目标用户ID: ${targetId}`
-    );
-
+    logger.debug(`call: 发起单人${type}通话，目标: ${targetId}`);
     if (!chatClientStore.getChatClient) {
-      logger.warn("ChatClient未初始化，请确保在Provider内使用");
+      logger.warn("ChatClient 未初始化");
       return;
     }
-
-    //设置当前通话状态为inviting
     callStateStore.initInviteInfo({
       calleeUserId: targetId,
       type: type === "audio" ? CALL_TYPE.AUDIO_1V1 : CALL_TYPE.VIDEO_1V1,
     });
-
-    logger.verbose(`startSingleCall: 已初始化邀请信息，通话类型: ${type}`);
-    // 使用信令管理器处理信令发送
-    const { sendInviteMessage } = useSignalManager();
     try {
-      // 使用信令管理器发送邀请消息
-      const message = await sendInviteMessage(
-        targetId,
-        "singleChat" as any,
-        msg
-      );
-      logger.info(
-        `startSingleCall: 发送单人通话邀请信息成功，消息ID: ${message.serverMsgId}`
-      );
-      logger.verbose(`startSingleCall: 邀请消息详情:`, message);
+      const message = await sendInviteMessage(targetId, "singleChat" as any, msg);
+      logger.info(`call: 邀请发送成功，msgId: ${message.serverMsgId}`);
     } catch (error) {
-      logger.error(`startSingleCall: 发送单人通话邀请信息失败:`, error);
+      logger.error(`call: 邀请发送失败`, error);
     }
   };
-  const startGroupCall = async (
+
+  const groupCall = async (
     groupId: string,
     members: string[],
     type: "audio" | "video",
@@ -57,100 +47,177 @@ export function useCallKit(): UseCallKitReturn {
     groupName?: string,
     groupAvatar?: string
   ) => {
-    logger.debug(
-      `startGroupCall: 开始发起群组${type}通话，群组ID: ${groupId}，邀请成员数: ${members.length}`
-    );
-
+    logger.debug(`groupCall: 发起群组${type}通话，groupId: ${groupId}`);
     if (!chatClientStore.getChatClient) {
-      logger.warn("ChatClient未初始化，请确保在Provider内使用");
+      logger.warn("ChatClient 未初始化");
       return;
     }
-
     if (!members || members.length === 0) {
       logger.warn("群组通话必须指定邀请成员列表");
       return;
     }
 
     try {
-      // 设置当前通话状态为inviting
       callStateStore.initInviteInfo({
         calleeUserId: groupId,
         type: type === "audio" ? CALL_TYPE.AUDIO_MULTI : CALL_TYPE.VIDEO_MULTI,
       });
 
-      logger.verbose(`startGroupCall: 已初始化群组邀请信息，通话类型: ${type}`);
-      logger.info(`startGroupCall: 准备发送群组通话邀请信息`);
+      const message = await sendInviteMessage(members, "groupChat" as any, msg, groupId);
+      logger.info(`groupCall: 邀请发送成功，msgId: ${message.serverMsgId}`);
 
-      // 使用信令管理器发送群组邀请消息
-      const { sendInviteMessage } = useSignalManager();
-      try {
-        const message = await sendInviteMessage(
-          members,
-          "groupChat" as any,
-          msg,
-          groupId
-        );
-        logger.info(
-          `startGroupCall: 发送群组通话邀请信息成功，消息ID: ${message.serverMsgId}`
-        );
-        logger.verbose(`startGroupCall: 邀请消息详情:`, message);
-        
-        // 主叫方发送邀请后，立即将状态更新为IN_CALL并加入RTC频道
-        logger.info('startGroupCall: 主叫方立即加入RTC频道')
-        callStateStore.setCallStatus(CALL_STATUS.IN_CALL)
+      // 主叫方立即进入 IN_CALL 并加入 RTC
+      callStateStore.setCallStatus(CALL_STATUS.IN_CALL);
 
-        // 初始化新架构 GroupCallStore（幂等：GroupCallShell 后续会再次调用 startSession，重复初始化安全）
-        const groupCallStore = useGroupCallStore()
-        const currentUserId = chatClientStore.getChatClient?.user || ''
-        groupCallStore.initSession({
-          sessionId: callStateStore.getCallState.channel || groupId,
-          groupId,
-          callType: type,
-          isActive: true,
-          startTime: Date.now(),
-        })
+      // 触发 callStarted（群通话主叫方）
+      const currentCallState = callStateStore.getCallState;
+      callKitEventBus.emit('callStarted', {
+        callId: currentCallState.callId,
+        channel: currentCallState.channel,
+        type: currentCallState.type,
+        callerUserId: currentCallState.callerUserId,
+        calleeUserId: currentCallState.calleeUserId,
+        groupId: groupId,
+        isCaller: true,
+      });
+
+      const groupCallStore = useGroupCallStore();
+      const currentUserId = chatClientStore.getChatClient?.user || '';
+      groupCallStore.initSession({
+        sessionId: callStateStore.getCallState.channel || groupId,
+        groupId,
+        callType: type,
+        isActive: true,
+        startTime: Date.now(),
+      });
+      groupCallStore.addParticipant({
+        userId: currentUserId,
+        nickname: currentUserId,
+        state: 'joinedRtc',
+        isLocal: true,
+        videoTrack: null,
+        audioTrack: null,
+        localStream: null,
+        isMuted: false,
+        isCameraOn: type === 'video',
+        isSpeaking: false,
+      });
+      members.forEach((m) => {
         groupCallStore.addParticipant({
-          userId: currentUserId,
-          nickname: currentUserId,
-          state: 'joinedRtc',
-          isLocal: true,
+          userId: m,
+          nickname: m,
+          state: 'invited',
+          isLocal: false,
           videoTrack: null,
           audioTrack: null,
           localStream: null,
           isMuted: false,
-          isCameraOn: type === 'video',
+          isCameraOn: false,
           isSpeaking: false,
-        })
-        members.forEach((m) => {
-          groupCallStore.addParticipant({
-            userId: m,
-            nickname: m,
-            state: 'invited',
-            isLocal: false,
-            videoTrack: null,
-            audioTrack: null,
-            localStream: null,
-            isMuted: false,
-            isCameraOn: false,
-            isSpeaking: false,
-          })
-        })
+        });
+      });
 
-        // 加入RTC频道
-        const { joinChannel } = useJoinChannel()
-        await joinChannel()
-        logger.info('startGroupCall: 主叫方已成功加入RTC频道')
-      } catch (error) {
-        logger.error(`startGroupCall: 发送群组通话邀请信息失败:`, error);
-        throw error;
-      }
+      const { joinChannel } = useJoinChannel();
+      await joinChannel();
+      logger.info('groupCall: 主叫方已加入 RTC 频道');
     } catch (error) {
-      logger.error(`startGroupCall: 群组通话初始化失败:`, error);
+      logger.error(`groupCall: 发起失败`, error);
       throw error;
     }
   };
+
+  // ─── 结束 ───
+
+  const hangup = async (reason: HANGUP_REASON = HANGUP_REASON.HANGUP) => {
+    logger.info("useCallKit.hangup", { reason });
+    await callService.hangup(reason);
+  };
+
+  const cancel = async () => {
+    logger.info("useCallKit.cancel");
+    const callState = callStateStore.getCallState;
+    callKitEventBus.emit('callCanceled', {
+      callId: callState.callId,
+      channel: callState.channel,
+      type: callState.type,
+      isRemote: false,
+      callerUserId: callState.callerUserId,
+      calleeUserId: callState.calleeUserId,
+      groupId: undefined,
+    });
+    await callService.cancelCall();
+  };
+
+  // ─── 应答 ───
+
+  const accept = async () => {
+    logger.info("useCallKit.accept");
+    const callState = callStateStore.getCallState;
+    if (!callState.callerUserId) {
+      logger.error("accept: 无法获取主叫方 ID");
+      throw new Error("无法获取主叫方 ID");
+    }
+    if (callStateStore.getCallStatus !== CALL_STATUS.ALERTING) {
+      logger.warn(`accept: 当前状态不是 ALERTING，无法接听`);
+      return;
+    }
+    if (callStateStore.getInviteTimeoutTimer) {
+      callStateStore.clearTimeoutTimer();
+    }
+    await sendAnswerMessage(
+      callState.callerUserId,
+      { callId: callState.callId, callerDevId: callState.callerDevId, calleeDevId: chatClientStore.getClientDeviceId },
+      "accept" as any
+    );
+    callStateStore.setCallStatus(CALL_STATUS.ANSWER_CALL);
+    logger.info("useCallKit.accept: 已发送接听信令");
+  };
+
+  const reject = async () => {
+    logger.info("useCallKit.reject");
+    const callState = callStateStore.getCallState;
+    if (!callState.callerUserId) {
+      logger.error("reject: 无法获取主叫方 ID");
+      throw new Error("无法获取主叫方 ID");
+    }
+    if (callStateStore.getInviteTimeoutTimer) {
+      callStateStore.clearTimeoutTimer();
+    }
+    await sendAnswerMessage(
+      callState.callerUserId,
+      { callId: callState.callId, callerDevId: callState.callerDevId, calleeDevId: chatClientStore.getClientDeviceId },
+      "refuse" as any
+    );
+    callStateStore.resetCallState();
+    logger.info("useCallKit.reject: 已发送拒绝信令");
+  };
+
+  const rejectBusy = async () => {
+    logger.info("useCallKit.rejectBusy");
+    const callState = callStateStore.getCallState;
+    if (!callState.callerUserId) {
+      logger.error("rejectBusy: 无法获取主叫方 ID");
+      throw new Error("无法获取主叫方 ID");
+    }
+    if (callStateStore.getInviteTimeoutTimer) {
+      callStateStore.clearTimeoutTimer();
+    }
+    await sendAnswerMessage(
+      callState.callerUserId,
+      { callId: callState.callId, callerDevId: callState.callerDevId, calleeDevId: chatClientStore.getClientDeviceId },
+      "busy" as any
+    );
+    callStateStore.resetCallState();
+    logger.info("useCallKit.rejectBusy: 已发送忙碌拒绝信令");
+  };
+
   return {
-    startSingleCall,
-    startGroupCall,
+    call,
+    groupCall,
+    hangup,
+    cancel,
+    accept,
+    reject,
+    rejectBusy,
   };
 }

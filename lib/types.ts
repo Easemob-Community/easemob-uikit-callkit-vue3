@@ -1,5 +1,7 @@
 import type { Chat } from "./core/sdk/imSDK";
 import type { HANGUP_REASON } from "./types/callstate.types";
+import type { LogLevel } from "./utils/logger";
+
 export interface EasemobChatCallKitOptions {
   // 基础配置
   appKey: string;
@@ -37,7 +39,8 @@ export interface ProviderConfig {
   chatClient?: Chat.Connection; // 可选，支持延迟初始化
   agoraAppId?: string; // [已废弃] Agora AppId 将从环信服务器动态获取，此参数仅用于向后兼容
   initConfig?: {
-    debug?: boolean; // 开启调试模式
+    debug?: boolean; // 开启调试模式（等价于 logLevel: LogLevel.VERBOSE）
+    logLevel?: LogLevel; // 日志输出级别：0=ERROR, 1=WARN, 2=INFO, 3=DEBUG, 4=VERBOSE
     enableRingtone?: boolean; // 开启铃声
     resizable?: boolean; // 开启可调整大小
     draggable?: boolean; // 开启可拖动
@@ -49,12 +52,14 @@ export interface ProviderConfig {
 export type EasemobChatCallKitInstance = CallKitInstance;
 
 export interface UseCallKitReturn {
-  startSingleCall: (
+  /** 发起单人通话 */
+  call: (
     targetId: string,
     type: "audio" | "video",
     msg?: string
   ) => Promise<void>;
-  startGroupCall: (
+  /** 发起群组通话 */
+  groupCall: (
     groupId: string,
     members: string[],
     type: "audio" | "video",
@@ -62,29 +67,14 @@ export interface UseCallKitReturn {
     groupName?: string,
     groupAvatar?: string
   ) => Promise<void>;
-}
-
-// useEndCall 返回类型
-export interface UseEndCallReturn {
-  // 核心挂断方法
+  /** 挂断/结束通话 */
   hangup: (reason?: HANGUP_REASON) => Promise<void>;
-  hangupCall: () => Promise<void>;
-  cancelCall: () => Promise<void>;
-  handleRemoteCancel: () => Promise<void>;
-  handleRemoteRefuse: () => Promise<void>;
-  handleAbnormalEnd: () => Promise<void>;
-  
-  // 状态检查方法
-  canHangup: () => boolean;
-  canCancel: () => boolean;
-}
-
-// useAnswerCall 返回类型
-export interface UseAnswerCallReturn {
-  // 接受通话
-  acceptCall: () => Promise<void>;
-  // 拒绝通话
-  rejectCall: () => Promise<void>;
-  // 忙碌拒绝通话
-  busyRejectCall: () => Promise<void>;
+  /** 取消通话邀请 */
+  cancel: () => Promise<void>;
+  /** 接听通话 */
+  accept: () => Promise<void>;
+  /** 拒绝通话 */
+  reject: () => Promise<void>;
+  /** 忙碌拒绝通话 */
+  rejectBusy: () => Promise<void>;
 }

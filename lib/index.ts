@@ -12,8 +12,7 @@ import { useSingleCallRtcStore } from "./store/singleCallRtc";
 import { useCallTimerStore } from "./store/callTimer";
 import { useGlobalCallStore } from "./store/globalCall";
 import { useCallKit } from "./composables/useCallKit";
-import { useEndCall } from "./composables/useEndCall";
-import { useAnswerCall } from "./composables/useAnswerCall";
+import { useCallKitEvents } from "./composables/useCallKitEvents";
 import { useRtcService } from "./composables/useRtcService";
 import { useJoinChannel } from "./composables/useJoinChannel";
 import { useParticipants } from "./composables/useParticipants";
@@ -32,7 +31,7 @@ export {
 // 导出store
 export { useCallStateStore, useRtcChannelStore, useGlobalCallStore, useSingleCallRtcStore, useCallTimerStore };
 // 导出部分hook
-export { useCallKit, useEndCall, useAnswerCall, useRtcService, useJoinChannel, useParticipants };
+export { useCallKit, useCallKitEvents, useRtcService, useJoinChannel, useParticipants };
 // 导出拖拽hook
 export { useDraggable, useCenteredDraggable, useCornerDraggable };
 // 导出RTC服务
@@ -44,14 +43,35 @@ export type {
   EasemobChatCallKitInstance,
   ProviderConfig,
   UseCallKitReturn,
-  UseEndCallReturn,
-  UseAnswerCallReturn,
 } from "./types";
+
+export type {
+  UseCallKitEventsReturn,
+} from "./composables/useCallKitEvents";
+
+export type {
+  CallKitEventType,
+  CallKitEventPayloads,
+  CallKitEventHandler,
+  BaseCallEvent,
+  StatusChangedEvent,
+  IncomingCallEvent,
+  CallStartedEvent,
+  CallEndedEvent,
+  CallCanceledEvent,
+  CallRefusedEvent,
+  CallTimeoutEvent,
+  CallBusyEvent,
+  ParticipantJoinedEvent,
+  ParticipantLeftEvent,
+} from "./core/events/types";
 
 export type { Participant } from "./composables/useParticipants";
 
 // 导出常量与类型
 export { HANGUP_REASON, CALL_STATUS, CALL_TYPE } from "./types/callstate.types";
+
+export { LogLevel } from "./utils/logger";
 
 // 导出静态资源配置
 export { DEFAULT_BACKGROUND_IMAGE, ICONS, getAssetUrl } from "./config/assets";

@@ -5,6 +5,7 @@ import { useGroupCallStore } from '../modules/groupCall'
 import { CallService } from '../services/CallService'
 import { CALL_STATUS, CALL_TYPE, HANGUP_REASON } from '../types/callstate.types'
 import { logger } from '../utils/logger'
+import { callKitEventBus } from '../core/events/CallKitEventBus'
 import type { CmdMsgBody } from '../composables/useListenerManager'
 import type { Chat } from '../core/sdk/imSDK'
 import type { SignalHandler } from './SignalRouter'
@@ -150,6 +151,15 @@ export class GroupCallSignalHandler implements SignalHandler {
         this.singleCallRtcStore.addPendingUserId(message.from)
       }
       this.groupCallStore.markAccepted(message.from as string)
+
+      // 触发 participantJoined
+      const callState = this.callStateStore.getCallState
+      callKitEventBus.emit('participantJoined', {
+        userId: message.from as string,
+        callId: callState.callId,
+        channel: callState.channel,
+        groupId: this.groupCallStore.session?.groupId,
+      })
     }
   }
 
@@ -249,6 +259,16 @@ export class GroupCallSignalHandler implements SignalHandler {
 
     // 通话中状态：只移除离开的成员，不挂断整个通话
     logger.info(`[GroupCallSignalHandler] 群聊成员 ${message.from} 离开`)
+
+    // 触发 participantLeft
+    const callState = this.callStateStore.getCallState
+    callKitEventBus.emit('participantLeft', {
+      userId: message.from as string,
+      callId: callState.callId,
+      channel: callState.channel,
+      groupId: this.groupCallStore.session?.groupId,
+      reason: 'left',
+    })
 
     // 标记用户已离开 RTC
     this.singleCallRtcStore.markUserLeftRtc(message.from as string)

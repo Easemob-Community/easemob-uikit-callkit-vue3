@@ -9,8 +9,8 @@
       </div>
     </div>
 
-    <!-- 使用Provider包裹应用 - 开启debug模式以测试logger -->
-    <EasemobChatCallKitProvider :chat-client="chatClient" :agora-app-id="'079c29108da649439a6f0b721a4212e4'" :init-config="{ inviteTimeout: 30000, debug: true }">
+    <!-- 使用Provider包裹应用 - 设置日志级别为 INFO -->
+    <EasemobChatCallKitProvider :chat-client="chatClient" :agora-app-id="'079c29108da649439a6f0b721a4212e4'" :init-config="{ inviteTimeout: 30000, logLevel: LogLevel.INFO }">
       <!-- 通话邀请通知 -->
       <InvitationNotification />
       
@@ -74,6 +74,19 @@
           />
         </div>
 
+        <!-- 事件日志展示 -->
+        <div class="event-log-section" v-if="eventLogs.length > 0">
+          <h3>📡 CallKit 事件日志</h3>
+          <div class="event-log-list">
+            <div v-for="(log, index) in eventLogs" :key="index" class="event-log-item" :class="log.type">
+              <span class="event-time">{{ log.time }}</span>
+              <span class="event-type">{{ log.type }}</span>
+              <span class="event-detail">{{ log.detail }}</span>
+            </div>
+          </div>
+          <button @click="eventLogs = []" class="btn clear-log-btn">清空日志</button>
+        </div>
+
         <div class="status-display" v-if="currentCallInfo">
           <p>{{ currentCallInfo }}</p>
           <button @click="handleEndCall" class="btn end-call-btn">
@@ -86,13 +99,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, watch, computed, onUnmounted } from 'vue'
 import SDK from 'easemob-websdk'
 import { 
   CALL_STATUS, 
   CALL_TYPE, 
+  LogLevel,
   useCallKit, 
-  useEndCall,
+  useCallKitEvents,
   useCallStateStore,
   EasemobChatCallKitProvider,
   InvitationNotification, 
@@ -133,6 +147,68 @@ const singleCallType = ref<'audio' | 'video'>('video')
 const multiCallType = ref<'audio' | 'video'>('video')
 const currentCallInfo = ref('')
 
+// 事件日志
+const eventLogs = ref<Array<{ time: string; type: string; detail: string }>>([])
+const maxLogs = 20
+
+function pushEventLog(type: string, detail: string) {
+  const now = new Date()
+  const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`
+  eventLogs.value.unshift({ time, type, detail })
+  if (eventLogs.value.length > maxLogs) {
+    eventLogs.value.pop()
+  }
+}
+
+// 使用 useCallKitEvents 订阅通话生命周期事件
+const { onCallStarted, onCallEnded, onIncomingCall, onCallCanceled, onCallRefused, onCallTimeout, onCallBusy, onStatusChanged } = useCallKitEvents()
+
+const unbindStatusChanged = onStatusChanged((e) => {
+  pushEventLog('statusChanged', `${e.from} → ${e.to}`)
+})
+
+const unbindIncomingCall = onIncomingCall((e) => {
+  const caller = e.callerUserId
+  const callType = e.type === CALL_TYPE.VIDEO_1V1 || e.type === CALL_TYPE.VIDEO_MULTI ? '视频' : '语音'
+  pushEventLog('incomingCall', `${caller} 发起${callType}通话`)
+})
+
+const unbindCallStarted = onCallStarted((e) => {
+  pushEventLog('callStarted', `通话接通 isCaller=${e.isCaller} callId=${e.callId}`)
+})
+
+const unbindCallEnded = onCallEnded((e) => {
+  const durationSec = Math.round(e.duration / 1000)
+  pushEventLog('callEnded', `原因: ${e.reason} 时长: ${durationSec}s`)
+})
+
+const unbindCallCanceled = onCallCanceled((e) => {
+  pushEventLog('callCanceled', e.isRemote ? '对方取消' : '本地取消')
+})
+
+const unbindCallRefused = onCallRefused((e) => {
+  pushEventLog('callRefused', e.isRemote ? '对方拒绝' : '本地拒绝')
+})
+
+const unbindCallTimeout = onCallTimeout(() => {
+  pushEventLog('callTimeout', '通话邀请超时')
+})
+
+const unbindCallBusy = onCallBusy(() => {
+  pushEventLog('callBusy', '对方忙线')
+})
+
+onUnmounted(() => {
+  unbindStatusChanged()
+  unbindIncomingCall()
+  unbindCallStarted()
+  unbindCallEnded()
+  unbindCallCanceled()
+  unbindCallRefused()
+  unbindCallTimeout()
+  unbindCallBusy()
+})
+
 // 登录相关状态
 const loginUserId = ref('ppp')
 const loginPassword = ref('1')
@@ -167,8 +243,7 @@ watch(
 )
 
 // 方法
-const { startSingleCall, startGroupCall } = useCallKit()
-const { hangup } = useEndCall()
+const { call, groupCall, hangup } = useCallKit()
 
 const startCall = async (type: 'audio' | 'video') => {
   if (!targetUserId.value) {
@@ -182,7 +257,7 @@ const startCall = async (type: 'audio' | 'video') => {
 
   singleCallType.value = type
   currentCallInfo.value = `单人${type === 'audio' ? '语音' : '视频'}通话: ${targetUserId.value}`
-  await startSingleCall(targetUserId.value, type)
+  await call(targetUserId.value, type)
 }
 
 const startMultiCall = async (type: 'audio' | 'video') => {
@@ -203,7 +278,7 @@ const startMultiCall = async (type: 'audio' | 'video') => {
   const members = groupMembers.value.split(',').map((id) => id.trim()).filter((id) => id.length > 0)
 
   try {
-    await startGroupCall(
+    await groupCall(
       groupId.value,
       members,
       type,
@@ -220,11 +295,10 @@ const startMultiCall = async (type: 'audio' | 'video') => {
 }
 
 const handleSingleCallStart = () => {
-  console.log('单人通话已显示界面')
+  // 已由 onCallStarted 事件处理
 }
 
 const handleSingleCallEnd = () => {
-  console.log('单人通话结束')
   currentCallInfo.value = ''
 }
 
@@ -455,5 +529,84 @@ const handleEndCall = () => {
   color: white;
   padding: 8px 16px;
   align-self: flex-start;
+}
+
+.event-log-section {
+  margin: 20px 0;
+  padding: 15px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background-color: #fafafa;
+}
+
+.event-log-section h3 {
+  margin-top: 0;
+  margin-bottom: 12px;
+  font-size: 16px;
+  color: #333;
+}
+
+.event-log-list {
+  max-height: 200px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.event-log-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 13px;
+  background-color: #fff;
+  border-left: 3px solid #ccc;
+}
+
+.event-log-item .event-time {
+  color: #999;
+  font-size: 12px;
+  flex-shrink: 0;
+  font-family: monospace;
+}
+
+.event-log-item .event-type {
+  font-weight: 600;
+  flex-shrink: 0;
+  min-width: 110px;
+}
+
+.event-log-item .event-detail {
+  color: #666;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-log-item.callStarted { border-left-color: #28a745; }
+.event-log-item.callStarted .event-type { color: #28a745; }
+.event-log-item.callEnded { border-left-color: #dc3545; }
+.event-log-item.callEnded .event-type { color: #dc3545; }
+.event-log-item.incomingCall { border-left-color: #007bff; }
+.event-log-item.incomingCall .event-type { color: #007bff; }
+.event-log-item.callCanceled { border-left-color: #fd7e14; }
+.event-log-item.callCanceled .event-type { color: #fd7e14; }
+.event-log-item.callRefused { border-left-color: #6f42c1; }
+.event-log-item.callRefused .event-type { color: #6f42c1; }
+.event-log-item.callTimeout { border-left-color: #e83e8c; }
+.event-log-item.callTimeout .event-type { color: #e83e8c; }
+.event-log-item.callBusy { border-left-color: #17a2b8; }
+.event-log-item.callBusy .event-type { color: #17a2b8; }
+.event-log-item.statusChanged { border-left-color: #6c757d; }
+.event-log-item.statusChanged .event-type { color: #6c757d; }
+
+.clear-log-btn {
+  background-color: #6c757d;
+  color: white;
+  padding: 6px 14px;
+  font-size: 13px;
 }
 </style>

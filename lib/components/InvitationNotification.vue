@@ -49,7 +49,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useCallStateStore } from '../store/callState'
 import { useChatClientStore } from '../store/chatClient'
-import { useAnswerCall } from '../composables/useAnswerCall'
+import { useCallKit } from '../composables/useCallKit'
 import { CALL_STATUS, CALL_TYPE } from '../types/callstate.types'
 import { logger } from '../utils/logger'
 import { useGroupCallStore } from '../modules/groupCall'
@@ -59,7 +59,7 @@ const callStateStore = useCallStateStore()
 const chatClientStore = useChatClientStore()
 const groupCallStore = useGroupCallStore()
 const globalCallStore = useGlobalCallStore()
-const { acceptCall, rejectCall } = useAnswerCall()
+const { accept, reject } = useCallKit()
 
 const visible = ref(false)
 const processing = ref(false)
@@ -123,7 +123,7 @@ watch(
       visible.value = false
       if (newStatus === CALL_STATUS.ALERTING && !isChatClientReady.value) {
         logger.warn('InvitationNotification: 收到通话邀请但 ChatClient 未登录或未初始化，无法显示弹窗')
-        console.warn('通话邀请被忽略: 请先登录环信账号')
+        logger.warn('通话邀请被忽略: 请先登录环信账号')
       }
     }
   }
@@ -136,18 +136,18 @@ const handleAccept = async () => {
   // 检查 ChatClient 是否已登录
   if (!isChatClientReady.value) {
     logger.error('InvitationNotification: ChatClient未登录或未初始化，无法接听通话')
-    console.error('接听失败: 请先登录环信账号')
+    logger.error('接听失败: 请先登录环信账号')
     visible.value = false
     return
   }
   
   processing.value = true
   try {
-    await acceptCall()
+    await accept()
     visible.value = false
   } catch (error) {
     logger.error('InvitationNotification: 接听失败:', error)
-    console.error('接听失败:', error)
+    logger.error('接听失败:', error)
     // 兜底：信令发送失败也要关闭弹窗并清理状态
     visible.value = false
     callStateStore.resetCallState()
@@ -163,18 +163,18 @@ const handleReject = async () => {
   // 检查 ChatClient 是否已登录
   if (!isChatClientReady.value) {
     logger.error('InvitationNotification: ChatClient未登录或未初始化，无法拒绝通话')
-    console.error('拒绝失败: 请先登录环信账号')
+    logger.error('拒绝失败: 请先登录环信账号')
     visible.value = false
     return
   }
   
   processing.value = true
   try {
-    await rejectCall()
+    await reject()
     visible.value = false
   } catch (error) {
     logger.error('InvitationNotification: 拒绝失败:', error)
-    console.error('拒绝失败:', error)
+    logger.error('拒绝失败:', error)
     // 兜底：信令发送失败也要关闭弹窗并清理状态
     visible.value = false
     callStateStore.resetCallState()

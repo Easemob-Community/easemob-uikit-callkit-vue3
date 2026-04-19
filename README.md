@@ -148,6 +148,54 @@ const endCall = async () => {
 
 **不需要写 `v-if`**，直接放在 Provider 内部即可。
 
+### 事件订阅
+
+通过 `useCallKitEvents()` 监听通话生命周期事件，在通话结束后发送系统消息、记录通话时长等：
+
+```typescript
+import { useCallKitEvents, HANGUP_REASON } from 'easemob-chat-callkit-vue3'
+import { onUnmounted } from 'vue'
+
+const { onCallStarted, onCallEnded, onIncomingCall } = useCallKitEvents()
+
+onCallStarted((e) => {
+  console.log('通话接通', e.callId, '主叫:', e.isCaller)
+})
+
+onCallEnded((e) => {
+  const sec = Math.round(e.duration / 1000)
+  console.log('通话结束', '原因:', e.reason, '时长:', sec, '秒')
+  // 可在此发送系统消息到聊天会话
+})
+
+onIncomingCall((e) => {
+  console.log('收到来电', e.callerUserId)
+})
+
+// 所有订阅返回解绑函数，建议在 onUnmounted 中调用
+```
+
+> 完整事件列表和用法参见 [USAGE.md](./USAGE.md#usecallkitevents)。
+
+### 日志级别
+
+```typescript
+import { LogLevel } from 'easemob-chat-callkit-vue3'
+
+<EasemobChatCallKitProvider
+  :chat-client="chatClient"
+  :init-config="{ logLevel: LogLevel.INFO }"
+>
+```
+
+| 级别 | 说明 |
+|------|------|
+| `LogLevel.ERROR` | 只输出错误 |
+| `LogLevel.WARN` | 错误 + 警告 |
+| `LogLevel.INFO` | 推荐生产环境 |
+| `LogLevel.DEBUG` | 开发调试 |
+| `LogLevel.VERBOSE` | 完整信令日志 |
+
 ---
 
 ## 🔧 两种集成方式

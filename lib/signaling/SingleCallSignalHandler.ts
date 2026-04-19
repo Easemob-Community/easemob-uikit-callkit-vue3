@@ -6,6 +6,7 @@ import { useJoinChannel } from '../composables/useJoinChannel'
 import { CallService } from '../services/CallService'
 import { CALL_STATUS, CALL_TYPE, HANGUP_REASON } from '../types/callstate.types'
 import { logger } from '../utils/logger'
+import { callKitEventBus } from '../core/events/CallKitEventBus'
 import type { CmdMsgBody } from '../composables/useListenerManager'
 import type { SignalHandler } from './SignalRouter'
 
@@ -220,6 +221,29 @@ export class SingleCallSignalHandler implements SignalHandler {
     if (ext?.result !== 'accept') {
       // 拒绝分支
       const reason = ext?.result === 'busy' ? HANGUP_REASON.BUSY : HANGUP_REASON.REFUSE
+      const callState = this.callStateStore.getCallState
+
+      // 触发语义化事件（在挂断之前）
+      if (ext?.result === 'busy') {
+        callKitEventBus.emit('callBusy', {
+          callId: callState.callId,
+          channel: callState.channel,
+          type: callState.type,
+          callerUserId: callState.callerUserId,
+          calleeUserId: callState.calleeUserId,
+          groupId: undefined,
+        })
+      } else {
+        callKitEventBus.emit('callRefused', {
+          callId: callState.callId,
+          channel: callState.channel,
+          type: callState.type,
+          isRemote: true,
+          callerUserId: callState.callerUserId,
+          calleeUserId: callState.calleeUserId,
+          groupId: undefined,
+        })
+      }
 
       const confirmCalleePayload = {
         callId: ext.callId,
@@ -262,6 +286,19 @@ export class SingleCallSignalHandler implements SignalHandler {
       ) {
         logger.info('一对一通话，更新状态为 IN_CALL并加入RTC频道')
         this.callStateStore.setCallStatus(CALL_STATUS.IN_CALL)
+
+        // 触发 callStarted（主叫方）
+        const callState = this.callStateStore.getCallState
+        callKitEventBus.emit('callStarted', {
+          callId: callState.callId,
+          channel: callState.channel,
+          type: callState.type,
+          callerUserId: callState.callerUserId,
+          calleeUserId: callState.calleeUserId,
+          groupId: undefined,
+          isCaller: true,
+        })
+
         this.joinRtcChannel().catch((error: any) => {
           logger.error('主叫方加入RTC频道失败:', error)
         })
@@ -303,6 +340,16 @@ export class SingleCallSignalHandler implements SignalHandler {
 
       if (isFromCaller && (currentStatus === CALL_STATUS.ALERTING || currentStatus === CALL_STATUS.INVITING)) {
         logger.info('一对一通话中收到主叫方取消，执行挂断')
+        const callState = this.callStateStore.getCallState
+        callKitEventBus.emit('callCanceled', {
+          callId: callState.callId,
+          channel: callState.channel,
+          type: callState.type,
+          isRemote: true,
+          callerUserId: callState.callerUserId,
+          calleeUserId: callState.calleeUserId,
+          groupId: undefined,
+        })
         const callService = new CallService()
         callService.handleRemoteCancel().catch((err) => {
           logger.error('执行挂断失败:', err)
@@ -312,6 +359,16 @@ export class SingleCallSignalHandler implements SignalHandler {
     }
 
     logger.info('收到对方取消，执行挂断操作')
+    const callState = this.callStateStore.getCallState
+    callKitEventBus.emit('callCanceled', {
+      callId: callState.callId,
+      channel: callState.channel,
+      type: callState.type,
+      isRemote: true,
+      callerUserId: callState.callerUserId,
+      calleeUserId: callState.calleeUserId,
+      groupId: undefined,
+    })
     const callService = new CallService()
     callService.hangup(HANGUP_REASON.CANCEL).catch((err) => {
       logger.error('执行挂断失败:', err)
@@ -424,6 +481,18 @@ export class SingleCallSignalHandler implements SignalHandler {
     } else {
       logger.info('当前状态已是 IN_CALL，继续加入RTC频道')
     }
+
+    // 触发 callStarted（被叫方）
+    const callState = this.callStateStore.getCallState
+    callKitEventBus.emit('callStarted', {
+      callId: callState.callId,
+      channel: callState.channel,
+      type: callState.type,
+      callerUserId: callState.callerUserId,
+      calleeUserId: callState.calleeUserId,
+      groupId: undefined,
+      isCaller: false,
+    })
 
     this.joinRtcChannel().catch((error: any) => {
       logger.error('被叫方加入RTC频道失败:', error)

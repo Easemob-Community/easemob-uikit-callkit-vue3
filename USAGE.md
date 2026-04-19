@@ -20,12 +20,16 @@ import {
 
   // Composables
   useCallKit,
+  useCallKitEvents,
   useRtcService,
   useJoinChannel,
   useParticipants,
   useDraggable,
   useCenteredDraggable,
   useCornerDraggable,
+
+  // 日志
+  LogLevel,
 
   // Store
   useCallStateStore,
@@ -77,7 +81,8 @@ import {
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `debug` | `boolean` | `false` | 开启调试日志，控制台输出详细信令收发日志 |
+| `debug` | `boolean` | `false` | 开启调试日志（等价于 `logLevel: LogLevel.VERBOSE`） |
+| `logLevel` | `LogLevel` | `LogLevel.ERROR` | 日志输出级别。`0=ERROR, 1=WARN, 2=INFO, 3=DEBUG, 4=VERBOSE`。优先级高于 `debug` |
 | `enableRingtone` | `boolean` | `true` | 开启呼叫铃声 |
 | `draggable` | `boolean` | `true` | 通话窗口可拖拽 |
 | `resizable` | `boolean` | `true` | 通话窗口可调整大小 |
@@ -353,6 +358,104 @@ await reject()
 ```typescript
 await rejectBusy()
 ```
+
+---
+
+### useCallKitEvents()
+
+**通话生命周期事件订阅**。用于监听通话全生命周期中的关键事件，如通话开始、结束、收到邀请、超时等。所有订阅方法都返回**解绑函数**，建议在 `onUnmounted` 中调用。
+
+```typescript
+const {
+  // 通用 API
+  on, once, off,
+  // 语义化便捷方法
+  onCallStarted,
+  onCallEnded,
+  onIncomingCall,
+  onCallCanceled,
+  onCallRefused,
+  onCallTimeout,
+  onCallBusy,
+  onParticipantJoined,
+  onParticipantLeft,
+  onStatusChanged,
+} = useCallKitEvents()
+```
+
+#### 使用示例
+
+```typescript
+import { useCallKitEvents, LogLevel } from 'easemob-chat-callkit-vue3'
+import { onUnmounted } from 'vue'
+
+const { onCallStarted, onCallEnded, onIncomingCall, onCallCanceled } = useCallKitEvents()
+
+// 通话接通
+const unbindStarted = onCallStarted((e) => {
+  console.log('通话开始', e.callId, e.channel, 'isCaller:', e.isCaller)
+})
+
+// 通话结束（核心：可在此发送系统消息、记录通话时长）
+const unbindEnded = onCallEnded((e) => {
+  const durationSec = Math.round(e.duration / 1000)
+  console.log('通话结束', '原因:', e.reason, '时长:', durationSec, '秒')
+  // 示例：发送一条系统消息到聊天会话
+  // sendSystemMessage(`通话结束，时长 ${durationSec} 秒`)
+})
+
+// 收到来电邀请
+const unbindIncoming = onIncomingCall((e) => {
+  console.log('收到来自', e.callerUserId, '的通话邀请')
+})
+
+// 通话被取消
+const unbindCanceled = onCallCanceled((e) => {
+  console.log(e.isRemote ? '对方取消了通话' : '本地取消了通话')
+})
+
+// 组件卸载时解绑，防止内存泄漏
+onUnmounted(() => {
+  unbindStarted()
+  unbindEnded()
+  unbindIncoming()
+  unbindCanceled()
+})
+```
+
+#### 事件列表
+
+| 便捷方法 | 事件名 | 触发时机 | Payload 关键字段 |
+|----------|--------|----------|-----------------|
+| `onStatusChanged` | `statusChanged` | 每次通话状态变化 | `from`, `to`, `callInfo` |
+| `onIncomingCall` | `incomingCall` | 收到通话邀请（文本消息） | `callerUserId`, `callerDevId`, `type` |
+| `onCallStarted` | `callStarted` | 双方/多方接通进入 `IN_CALL` | `isCaller`, `callId`, `channel`, `type` |
+| `onCallEnded` | `callEnded` | 通话结束，状态重置为 `IDLE` | `reason`, `duration`（毫秒） |
+| `onCallCanceled` | `callCanceled` | 通话被取消 | `isRemote` |
+| `onCallRefused` | `callRefused` | 通话被拒绝 | `isRemote` |
+| `onCallTimeout` | `callTimeout` | 通话邀请超时 | — |
+| `onCallBusy` | `callBusy` | 对方忙线 | — |
+| `onParticipantJoined` | `participantJoined` | 群通话成员接受并加入 | `userId` |
+| `onParticipantLeft` | `participantLeft` | 群通话成员离开 | `userId`, `reason` |
+
+#### 通用 API
+
+如果需要更灵活的控制，可直接使用 `on` / `once` / `off`：
+
+```typescript
+const { on, once, off } = useCallKitEvents()
+
+// 持续监听
+const unbind = on('callEnded', (e) => { ... })
+
+// 只监听一次
+once('callStarted', (e) => { ... })
+
+// 手动解绑
+off('callEnded', handler)
+```
+
+> **注意**：`callEnded` 事件在 `CallService.resetState()` 中触发，此时通话状态还未完全重置为 `IDLE`，但 `duration` 已经计算完成。`reason` 字段为 `HANGUP_REASON` 枚举值。
 
 ---
 
@@ -738,14 +841,49 @@ globalStore.setUserInfo('user123', {
 })
 ```
 
+### 日志级别配置
+
+CallKit 内置了 5 级日志系统，可通过 `initConfig.logLevel` 精确控制输出级别：
+
+```typescript
+import { LogLevel } from 'easemob-chat-callkit-vue3'
+
+// 只输出错误
+const initConfig = { logLevel: LogLevel.ERROR }
+
+// 输出错误 + 警告
+const initConfig = { logLevel: LogLevel.WARN }
+
+// 输出到 INFO（推荐生产环境）
+const initConfig = { logLevel: LogLevel.INFO }
+
+// 输出完整调试信息（开发环境）
+const initConfig = { logLevel: LogLevel.DEBUG }
+
+// 或等价于 { debug: true }
+const initConfig = { logLevel: LogLevel.VERBOSE }
+```
+
+| 级别 | 值 | 输出内容 |
+|------|-----|---------|
+| `ERROR` | 0 | 错误日志 |
+| `WARN` | 1 | 警告 + 错误 |
+| `INFO` | 2 | 信息 + 警告 + 错误 |
+| `DEBUG` | 3 | 调试 + 信息 + 警告 + 错误 |
+| `VERBOSE` | 4 | 全部（包括详细信令日志） |
+
+> `logLevel` 优先级高于 `debug`。若同时设置，`logLevel` 生效。
+
+---
+
 ### 调试信令
 
-在 Provider 的 `initConfig` 中开启 `debug: true`：
+在 Provider 的 `initConfig` 中开启 `debug: true` 或 `logLevel: LogLevel.VERBOSE`：
 
 ```vue
 <EasemobChatCallKitProvider
   :chat-client="chatClient"
-  :init-config="{ debug: true }"
+  :init-config="{ logLevel: LogLevel.DEBUG }"
 >
 ```
 
@@ -753,6 +891,71 @@ globalStore.setUserInfo('user123', {
 
 ```
 [Vue3 CallKit] [2026-04-19T10:16:13.846Z] [INFO] ...
+```
+
+---
+
+## 📡 事件类型参考
+
+### CallKitEventType
+
+```typescript
+import type { CallKitEventType } from 'easemob-chat-callkit-vue3'
+
+type CallKitEventType =
+  | 'statusChanged'      // 通话状态变化
+  | 'incomingCall'       // 收到来电邀请
+  | 'callStarted'        // 通话接通
+  | 'callEnded'          // 通话结束
+  | 'callCanceled'       // 通话取消
+  | 'callRefused'        // 通话拒绝
+  | 'callTimeout'        // 邀请超时
+  | 'callBusy'           // 对方忙线
+  | 'participantJoined'  // 群通话成员加入
+  | 'participantLeft'    // 群通话成员离开
+```
+
+### 事件 Payload 结构
+
+| 事件 | Payload 接口 | 关键字段 |
+|------|-------------|---------|
+| `statusChanged` | `StatusChangedEvent` | `from`, `to`, `callId`, `channel`, `type`, `callerUserId` |
+| `incomingCall` | `IncomingCallEvent` | `callerUserId`, `callerDevId`, `calleeUserId`, `groupId`, `groupName`, `invitedMembers` |
+| `callStarted` | `CallStartedEvent` | `isCaller`, `callId`, `channel`, `type`, `callerUserId`, `calleeUserId`, `groupId` |
+| `callEnded` | `CallEndedEvent` | `reason`, `duration`（毫秒）, `callId`, `channel`, `type` |
+| `callCanceled` | `CallCanceledEvent` | `isRemote`, `callId`, `channel`, `type` |
+| `callRefused` | `CallRefusedEvent` | `isRemote`, `callId`, `channel`, `type` |
+| `callTimeout` | `CallTimeoutEvent` | `callId`, `channel`, `type`, `callerUserId`, `calleeUserId` |
+| `callBusy` | `CallBusyEvent` | `callId`, `channel`, `type`, `callerUserId`, `calleeUserId` |
+| `participantJoined` | `ParticipantJoinedEvent` | `userId`, `callId`, `channel`, `groupId` |
+| `participantLeft` | `ParticipantLeftEvent` | `userId`, `callId`, `channel`, `groupId`, `reason` |
+
+### 使用场景：通话结束后发送系统消息
+
+```typescript
+const { onCallEnded } = useCallKitEvents()
+
+onCallEnded((e) => {
+  const durationSec = Math.round(e.duration / 1000)
+  const minutes = Math.floor(durationSec / 60)
+  const seconds = durationSec % 60
+  const durationText = `${minutes}分${seconds}秒`
+
+  const text = e.reason === HANGUP_REASON.HANGUP
+    ? `通话结束，时长 ${durationText}`
+    : e.reason === HANGUP_REASON.CANCEL
+    ? '通话已取消'
+    : e.reason === HANGUP_REASON.REFUSE
+    ? '通话被拒绝'
+    : e.reason === HANGUP_REASON.BUSY
+    ? '对方忙线'
+    : e.reason === HANGUP_REASON.NO_RESPONSE
+    ? '对方无响应'
+    : '通话结束'
+
+  // 调用你自己的 IM 消息发送接口
+  // chatClient.sendTextMessage({ ... })
+})
 ```
 
 ---

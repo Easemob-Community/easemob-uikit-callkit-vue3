@@ -43,6 +43,7 @@ import { useGlobalCallStore } from '../../store/globalCall'
 import { CALL_STATUS } from '../../types/callstate.types'
 import { DEFAULT_BACKGROUND_IMAGE, getAssetUrl } from '../../config/assets'
 import { useDraggable } from '../../composables/useDraggable'
+import { logger } from '../../utils/logger'
 import EasemobChatCallWaiting from './EasemobChatCallWaiting.vue'
 import EasemobChatCallStream from './EasemobChatCallStream.vue'
 import EasemobChatMiniWindow from '../EasemobChatMiniWindow.vue'
@@ -145,9 +146,9 @@ const startCall = async () => {
     emit('callStarted')
 
     // 这里应该集成实际的通话SDK
-    console.log(`Starting ${props.type || 'video'} call with ${displayTargetUser}`)
+    logger.info(`Starting ${props.type || 'video'} call with ${displayTargetUser}`)
   } catch (error) {
-    console.error('Failed to start call:', error)
+    logger.error('Failed to start call:', error)
     handleEndCall()
   }
 }
@@ -180,7 +181,7 @@ onMounted(() => {
 
   // 设置状态监听器
   stopStateWatch = callStateStore.$subscribe((_mutation, state) => {
-    console.log('Call state changed:', state.status)
+    logger.debug('Call state changed:', state.status)
     // 当状态变为IDLE时，触发callEnded事件关闭弹窗
     if (state.status === CALL_STATUS.IDLE && isCallActive.value) {
       handleEndCall()
