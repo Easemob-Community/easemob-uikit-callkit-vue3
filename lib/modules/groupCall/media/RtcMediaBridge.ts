@@ -28,6 +28,8 @@ export class RtcMediaBridge {
 
   destroy() {
     this.unbindEvents()
+    // 恢复 RtcService 自动订阅，避免影响单聊等旧流程
+    this.rtcService.setAutoSubscribe(true)
   }
 
   private bindEvents() {

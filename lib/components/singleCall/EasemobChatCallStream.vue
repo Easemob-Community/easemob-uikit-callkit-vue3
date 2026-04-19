@@ -149,28 +149,41 @@ const endCall = async () => {
 }
 
 // 设置远程视频播放
-const playRemoteVideo = (userId: string) => {
+const playRemoteVideo = async (userId: string) => {
   if (!rtcService.value || !remoteVideo.value) {
     logger.warn('播放远程视频失败：rtcService或remoteVideo元素不存在')
     return
   }
-  
+
   // 获取RTC客户端
   const client = rtcService.value.getClient()
   if (!client || !client.remoteUsers || client.remoteUsers.length === 0) {
     logger.warn('播放远程视频失败：未找到远程用户', { userId })
     return
   }
-  
+
   // 获取第一个远程用户（1v1情况下只有一个）
   const remoteUser = client.remoteUsers[0]
   if (!remoteUser) {
     logger.warn('播放远程视频失败：远程用户列表为空')
     return
   }
-  
+
   // 使用uid获取远程视频轨道
-  const remoteVideoTrack = rtcService.value.getRemoteVideoTrack(remoteUser.uid.toString())
+  let remoteVideoTrack = rtcService.value.getRemoteVideoTrack(remoteUser.uid.toString())
+
+  // 兜底：若 RtcService 未自动订阅，主动订阅一次
+  if (!remoteVideoTrack && retryCount.value === 0) {
+    try {
+      await rtcService.value.subscribeRemoteUser(remoteUser.uid, 'video')
+      logger.info('CallStream 兜底订阅远程视频成功', { uid: remoteUser.uid })
+      // 订阅完成后重新获取 track
+      remoteVideoTrack = rtcService.value.getRemoteVideoTrack(remoteUser.uid.toString())
+    } catch (e) {
+      logger.warn('CallStream 兜底订阅远程视频失败', e)
+    }
+  }
+
   if (remoteVideoTrack) {
     try {
       remoteVideoTrack.play(remoteVideo.value)

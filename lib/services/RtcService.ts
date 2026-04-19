@@ -176,6 +176,10 @@ export class RtcService {
     } catch (error) {
       logger.error('Failed to leave channel:', error)
       throw error
+    } finally {
+      // 恢复自动订阅默认值，避免影响后续单聊等旧流程
+      this.autoSubscribe = true
+      logger.debug('RtcService: 自动订阅已重置为开启')
     }
   }
 
@@ -655,7 +659,7 @@ export class RtcService {
       // 自动订阅远程用户（可被上层关闭，由上层统一处理订阅逻辑）
       if (this.autoSubscribe) {
         try {
-          await this.subscribeRemoteUser(user, mediaType)
+          await this.subscribeRemoteUser(user.uid, mediaType)
           logger.info('自动订阅远程用户成功:', { uid: user.uid, userId, mediaType })
         } catch (error) {
           logger.error('自动订阅远程用户失败:', error)
