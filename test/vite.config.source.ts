@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [vue()],
   root: '.',
   define: {
-    'import.meta.env.VITE_IMPORT_MODE': JSON.stringify('source')
+    '__CALLKIT_TEST_MODE__': JSON.stringify('source')
   },
   resolve: {
     alias: [

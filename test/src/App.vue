@@ -100,7 +100,8 @@ import {
   EasemobChatMultiCall 
 } from 'easemob-chat-callkit-vue3'
 // 引入模式检测
-const importMode = import.meta.env.VITE_IMPORT_MODE || 'unknown'
+// @ts-ignore
+const importMode = (typeof __CALLKIT_TEST_MODE__ !== 'undefined' ? __CALLKIT_TEST_MODE__ : 'unknown') as string
 const importModeText = computed(() => {
   switch (importMode) {
     case 'source':

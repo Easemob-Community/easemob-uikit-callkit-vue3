@@ -8,7 +8,7 @@ export default defineConfig({
   plugins: [vue()],
   root: '.',
   define: {
-    'import.meta.env.VITE_IMPORT_MODE': JSON.stringify('tgz')
+    '__CALLKIT_TEST_MODE__': JSON.stringify('tgz')
   },
   resolve: {
     alias: {
