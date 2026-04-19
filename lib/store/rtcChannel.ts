@@ -95,9 +95,17 @@ export const useRtcChannelStore = defineStore('rtcChannel', {
         const chatClientStore = useChatClientStore()
         const chatClient = chatClientStore.getChatClient
         
-        const service = new RtcService({ 
+        const service = new RtcService({
           appId: agoraAppId,
-          chatClient: chatClient // 传入环信客户端用于获取userId映射
+          chatClient: chatClient, // 传入环信客户端用于获取userId映射
+          // 状态同步回调：RtcService 内部状态变化时通知 store 更新
+          onAudioEnabledChange: (enabled) => this.setAudioEnabled(enabled),
+          onVideoEnabledChange: (enabled) => this.setVideoEnabled(enabled),
+          onLocalStreamChange: (stream) => this.setLocalStream(stream),
+          onUidToUserIdMapping: (uid, userId) => this.setUidToUserIdMapping(uid, userId),
+          onUserJoinedRtc: (userId) => this.markUserJoinedRtc(userId),
+          onUserLeftRtc: (userId) => this.markUserLeftRtc(userId),
+          popPendingUserId: () => this.popPendingUserId(),
         })
         await service.initialize()
         this.rtcService = service

@@ -24,7 +24,6 @@ import AgoraRTC, {
   type IRemoteVideoTrack,
   type VideoEncoderConfigurationPreset,
 } from 'agora-rtc-sdk-ng'
-import { useRtcChannelStore } from '../store/rtcChannel'
 import { logger } from '../utils/logger'
 
 export interface RtcServiceConfig {
@@ -37,6 +36,15 @@ export interface RtcServiceConfig {
   onUserUnpublished?: (user: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => void
   onVolumeIndicator?: (volumes: any[]) => void
   chatClient?: any // 环信客户端实例，用于获取userId映射
+
+  // 状态同步回调（替代直接写入 rtcChannelStore）
+  onAudioEnabledChange?: (enabled: boolean) => void
+  onVideoEnabledChange?: (enabled: boolean) => void
+  onLocalStreamChange?: (stream: MediaStream | null) => void
+  onUidToUserIdMapping?: (uid: string, userId: string) => void
+  onUserJoinedRtc?: (userId: string) => void
+  onUserLeftRtc?: (userId: string) => void
+  popPendingUserId?: () => string | undefined
 }
 
 export class RtcService {
@@ -54,7 +62,10 @@ export class RtcService {
   private isVideoEnabled: boolean = true
   private chatClient: any = null // 环信客户端实例
   private autoSubscribe: boolean = true // 是否自动订阅远程用户
-  
+
+  // 内部 UID 映射（替代 rtcChannelStore.uidToUserIdMap）
+  private uidToUserIdMap = new Map<string, string>()
+
   // 回调函数
   private onNetworkQualityChange?: (quality: any) => void
   private onUserJoined?: (userId: string) => void
@@ -62,8 +73,15 @@ export class RtcService {
   private onUserPublished?: (user: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => void
   private onUserUnpublished?: (user: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => void
   private onVolumeIndicator?: (volumes: any[]) => void
-  
-  private rtcChannelStore = useRtcChannelStore()
+
+  // 状态同步回调
+  private onAudioEnabledChange?: (enabled: boolean) => void
+  private onVideoEnabledChange?: (enabled: boolean) => void
+  private onLocalStreamChange?: (stream: MediaStream | null) => void
+  private onUidToUserIdMapping?: (uid: string, userId: string) => void
+  private onUserJoinedRtc?: (userId: string) => void
+  private onUserLeftRtc?: (userId: string) => void
+  private popPendingUserIdFn?: () => string | undefined
 
   constructor(config: RtcServiceConfig) {
     this.appId = config.appId
@@ -75,6 +93,13 @@ export class RtcService {
     this.onUserPublished = config.onUserPublished
     this.onUserUnpublished = config.onUserUnpublished
     this.onVolumeIndicator = config.onVolumeIndicator
+    this.onAudioEnabledChange = config.onAudioEnabledChange
+    this.onVideoEnabledChange = config.onVideoEnabledChange
+    this.onLocalStreamChange = config.onLocalStreamChange
+    this.onUidToUserIdMapping = config.onUidToUserIdMapping
+    this.onUserJoinedRtc = config.onUserJoinedRtc
+    this.onUserLeftRtc = config.onUserLeftRtc
+    this.popPendingUserIdFn = config.popPendingUserId
   }
 
   /**
@@ -193,7 +218,7 @@ export class RtcService {
       }
 
       this.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack()
-      this.rtcChannelStore.setAudioEnabled(true)
+      this.onAudioEnabledChange?.(true)
       
       logger.info('Created local audio track')
       return this.localAudioTrack
@@ -217,13 +242,13 @@ export class RtcService {
         : undefined
       
       this.localVideoTrack = await AgoraRTC.createCameraVideoTrack(config)
-      this.rtcChannelStore.setVideoEnabled(true)
-      
+      this.onVideoEnabledChange?.(true)
+
       // 创建本地视频流
       this.localVideoStream = new MediaStream([
         this.localVideoTrack.getMediaStreamTrack()
       ])
-      this.rtcChannelStore.setLocalStream(this.localVideoStream)
+      this.onLocalStreamChange?.(this.localVideoStream)
       
       logger.info('Created local video track')
       return this.localVideoTrack
@@ -263,13 +288,13 @@ export class RtcService {
           }
         }
         this.isAudioEnabled = enabled
-        this.rtcChannelStore.setAudioEnabled(enabled)
+        this.onAudioEnabledChange?.(enabled)
         return enabled
       }
 
       await this.localAudioTrack.setEnabled(enabled)
       this.isAudioEnabled = enabled
-      this.rtcChannelStore.setAudioEnabled(enabled)
+      this.onAudioEnabledChange?.(enabled)
       
       logger.info('Audio toggled:', enabled)
       return enabled
@@ -300,7 +325,7 @@ export class RtcService {
           }
         }
         this.isVideoEnabled = enabled
-        this.rtcChannelStore.setVideoEnabled(enabled)
+        this.onVideoEnabledChange?.(enabled)
         return enabled
       }
 
@@ -320,12 +345,12 @@ export class RtcService {
             }
           }
           
-          // 重新创建后更新本地视频流到 store
+          // 重新创建后更新本地视频流
           if (this.localVideoTrack) {
             this.localVideoStream = new MediaStream([
               this.localVideoTrack.getMediaStreamTrack()
             ])
-            this.rtcChannelStore.setLocalStream(this.localVideoStream)
+            this.onLocalStreamChange?.(this.localVideoStream)
             logger.info('Local video stream updated after recreating track')
           }
         } else {
@@ -333,7 +358,7 @@ export class RtcService {
           await this.localVideoTrack.setEnabled(true)
         }
         this.isVideoEnabled = true
-        this.rtcChannelStore.setVideoEnabled(true)
+        this.onVideoEnabledChange?.(true)
       } else {
         // 关闭视频时先取消发布，再关闭轨道
         if (this.client && this.client.connectionState === 'CONNECTED' && this.localVideoTrack) {
@@ -353,9 +378,9 @@ export class RtcService {
         this.localVideoTrack.close()
         this.localVideoTrack = null
         this.localVideoStream = null
-        this.rtcChannelStore.setLocalStream(null)
+        this.onLocalStreamChange?.(null)
         this.isVideoEnabled = false
-        this.rtcChannelStore.setVideoEnabled(false)
+        this.onVideoEnabledChange?.(false)
       }
       
       logger.info('Video toggled:', enabled)
@@ -470,9 +495,8 @@ export class RtcService {
     }
     
     // 尝试通过userId查找UID，然后查找轨道
-    // 遍历uidToUserIdMap找到对应的UID
-    const uidToUserIdMap = this.rtcChannelStore.uidToUserIdMap
-    for (const [uid, mappedUserId] of uidToUserIdMap.entries()) {
+    // 遍历内部 uidToUserIdMap 找到对应的UID
+    for (const [uid, mappedUserId] of this.uidToUserIdMap.entries()) {
       if (mappedUserId === userId) {
         const track = this.remoteVideoTracks.get(uid)
         if (track) {
@@ -494,8 +518,7 @@ export class RtcService {
     }
     
     // 尝试通过userId查找UID，然后查找轨道
-    const uidToUserIdMap = this.rtcChannelStore.uidToUserIdMap
-    for (const [uid, mappedUserId] of uidToUserIdMap.entries()) {
+    for (const [uid, mappedUserId] of this.uidToUserIdMap.entries()) {
       if (mappedUserId === userId) {
         const track = this.remoteAudioTracks.get(uid)
         if (track) {
@@ -562,7 +585,7 @@ export class RtcService {
       this.localVideoStream = null
     }
 
-    this.rtcChannelStore.setLocalStream(null)
+    this.onLocalStreamChange?.(null)
   }
 
   /**
@@ -574,27 +597,29 @@ export class RtcService {
     // 用户加入
     this.client.on('user-joined', async (user: IAgoraRTCRemoteUser) => {
       logger.info('User joined:', user.uid)
-      
+
       // 获取userId映射
-      let userId = this.rtcChannelStore.getUserIdByUid(user.uid.toString())
-      
+      let userId = this.uidToUserIdMap.get(user.uid.toString())
+
       // 1. 先检查是否有待加入的userId（从 answerCall 信令添加）
       if (!userId) {
-        const pendingUserId = this.rtcChannelStore.popPendingUserId()
+        const pendingUserId = this.popPendingUserIdFn?.()
         if (pendingUserId) {
           userId = pendingUserId
-          this.rtcChannelStore.setUidToUserIdMapping(user.uid.toString(), userId)
+          this.uidToUserIdMap.set(user.uid.toString(), userId)
+          this.onUidToUserIdMapping?.(user.uid.toString(), userId)
           logger.info('User-joined: 使用待加入列表匹配 userId:', { uid: user.uid, userId })
         }
       }
-      
+
       // 2. 如果还没有，尝试通过环信API获取映射
       if (!userId && this.chatClient) {
         try {
           const res = await this.chatClient.getUserIdByRTCUIds([user.uid])
           userId = res.data[user.uid]
           if (userId) {
-            this.rtcChannelStore.setUidToUserIdMapping(user.uid.toString(), userId)
+            this.uidToUserIdMap.set(user.uid.toString(), userId)
+            this.onUidToUserIdMapping?.(user.uid.toString(), userId)
             logger.info('User-joined: 通过API获取userId映射:', { uid: user.uid, userId })
           } else {
             logger.warn('User-joined: API返回的userId为空:', user.uid)
@@ -603,60 +628,52 @@ export class RtcService {
           logger.error('获取userId映射失败:', error)
         }
       }
-      
+
       // 标记用户已加入RTC
       if (userId) {
-        this.rtcChannelStore.markUserJoinedRtc(userId)
-        logger.info('[RTC DEBUG] 用户已标记为加入RTC:', { 
-          uid: user.uid, 
-          userId,
-          joinedRtcUsers: Array.from(this.rtcChannelStore.joinedRtcUsers)
-        })
+        this.onUserJoinedRtc?.(userId)
+        logger.info('[RTC DEBUG] 用户已标记为加入RTC:', { uid: user.uid, userId })
       } else {
         logger.warn('User-joined: 未能获取userId映射，使用uid作为默认值:', user.uid)
       }
-      
+
       this.onUserJoined?.(userId || user.uid.toString())
     })
 
     // 用户离开
     this.client.on('user-left', (user: IAgoraRTCRemoteUser, reason: string) => {
       logger.info('User left:', user.uid, reason)
-      
+
       // 获取userId
-      const userId = this.rtcChannelStore.getUserIdByUid(user.uid.toString())
-      
+      const userId = this.uidToUserIdMap.get(user.uid.toString())
+
       // 清理远程轨道
       this.remoteVideoTracks.delete(user.uid.toString())
       this.remoteAudioTracks.delete(user.uid.toString())
-      
+
       // 标记用户已离开RTC
       if (userId) {
-        this.rtcChannelStore.markUserLeftRtc(userId)
+        this.onUserLeftRtc?.(userId)
       }
-      
+
       this.onUserLeft?.(userId || user.uid.toString())
     })
 
     // 用户发布 - 自动订阅远程用户
     this.client.on('user-published', async (user: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => {
       logger.info('User published:', user.uid, mediaType)
-      
+
       // 获取userId映射
-      let userId = this.rtcChannelStore.getUserIdByUid(user.uid.toString())
+      let userId = this.uidToUserIdMap.get(user.uid.toString())
       if (!userId && this.chatClient) {
         try {
           const res = await this.chatClient.getUserIdByRTCUIds([user.uid])
           userId = res.data[user.uid]
           if (userId) {
-            this.rtcChannelStore.setUidToUserIdMapping(user.uid.toString(), userId)
-            this.rtcChannelStore.markUserJoinedRtc(userId)
-            logger.info('[RTC DEBUG] user-published 时标记用户加入:', { 
-              uid: user.uid, 
-              userId,
-              mediaType,
-              joinedRtcUsers: Array.from(this.rtcChannelStore.joinedRtcUsers)
-            })
+            this.uidToUserIdMap.set(user.uid.toString(), userId)
+            this.onUidToUserIdMapping?.(user.uid.toString(), userId)
+            this.onUserJoinedRtc?.(userId)
+            logger.info('[RTC DEBUG] user-published 时标记用户加入:', { uid: user.uid, userId, mediaType })
           }
         } catch (error) {
           logger.error('获取userId映射失败:', error)
