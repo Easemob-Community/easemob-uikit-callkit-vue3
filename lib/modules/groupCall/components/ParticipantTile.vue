@@ -1,5 +1,5 @@
 <template>
-  <div class="gcall-tile">
+  <div class="gcall-tile" @click="handleClick">
     <!-- 视频层 -->
     <video
       v-if="showVideo"
@@ -19,7 +19,11 @@
         class="gcall-tile-avatar"
         alt="avatar"
       />
-      <div v-else class="gcall-tile-avatar-fallback">
+      <div
+        v-else
+        class="gcall-tile-avatar-fallback"
+        :style="{ background: avatarGradient }"
+      >
         {{ nicknameFirstChar }}
       </div>
       <div v-if="participant.state === 'invited'" class="gcall-tile-loading">
@@ -31,17 +35,27 @@
       </div>
     </div>
 
+    <!-- Hover 放大提示 -->
+    <div class="gcall-tile-hover-icon">
+      <CallKitIcon name="chevron-4-all-around" :width="14" :height="14" color="#fff" />
+    </div>
+
     <!-- 信息条 -->
     <div class="gcall-tile-info">
       <span class="gcall-tile-name">{{ participant.nickname }}</span>
-      <span v-if="participant.isMuted" class="gcall-tile-mic">🔇</span>
-      <span v-else-if="participant.isSpeaking" class="gcall-tile-speaking">🗣️</span>
+      <span v-if="participant.isMuted" class="gcall-tile-mic">
+        <CallKitIcon name="mic-slash" :width="14" :height="14" />
+      </span>
+      <span v-else-if="participant.isSpeaking" class="gcall-tile-speaking">
+        <CallKitIcon name="speaker-wave-2" :width="14" :height="14" />
+      </span>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, watch, computed, onUnmounted } from 'vue'
+import CallKitIcon from './CallKitIcon.vue'
 import type { Participant } from '../types'
 
 interface Props {
@@ -49,6 +63,10 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const emit = defineEmits<{
+  click: [userId: string]
+}>()
+
 const videoEl = ref<HTMLVideoElement | null>(null)
 
 const showVideo = computed(() => {
@@ -60,6 +78,16 @@ const showVideo = computed(() => {
 
 const nicknameFirstChar = computed(() => {
   return props.participant.nickname?.charAt(0)?.toUpperCase() || '?'
+})
+
+// 根据 userId hash 生成渐变色
+const avatarGradient = computed(() => {
+  const hash = props.participant.userId.split('').reduce((acc, char) => {
+    return char.charCodeAt(0) + ((acc << 5) - acc)
+  }, 0)
+  const h1 = Math.abs(hash % 360)
+  const h2 = (h1 + 40) % 360
+  return `linear-gradient(135deg, hsl(${h1}, 60%, 45%) 0%, hsl(${h2}, 60%, 35%) 100%)`
 })
 
 // 当 track、stream 或 video 元素本身变化时，执行 play
@@ -87,6 +115,10 @@ watch(
   { immediate: true }
 )
 
+function handleClick() {
+  emit('click', props.participant.userId)
+}
+
 onUnmounted(() => {
   const el = videoEl.value
   if (el) {
@@ -95,105 +127,4 @@ onUnmounted(() => {
 })
 </script>
 
-<style scoped>
-.gcall-tile {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  background: #1a1a1a;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.gcall-tile-video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.gcall-tile-video.mirror {
-  transform: scaleX(-1);
-}
-
-.gcall-tile-placeholder {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  color: white;
-}
-
-.gcall-tile-avatar {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-
-.gcall-tile-avatar-fallback {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: #444;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  font-weight: 500;
-}
-
-.gcall-tile-loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.gcall-spinner {
-  width: 20px;
-  height: 20px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: gcall-spin 1s linear infinite;
-}
-
-@keyframes gcall-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.gcall-tile-hint {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.6);
-}
-
-.gcall-tile-info {
-  position: absolute;
-  bottom: 8px;
-  left: 8px;
-  right: 8px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: white;
-  font-size: 12px;
-  background: rgba(0, 0, 0, 0.5);
-  padding: 4px 8px;
-  border-radius: 4px;
-  pointer-events: none;
-}
-
-.gcall-tile-name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-</style>
+<style scoped src="./ParticipantTile.css"></style>

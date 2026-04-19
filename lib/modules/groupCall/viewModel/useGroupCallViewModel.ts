@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { ref, computed, type ComputedRef, type Ref } from 'vue'
 import { useGroupCallStore } from './GroupCallStore'
 import { RtcMediaBridge } from '../media/RtcMediaBridge'
 import { GroupCallSignalingAdapter } from '../signaling/GroupCallSignalingAdapter'
@@ -8,10 +8,11 @@ import { logger } from '../../../utils/logger'
 
 export interface UseGroupCallViewModelReturn {
   // 状态
-  isActive: boolean
-  participants: Participant[]
-  localParticipant: Participant | undefined
-  callDuration: number
+  isActive: ComputedRef<boolean>
+  participants: ComputedRef<Participant[]>
+  localParticipant: ComputedRef<Participant | undefined>
+  callDuration: ComputedRef<number>
+  selectedParticipantId: Ref<string | null>
 
   // 动作
   startSession: (payload: {
@@ -35,6 +36,9 @@ export interface UseGroupCallViewModelReturn {
   setLocalStream: (stream: MediaStream | null) => void
   setLocalMute: (isMuted: boolean) => void
   setLocalCamera: (isCameraOn: boolean) => void
+
+  // 布局控制
+  selectParticipant: (userId: string | null) => void
 }
 
 /**
@@ -54,6 +58,11 @@ export function useGroupCallViewModel(): UseGroupCallViewModelReturn {
     if (!store.session?.startTime) return 0
     return Math.floor((Date.now() - store.session.startTime) / 1000)
   })
+  const selectedParticipantId = ref<string | null>(null)
+
+  function selectParticipant(userId: string | null) {
+    selectedParticipantId.value = userId
+  }
 
   function startSession(payload: {
     sessionId: string
@@ -166,6 +175,7 @@ export function useGroupCallViewModel(): UseGroupCallViewModelReturn {
     participants,
     localParticipant,
     callDuration,
+    selectedParticipantId,
     startSession,
     addRemoteParticipant,
     markRemoteAccepted,
@@ -176,5 +186,6 @@ export function useGroupCallViewModel(): UseGroupCallViewModelReturn {
     setLocalStream,
     setLocalMute,
     setLocalCamera,
+    selectParticipant,
   }
 }

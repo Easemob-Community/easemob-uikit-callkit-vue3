@@ -1,34 +1,77 @@
 <template>
   <div class="gcall-shell">
     <!-- Header -->
-    <div class="gcall-header">
-      <span class="gcall-title">{{ groupName || '群组通话' }}</span>
-      <span class="gcall-duration">{{ formattedDuration }}</span>
-      <button class="gcall-btn-icon" @click="showAddMember = true">+</button>
+    <div class="gcall-header" :class="{ hidden: isClearScreen }">
+      <div class="gcall-header-left">
+        <span class="gcall-title">{{ groupName || '群组通话' }}</span>
+        <span class="gcall-duration">{{ formattedDuration }}</span>
+      </div>
+      <div class="gcall-header-right">
+        <button class="gcall-header-btn" title="添加成员" @click="showAddMember = true">
+          <CallKitIcon name="person-add-fill" :width="20" :height="20" />
+        </button>
+      </div>
     </div>
 
-    <!-- Video Grid -->
-    <VideoGrid :participants="participants" />
+    <!-- Video Grid / Content -->
+    <div class="gcall-content" @click="handleClearScreen">
+      <VideoGrid
+        :participants="participants"
+        :selected-id="selectedParticipantId"
+        @select="handleSelectParticipant"
+      />
+
+      <!-- 清屏提示 -->
+      <div class="gcall-clear-hint" :class="{ show: isClearScreen }">
+        点击画面恢复 controls
+      </div>
+    </div>
 
     <!-- Controls -->
-    <div class="gcall-controls">
-      <button
-        class="gcall-control-btn"
-        :class="{ active: localParticipant?.isMuted }"
-        @click="toggleMute"
-      >
-        {{ localParticipant?.isMuted ? '取消静音' : '静音' }}
-      </button>
-      <button
-        class="gcall-control-btn"
-        :class="{ active: !localParticipant?.isCameraOn }"
-        @click="toggleCamera"
-      >
-        {{ localParticipant?.isCameraOn ? '关闭摄像头' : '开启摄像头' }}
-      </button>
-      <button class="gcall-control-btn gcall-hangup" @click="handleHangup">
-        挂断
-      </button>
+    <div class="gcall-controls" :class="{ hidden: isClearScreen }">
+      <!-- 静音 -->
+      <div class="gcall-control-group">
+        <button
+          class="gcall-control-btn"
+          :class="{ active: localParticipant?.isMuted }"
+          @click="toggleMute"
+        >
+          <CallKitIcon
+            :name="localParticipant?.isMuted ? 'mic-slash' : 'mic-on'"
+            :width="20"
+            :height="20"
+          />
+        </button>
+        <span class="gcall-control-label">
+          {{ localParticipant?.isMuted ? '取消静音' : '静音' }}
+        </span>
+      </div>
+
+      <!-- 摄像头 -->
+      <div class="gcall-control-group">
+        <button
+          class="gcall-control-btn"
+          :class="{ 'disabled-state': !localParticipant?.isCameraOn }"
+          @click="toggleCamera"
+        >
+          <CallKitIcon
+            :name="localParticipant?.isCameraOn ? 'video-camera' : 'video-camera-xmark'"
+            :width="20"
+            :height="20"
+          />
+        </button>
+        <span class="gcall-control-label">
+          {{ localParticipant?.isCameraOn ? '关闭摄像头' : '开启摄像头' }}
+        </span>
+      </div>
+
+      <!-- 挂断 -->
+      <div class="gcall-control-group">
+        <button class="gcall-control-btn hangup" @click="handleHangup">
+          <CallKitIcon name="phone-hang" :width="20" :height="20" />
+        </button>
+        <span class="gcall-control-label">挂断</span>
+      </div>
     </div>
 
     <!-- Add Member Modal -->
@@ -46,6 +89,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import VideoGrid from './VideoGrid.vue'
+import CallKitIcon from './CallKitIcon.vue'
 import EasemobChatGroupMemberList from '../../../components/multiCall/EasemobChatGroupMemberList.vue'
 import { useGroupCallViewModel } from '../viewModel/useGroupCallViewModel'
 import { useRtcChannelStore } from '../../../store/rtcChannel'
@@ -70,13 +114,15 @@ const emit = defineEmits<{
 const vm = useGroupCallViewModel()
 const rtcChannelStore = useRtcChannelStore()
 const showAddMember = ref(false)
+const isClearScreen = ref(false)
 
 const participants = computed(() => vm.participants.value)
 const localParticipant = computed(() => vm.localParticipant.value)
+const selectedParticipantId = computed(() => vm.selectedParticipantId.value)
 
-const existingUserIds = computed(() => participants.value.map(p => p.userId))
+const existingUserIds = computed(() => participants.value.map((p) => p.userId))
 const invitingUserIds = computed(() =>
-  participants.value.filter(p => p.state === 'invited').map(p => p.userId)
+  participants.value.filter((p) => p.state === 'invited').map((p) => p.userId)
 )
 
 const formattedDuration = computed(() => {
@@ -87,6 +133,16 @@ const formattedDuration = computed(() => {
   const s = (total % 60).toString().padStart(2, '0')
   return `${m}:${s}`
 })
+
+// 清屏：点击 content 区域切换
+function handleClearScreen() {
+  isClearScreen.value = !isClearScreen.value
+}
+
+// 选择参与者（进入主视频模式）
+function handleSelectParticipant(userId: string | null) {
+  vm.selectParticipant(userId)
+}
 
 // 暴露给父组件的初始化方法
 defineExpose({
@@ -124,7 +180,7 @@ watch(
   { immediate: true }
 )
 
-// 同步本地视频流：RtcService 创建轨道后会写入 rtcChannelStore.localStream
+// 同步本地视频流
 watch(
   () => rtcChannelStore.localStream,
   (stream) => {
@@ -174,97 +230,4 @@ async function handleInviteMembers(userIds: string[]) {
 }
 </script>
 
-<style scoped>
-.gcall-shell {
-  width: 800px;
-  height: 600px;
-  max-width: 90vw;
-  max-height: 90vh;
-  background: #1a1a1a;
-  color: white;
-  display: flex;
-  flex-direction: column;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-}
-
-.gcall-header {
-  height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-  background: rgba(0, 0, 0, 0.3);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.gcall-title {
-  font-weight: 500;
-  font-size: 14px;
-}
-
-.gcall-duration {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.7);
-  font-variant-numeric: tabular-nums;
-}
-
-.gcall-btn-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(255, 255, 255, 0.15);
-  color: white;
-  cursor: pointer;
-}
-
-.gcall-controls {
-  height: 64px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  padding: 0 16px;
-  background: rgba(0, 0, 0, 0.3);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.gcall-control-btn {
-  padding: 8px 16px;
-  border-radius: 20px;
-  border: none;
-  background: rgba(255, 255, 255, 0.12);
-  color: white;
-  font-size: 13px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.gcall-control-btn.active {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-.gcall-control-btn.gcall-hangup {
-  background: #e74c3c;
-}
-
-.gcall-modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2000;
-}
-
-.gcall-modal-content {
-  background: #222;
-  color: white;
-  padding: 20px;
-  border-radius: 8px;
-  min-width: 240px;
-}
-</style>
+<style scoped src="./GroupCallShell.css"></style>

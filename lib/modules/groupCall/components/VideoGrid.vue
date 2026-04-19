@@ -1,11 +1,21 @@
 <template>
-  <div class="gcall-grid" :style="gridStyle">
+  <!-- 主视频模式 -->
+  <MainVideoLayout
+    v-if="selectedId && participants.length > 1"
+    :participants="participants"
+    :selected-id="selectedId"
+    @select="handleSelect"
+    @exit="handleExit"
+  />
+
+  <!-- 网格模式 -->
+  <div v-else class="gcall-grid" :style="gridStyle">
     <div
       v-for="p in participants"
       :key="p.userId"
       class="gcall-grid-cell"
     >
-      <ParticipantTile :participant="p" />
+      <ParticipantTile :participant="p" @click="handleTileClick" />
     </div>
   </div>
 </template>
@@ -13,13 +23,18 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import ParticipantTile from './ParticipantTile.vue'
+import MainVideoLayout from './MainVideoLayout.vue'
 import type { Participant } from '../types'
 
 interface Props {
   participants: Participant[]
+  selectedId?: string | null
 }
 
 const props = defineProps<Props>()
+const emit = defineEmits<{
+  select: [userId: string | null]
+}>()
 
 const gridStyle = computed(() => {
   const count = props.participants.length
@@ -59,19 +74,21 @@ const gridStyle = computed(() => {
     gridTemplateRows: '1fr 1fr 1fr 1fr',
   }
 })
+
+function handleTileClick(userId: string) {
+  // 只有多人时才支持选中
+  if (props.participants.length > 1) {
+    emit('select', userId)
+  }
+}
+
+function handleSelect(userId: string) {
+  emit('select', userId)
+}
+
+function handleExit() {
+  emit('select', null as any)
+}
 </script>
 
-<style scoped>
-.gcall-grid {
-  flex: 1;
-  display: grid;
-  gap: 8px;
-  padding: 8px;
-  overflow: auto;
-}
-
-.gcall-grid-cell {
-  min-width: 0;
-  min-height: 0;
-}
-</style>
+<style scoped src="./VideoGrid.css"></style>

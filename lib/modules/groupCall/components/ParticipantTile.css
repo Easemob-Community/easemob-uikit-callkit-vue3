@@ -1,0 +1,166 @@
+/* ========== Tile 容器 ========== */
+.gcall-tile {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #1a1a1a;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.gcall-tile:hover {
+  box-shadow: 0 0 0 2px rgba(51, 177, 255, 0.5);
+}
+
+/* ========== 视频层 ========== */
+.gcall-tile-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.gcall-tile-video.mirror {
+  transform: scaleX(-1);
+}
+
+/* ========== 占位层 ========== */
+.gcall-tile-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: white;
+  background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
+}
+
+.gcall-tile-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.gcall-tile-avatar-fallback {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: 500;
+  color: white;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.gcall-tile-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.gcall-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: gcall-spin 1s linear infinite;
+}
+
+@keyframes gcall-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.gcall-tile-hint {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* ========== 信息条 ========== */
+.gcall-tile-info {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: white;
+  font-size: 12px;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 4px 8px;
+  border-radius: 4px;
+  pointer-events: none;
+  backdrop-filter: blur(4px);
+}
+
+.gcall-tile-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gcall-tile-mic {
+  color: #ff4757;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.gcall-tile-speaking {
+  color: #0c7;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+/* ========== Hover 放大提示 ========== */
+.gcall-tile-hover-icon {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.gcall-tile:hover .gcall-tile-hover-icon {
+  opacity: 1;
+}
+
+/* ========== 响应式 ========== */
+@media (max-width: 480px) {
+  .gcall-tile-avatar,
+  .gcall-tile-avatar-fallback {
+    width: 56px;
+    height: 56px;
+    font-size: 20px;
+  }
+
+  .gcall-tile-info {
+    font-size: 11px;
+    padding: 3px 6px;
+  }
+}
