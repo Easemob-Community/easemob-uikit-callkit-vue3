@@ -3,8 +3,9 @@
     <div class="header">
       <h1>Easemob Chat CallKit Vue3 演示</h1>
       <div class="mode-indicator" :class="importMode">
-        <span class="mode-label">当前模式</span>
+        <span class="mode-label">测试环境</span>
         <span class="mode-value">{{ importModeText }}</span>
+        <span class="mode-desc">{{ importModeDesc }}</span>
       </div>
     </div>
 
@@ -103,11 +104,21 @@ const importMode = import.meta.env.VITE_IMPORT_MODE || 'unknown'
 const importModeText = computed(() => {
   switch (importMode) {
     case 'source':
-      return '🔧 源码引入'
+      return '🛠️ 本地开发模式'
     case 'tgz':
-      return '📦 TGZ 包引入'
+      return '📦 生产环境模式'
     default:
       return '❓ 未知模式'
+  }
+})
+const importModeDesc = computed(() => {
+  switch (importMode) {
+    case 'source':
+      return '直接引用 lib/ 源码，修改即生效'
+    case 'tgz':
+      return '使用打包后的 npm 包，模拟真实用户场景'
+    default:
+      return ''
   }
 })
 
@@ -328,6 +339,15 @@ const handleEndCall = () => {
   font-size: 14px;
   font-weight: 600;
   margin-top: 2px;
+}
+
+.mode-desc {
+  font-size: 11px;
+  opacity: 0.85;
+  margin-top: 4px;
+  max-width: 220px;
+  text-align: center;
+  line-height: 1.4;
 }
 
 .demo-section {
