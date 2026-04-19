@@ -1,9 +1,7 @@
 import { CallService } from '../../../services/CallService'
 import { useSignalManager } from '../../../composables/useSignalManager'
-import { useCallStateStore } from '../../../store/callState'
-import { CALL_STATUS } from '../../../types/callstate.types'
+import { useGroupCallStore } from '../viewModel/GroupCallStore'
 import { logger } from '../../../utils/logger'
-import type { GroupCallSessionState } from '../types'
 
 /**
  * GroupCallSignalingAdapter
@@ -13,29 +11,6 @@ import type { GroupCallSessionState } from '../types'
 export class GroupCallSignalingAdapter {
   private callService = new CallService()
   private signalManager = useSignalManager()
-  private callStateStore = useCallStateStore()
-
-  /**
-   * 初始化群组通话状态（主叫方发起前）
-   */
-  prepareSession(payload: {
-    groupId: string
-    channel: string
-    callType: 'video' | 'audio'
-    callerUserId: string
-    invitedMembers: string[]
-  }) {
-    this.callStateStore.setCallState({
-      status: CALL_STATUS.INVITING,
-      type: payload.callType === 'video' ? 2 : 3, // VIDEO_MULTI=2, AUDIO_MULTI=3
-      callerUserId: payload.callerUserId,
-      calleeUserId: '',
-      groupId: payload.groupId,
-      channel: payload.channel,
-      invitedMembers: payload.invitedMembers,
-    })
-    logger.info('[GroupCallSignalingAdapter] 准备会话', payload)
-  }
 
   /**
    * 发送邀请（主叫方添加新成员）
@@ -61,9 +36,6 @@ export class GroupCallSignalingAdapter {
    * 实际接听动作在 viewModel 中 orchestrate
    */
   async sendAnswer(userId: string, groupId: string): Promise<void> {
-    // 通过现有的 answer message 机制发送接受信令
-    // 注意：这里不直接操作，而是通过现有的 useAnswerCall 来处理
-    // 此 adapter 主要给 viewModel 提供一个统一的面板
     logger.info('[GroupCallSignalingAdapter] 发送接听信令', { userId, groupId })
   }
 
@@ -82,11 +54,9 @@ export class GroupCallSignalingAdapter {
    */
   async cancelInvitation(userId: string, groupId?: string): Promise<void> {
     try {
-      await this.signalManager.sendCancelMessage(
-        groupId || this.callStateStore.getCallState.groupId || '',
-        'groupChat',
-        [userId]
-      )
+      const groupCallStore = useGroupCallStore()
+      const gid = groupId || groupCallStore.session?.groupId || ''
+      await this.signalManager.sendCancelMessage(gid, 'groupChat', [userId])
       logger.info('[GroupCallSignalingAdapter] 取消邀请信令已发送', userId)
     } catch (error) {
       logger.error('[GroupCallSignalingAdapter] 取消邀请失败', error)

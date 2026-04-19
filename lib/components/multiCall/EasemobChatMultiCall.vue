@@ -2,8 +2,8 @@
   <GroupCallShell
     v-if="isVisible"
     ref="groupCallShellRef"
-    :group-id="groupId || callStateStore.getCallState.groupId || ''"
-    :group-name="groupName || callStateStore.getCallState.groupName"
+    :group-id="groupId || ''"
+    :group-name="groupName || ''"
     :current-user-id="props.currentUserId || chatClientStore.getChatClient?.user || ''"
     :current-nickname="callStateStore.getUserInfo(chatClientStore.getChatClient?.user)?.nickname"
     :current-avatar-url="callStateStore.getUserInfo(chatClientStore.getChatClient?.user)?.avatarURL"

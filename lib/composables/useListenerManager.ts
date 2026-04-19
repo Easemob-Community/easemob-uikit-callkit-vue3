@@ -109,7 +109,7 @@ export function useListenerManager(): ListenerManagerReturn {
         return;
       }
     }
-    //开始更新store中的state属性
+    // 开始更新 store 中的 state 属性（单聊字段，群聊字段已迁移至 GroupCallStore）
     callStateStore.updateCallState({
       callId: ext?.callId,
       channel: ext?.channelName,
@@ -118,12 +118,7 @@ export function useListenerManager(): ListenerManagerReturn {
       callerUserId: ext?.callerIMName || message.from,
       calleeUserId:
         (ext?.type === CALL_TYPE.VIDEO_MULTI || ext?.type === CALL_TYPE.AUDIO_MULTI) ? ext?.groupId : message.to,
-      groupId: ext?.callkitGroupInfo?.groupId,
-      groupName: ext?.callkitGroupInfo?.groupName,
-      groupAvatar: ext?.callkitGroupInfo?.groupAvatar,
       inviteMessageId: message.id,
-      // 群组通话时，从邀请消息中获取被邀请成员列表
-      invitedMembers: ext?.invitedMembers || [],
     });
     logger.info("通话邀请已更新至store", callStateStore.getCallState);
 
@@ -133,6 +128,7 @@ export function useListenerManager(): ListenerManagerReturn {
       const currentUserId = chatClientStore.getChatClient?.context?.userId || chatClientStore.getChatClient?.user || ''
       const callerUserId = ext?.callerIMName || message.from || ''
       const groupId = ext?.callkitGroupInfo?.groupId || ''
+      const groupName = ext?.callkitGroupInfo?.groupName || ''
       const channel = ext?.channelName || ''
       const callType = ext?.type === CALL_TYPE.VIDEO_MULTI ? 'video' : 'audio'
       const invitedMembers: string[] = ext?.invitedMembers || []
@@ -140,6 +136,7 @@ export function useListenerManager(): ListenerManagerReturn {
       groupCallStore.initSession({
         sessionId: channel,
         groupId,
+        groupName,
         callType,
         isActive: true,
         startTime: Date.now(),
@@ -479,19 +476,9 @@ export function useListenerManager(): ListenerManagerReturn {
         // 错误已在useSignalManager内部记录
       });
 
-      //针对群组多人通话的逻辑处理
-      if (
-        callStateStore.type === CALL_TYPE.VIDEO_MULTI ||
-        callStateStore.type === CALL_TYPE.AUDIO_MULTI
-      ) {
-        // 多人通话：只记录拒绝状态，不挂断通话
-        // 从邀请列表中移除拒绝的用户
-        const invitedMembers = callStateStore.getInvitedMembers.filter(
-          (member) => member !== message.from
-        );
-        callStateStore.updateInvitedMembers(invitedMembers);
-        // 同步从 GroupCallStore 移除拒绝的用户
-        const groupCallStore = useGroupCallStore()
+      // 群聊拒绝：从 GroupCallStore 移除，不挂断通话
+      const groupCallStore = useGroupCallStore()
+      if (groupCallStore.session) {
         groupCallStore.removeParticipant(message.from as string)
       } else {
         //一对一通话执行挂断
@@ -661,14 +648,8 @@ export function useListenerManager(): ListenerManagerReturn {
       }
       
       // 通话中状态：只移除离开的成员，不挂断整个通话
-      logger.info(`群组通话：成员 ${message.from} 离开，从邀请列表中移除`);
-      
-      // 从邀请列表中移除
-      const invitedMembers = callStateStore.getInvitedMembers.filter(
-        (member) => member !== message.from
-      );
-      callStateStore.updateInvitedMembers(invitedMembers);
-      
+      logger.info(`群组通话：成员 ${message.from} 离开`);
+
       // 标记用户已离开RTC
       rtcChannelStore.markUserLeftRtc(message.from as string);
 

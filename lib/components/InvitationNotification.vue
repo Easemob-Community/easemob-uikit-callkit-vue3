@@ -52,9 +52,11 @@ import { useChatClientStore } from '../store/chatClient'
 import { useAnswerCall } from '../composables/useAnswerCall'
 import { CALL_STATUS, CALL_TYPE } from '../types/callstate.types'
 import { logger } from '../utils/logger'
+import { useGroupCallStore } from '../modules/groupCall'
 
 const callStateStore = useCallStateStore()
 const chatClientStore = useChatClientStore()
+const groupCallStore = useGroupCallStore()
 const { acceptCall, rejectCall } = useAnswerCall()
 
 const visible = ref(false)
@@ -94,7 +96,7 @@ const isGroupCall = computed(() => {
 const callDescription = computed(() => {
   const base = callType.value === 'video' ? '视频通话' : '语音通话'
   if (isGroupCall.value) {
-    const groupName = callStateStore.getCallState.groupName
+    const groupName = groupCallStore.session?.groupName
     return `邀请您加入${groupName ? `「${groupName}」` : '群组'}${base}`
   }
   return `${base}邀请`

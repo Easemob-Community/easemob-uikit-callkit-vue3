@@ -43,6 +43,7 @@ export interface Participant {
 export interface GroupCallSessionState {
   sessionId: string        // 通常等于 channelName
   groupId: string
+  groupName?: string
   callType: 'video' | 'audio'
   isActive: boolean        // 是否正在通话中
   startTime: number        // 接通时间戳

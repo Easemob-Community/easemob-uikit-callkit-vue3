@@ -4,6 +4,7 @@ import { useChatClientStore } from "../store/chatClient";
 import { useRtcChannelStore } from "../store/rtcChannel";
 import { HANGUP_REASON, CALL_STATUS, CALL_TYPE } from "../types/callstate.types";
 import { useSignalManager } from "../composables/useSignalManager";
+import { useGroupCallStore } from "../modules/groupCall";
 import { logger } from "../utils/logger";
 
 export class CallService {
@@ -119,30 +120,27 @@ export class CallService {
       
       if (isGroupCall) {
         // 群组通话：发送群定向消息给通话中的其他人
-        if (!callState.groupId) {
+        const groupCallStore = useGroupCallStore();
+        const groupId = groupCallStore.session?.groupId;
+        if (!groupId) {
           logger.warn("CallService: 群组通话挂断失败，groupId 为空");
           return;
         }
         
-        // 获取已加入RTC的成员列表，如果没有则使用被邀请成员列表
-        const joinedMembers = callState.joinedMembers || [];
-        const invitedMembers = callState.invitedMembers || [];
-        // 优先使用 joinedMembers，如果没有则使用 invitedMembers
-        const targetMembers = joinedMembers.length > 0 ? joinedMembers : invitedMembers;
-        
-        // 获取当前用户ID
+        // 获取还在通话中的成员（state 不为 left）
         const currentUserId = this.chatClientStore.getChatClient?.user;
-        // 过滤掉自己，只通知其他成员
-        const receiverList = targetMembers.filter(id => id !== currentUserId);
+        const receiverList = groupCallStore.participantList
+          .filter(p => p.userId !== currentUserId && p.state !== 'left')
+          .map(p => p.userId);
         
         logger.info(
-          `CallService: 发送群组离开通话信令，群组: ${callState.groupId}，接收者: ${receiverList.join(',') || '无'}`
+          `CallService: 发送群组离开通话信令，群组: ${groupId}，接收者: ${receiverList.join(',') || '无'}`
         );
         
         // 如果有需要通知的成员，发送群定向消息
         if (receiverList.length > 0) {
           await sendLeaveMessage(
-            callState.groupId,
+            groupId,
             "groupChat",
             receiverList
           );
@@ -198,15 +196,18 @@ export class CallService {
       
       if (isGroupCall) {
         // 群组通话：发送群定向消息给所有被邀请的成员
-        if (!callState.groupId) {
+        const groupCallStore = useGroupCallStore();
+        const groupId = groupCallStore.session?.groupId;
+        if (!groupId) {
           logger.warn("CallService: 群组通话取消失败，groupId 为空");
           return;
         }
         
         // 获取被邀请的成员列表（排除自己）
-        const invitedMembers = callState.invitedMembers || [];
         const currentUserId = this.chatClientStore.getChatClient?.user;
-        const receiverList = invitedMembers.filter(id => id !== currentUserId);
+        const receiverList = groupCallStore.participantList
+          .filter(p => p.userId !== currentUserId && p.state === 'invited')
+          .map(p => p.userId);
         
         if (receiverList.length === 0) {
           logger.warn("CallService: 群组通话取消失败，没有需要通知的被邀请成员");
@@ -214,11 +215,11 @@ export class CallService {
         }
         
         logger.info(
-          `CallService: 发送群组取消通话信令，群组: ${callState.groupId}，接收者: ${receiverList.join(',')}`
+          `CallService: 发送群组取消通话信令，群组: ${groupId}，接收者: ${receiverList.join(',')}`
         );
         
         await sendCancelMessage(
-          callState.groupId,
+          groupId,
           "groupChat",
           receiverList
         );

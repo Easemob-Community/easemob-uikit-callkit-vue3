@@ -74,12 +74,8 @@ export function useCallKit(): UseCallKitReturn {
     try {
       // 设置当前通话状态为inviting
       callStateStore.initInviteInfo({
-        groupId,
-        groupName,
-        groupAvatar,
         calleeUserId: groupId,
         type: type === "audio" ? CALL_TYPE.AUDIO_MULTI : CALL_TYPE.VIDEO_MULTI,
-        invitedMembers: members,
       });
 
       logger.verbose(`startGroupCall: 已初始化群组邀请信息，通话类型: ${type}`);

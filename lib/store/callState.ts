@@ -20,11 +20,7 @@ export const useCallStateStore = defineStore("callState", {
     calleeDevId: "",
     callerUserId: "",
     calleeUserId: "",
-    groupId: "",
-    groupName: "",
-    groupAvatar: "",
-    invitedMembers: [], //被邀请成员列表
-    joinedMembers: [], //已加入成员列表
+    // 注：groupId / groupName / invitedMembers 等群聊字段已迁移至 GroupCallStore
     inviteMessageId: "",
     duration: "",
     // 超时设置
@@ -46,22 +42,11 @@ export const useCallStateStore = defineStore("callState", {
       this.callerUserId = chatClient.context.userId;
       this.token = chatClient.token;
     },
-    //初始化邀请信息状态创建
+    // 初始化邀请信息状态创建（单聊专用，群聊字段已迁移至 GroupCallStore）
     initInviteInfo(inviteInfo: INVITE_INFO) {
-      const { type, calleeUserId, groupId, groupName, groupAvatar, invitedMembers } =
-        inviteInfo;
+      const { type, calleeUserId } = inviteInfo;
       this.type = type;
       this.calleeUserId = calleeUserId;
-      // 修复逻辑错误：判断是否为群呼
-      if (
-        this.type === CALL_TYPE.AUDIO_MULTI ||
-        this.type === CALL_TYPE.VIDEO_MULTI
-      ) {
-        this.groupId = groupId || "";
-        this.groupName = groupName || "";
-        this.groupAvatar = groupAvatar || "";
-        this.invitedMembers = invitedMembers || [];
-      }
       this.callId = generateRandomChannel(10);
       this.channel = generateRandomChannel(8);
       this.status = CALL_STATUS.INVITING;
@@ -78,10 +63,7 @@ export const useCallStateStore = defineStore("callState", {
         this.userInfoMap.set(userId, userInfo);
       }
     },
-    //更新invitedMembers
-    updateInvitedMembers(members: string[]) {
-      this.invitedMembers = members;
-    },
+    // 注：updateInvitedMembers 已废弃，群聊成员管理请使用 GroupCallStore
     /**
      * 开始超时计时
      * 支持传入callback，超时后执行callback
@@ -114,18 +96,6 @@ export const useCallStateStore = defineStore("callState", {
      */
     handleTimeout() {
       console.warn("通话邀请超时");
-      
-      // 🔑 关键修复：多人通话场景下，超时后不自动隐藏界面
-      // 用户需要手动挂断才能正确销毁资源
-      const isMultiCall = this.type === CALL_TYPE.VIDEO_MULTI || this.type === CALL_TYPE.AUDIO_MULTI;
-      
-      if (isMultiCall) {
-        console.log("多人通话邀请超时，保持界面等待用户手动挂断");
-        // 多人通话保持当前状态，由用户主动挂断
-        // 可以在这里触发超时提示事件
-        return;
-      }
-      
       // 单人通话场景下，设置状态为IDLE，自动隐藏界面
       this.setCallStatus(CALL_STATUS.IDLE);
     },
@@ -168,13 +138,6 @@ export const useCallStateStore = defineStore("callState", {
       this.callerUserId = ""; // 🔑 修复：重置callerUserId
       this.inviteMessageId = "";
       this.duration = "";
-      
-      // 重置群组通话相关状态
-      this.groupId = "";
-      this.groupName = "";
-      this.groupAvatar = "";
-      this.invitedMembers = [];
-      this.joinedMembers = [];
       
       // 重置通话类型为默认值
       this.type = CALL_TYPE.AUDIO_1V1;
@@ -248,9 +211,7 @@ export const useCallStateStore = defineStore("callState", {
       return this.status !== CALL_STATUS.IDLE;
     },
 
-    getInvitedMembers(): string[] {
-      return this.invitedMembers || [];
-    },
+    // 注：getInvitedMembers 已废弃，群聊成员请使用 GroupCallStore.participantList
     
     /**
      * 判断是否为小窗口模式

@@ -39,7 +39,7 @@ export function useParticipants(currentUserId?: string) {
     logger.debug('[useParticipants] 计算参与者列表:', {
       currentUser,
       callerUserId: state.callerUserId,
-      invitedMembers: JSON.parse(JSON.stringify(state.invitedMembers)),
+      invitedMembers: JSON.parse(JSON.stringify(state.invitedMembers ?? [])),
       joinedRtcUsers: joinedUsers,
       leftUsers: Array.from(rtcChannelStore.leftUsers),
       uidToUserIdMap: JSON.parse(JSON.stringify(Array.from(rtcChannelStore.uidToUserIdMap.entries())))
@@ -61,7 +61,7 @@ export function useParticipants(currentUserId?: string) {
     // 主叫方始终添加，直到明确离开（通过 userLeft 事件标记）
     if (state.callerUserId && state.callerUserId !== currentUser) {
       const hasJoined = rtcChannelStore.isUserInRtc(state.callerUserId)
-      const isInInvitedList = state.invitedMembers?.includes(state.callerUserId)
+      const isInInvitedList = (state.invitedMembers ?? []).includes(state.callerUserId)
       const hasExplicitlyLeft = rtcChannelStore.hasUserLeft(state.callerUserId) // 🔑 检查是否已明确离开
       
       // 主叫方在以下情况显示：
@@ -83,8 +83,9 @@ export function useParticipants(currentUserId?: string) {
     }
     
     // 添加其他被邀请成员（排除已明确离开的用户）
-    if (state.invitedMembers && state.invitedMembers.length > 0) {
-      state.invitedMembers.forEach(userId => {
+    const invitedMembers = state.invitedMembers ?? []
+    if (invitedMembers.length > 0) {
+      invitedMembers.forEach(userId => {
         // 避免重复添加，且排除已明确离开的用户
         if (userId !== currentUser && userId !== state.callerUserId && !rtcChannelStore.hasUserLeft(userId)) {
           const hasJoined = rtcChannelStore.isUserInRtc(userId)
