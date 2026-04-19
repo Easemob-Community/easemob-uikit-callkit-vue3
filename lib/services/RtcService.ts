@@ -508,6 +508,13 @@ export class RtcService {
   }
 
   /**
+   * 获取本地视频轨道
+   */
+  getLocalVideoTrack(): ICameraVideoTrack | null {
+    return this.localVideoTrack
+  }
+
+  /**
    * 检查音频是否静音
    */
   isMuted(): boolean {

@@ -54,7 +54,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, onUnmounted } from 'vue'
+import { ref, watch, computed, onUnmounted, nextTick } from 'vue'
 import CallKitIcon from './CallKitIcon.vue'
 import type { Participant } from '../types'
 
@@ -90,24 +90,79 @@ const avatarGradient = computed(() => {
   return `linear-gradient(135deg, hsl(${h1}, 60%, 45%) 0%, hsl(${h2}, 60%, 35%) 100%)`
 })
 
+function enforceVideoSize(el: HTMLVideoElement) {
+  el.style.width = '100%'
+  el.style.height = '100%'
+  el.style.objectFit = 'cover'
+  el.style.maxWidth = '100%'
+  el.style.maxHeight = '100%'
+}
+
+// 安全播放：先 stop，等 Vue DOM 更新完成 + 浏览器重排后再 play，避免 Agora 状态残留或读到 0 尺寸导致黑屏
+function safePlayTrack(track: any, el: HTMLElement) {
+  if (!track || !el) return
+  try {
+    track.stop()
+  } catch (e) {
+    // 忽略 stop 失败（可能之前未播放）
+  }
+  nextTick(() => {
+    requestAnimationFrame(() => {
+      try {
+        track.play(el)
+      } catch (e) {
+        console.warn('[ParticipantTile] track.play 失败', e)
+      }
+    })
+  })
+}
+
 // 当 track、stream 或 video 元素本身变化时，执行 play
 watch(
   [() => props.participant.videoTrack, () => props.participant.localStream, videoEl],
-  () => {
+  (newVals, oldVals) => {
     const el = videoEl.value
     if (!el) return
 
-    if (props.participant.isLocal && props.participant.localStream) {
-      if (el.srcObject !== props.participant.localStream) {
-        el.srcObject = props.participant.localStream
-        el.play().catch((err) => console.warn('本地视频播放失败', err))
+    const [, , oldEl] = oldVals || [undefined, undefined, undefined]
+    const domChanged = oldEl !== el
+
+    if (props.participant.isLocal) {
+      // 优先使用 Agora track.play() 方式（兼容性更好）
+      const track = props.participant.videoTrack
+      if (track) {
+        if (domChanged) {
+          safePlayTrack(track, el)
+        } else {
+          // DOM 没变只补约束尺寸
+          try { track.play(el) } catch (e) {}
+        }
+        enforceVideoSize(el)
+        return
       }
-      return
+      // 兜底：使用标准 MediaStream 方式
+      if (props.participant.localStream) {
+        if (el.srcObject !== props.participant.localStream) {
+          el.srcObject = props.participant.localStream
+          el.play().catch((err) => console.warn('本地视频播放失败', err))
+        }
+        enforceVideoSize(el)
+        return
+      }
     }
 
     const track = props.participant.videoTrack
     if (track) {
-      track.play(el)
+      if (domChanged) {
+        safePlayTrack(track, el)
+      } else {
+        try { track.play(el) } catch (e) {}
+      }
+      // Agora play() 是异步设置尺寸的，需要多轮强制覆盖
+      enforceVideoSize(el)
+      requestAnimationFrame(() => enforceVideoSize(el))
+      setTimeout(() => enforceVideoSize(el), 50)
+      setTimeout(() => enforceVideoSize(el), 300)
     } else {
       el.srcObject = null
     }
@@ -123,6 +178,15 @@ onUnmounted(() => {
   const el = videoEl.value
   if (el) {
     el.srcObject = null
+  }
+  // 组件卸载时停止 Agora track 播放，避免状态残留
+  const track = props.participant.videoTrack
+  if (track) {
+    try {
+      track.stop()
+    } catch (e) {
+      // ignore
+    }
   }
 })
 </script>

@@ -3,7 +3,7 @@
  * 设计原则：单一事实源，UI 只做纯渲染，状态驱动媒体
  */
 
-import type { IRemoteVideoTrack, IRemoteAudioTrack } from 'agora-rtc-sdk-ng'
+import type { IRemoteVideoTrack, IRemoteAudioTrack, ICameraVideoTrack } from 'agora-rtc-sdk-ng'
 
 /** 参与者生命周期状态 */
 export type ParticipantState =
@@ -22,7 +22,7 @@ export interface Participant {
   isLocal: boolean
 
   // RTC 轨道（由 RtcMediaBridge 写入，UI 只读）
-  videoTrack: IRemoteVideoTrack | null
+  videoTrack: ICameraVideoTrack | IRemoteVideoTrack | null
   audioTrack: IRemoteAudioTrack | null
   localStream: MediaStream | null   // 仅 isLocal = true 时有值
 

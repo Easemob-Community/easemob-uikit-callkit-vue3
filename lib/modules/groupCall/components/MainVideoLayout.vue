@@ -3,7 +3,7 @@
     <!-- 主视频 -->
     <div class="gcall-main-video" @click="handleMainClick">
       <div class="gcall-main-video-inner">
-        <ParticipantTile :participant="mainParticipant" />
+        <ParticipantTile :key="mainParticipant.userId" :participant="mainParticipant" />
       </div>
       <button class="gcall-main-video-exit" title="返回九宫格" @click.stop="handleExit">
         <CallKitIcon name="chevron-4-cluster" :width="16" :height="16" color="#fff" />
@@ -115,3 +115,176 @@ watch(() => props.participants.length, () => {
 // 初始检查
 nextTick(checkScroll)
 </script>
+
+<style scoped>
+/* ========== 主视频模式 ========== */
+.gcall-main-layout {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 8px;
+  gap: 8px;
+}
+
+.gcall-main-video {
+  flex: 1;
+  min-height: 120px;
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.gcall-main-video-inner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.gcall-main-video-inner > :deep(.gcall-tile) {
+  flex: 1;
+  min-height: 0;
+  border-radius: 0;
+}
+
+.gcall-main-video-exit {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  border: none;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 5;
+}
+
+.gcall-main-video:hover .gcall-main-video-exit {
+  opacity: 1;
+}
+
+.gcall-thumbnails {
+  height: 84px;
+  min-height: 84px;
+  max-height: 84px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.gcall-thumbnails-scroll {
+  flex: 1;
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  scroll-behavior: smooth;
+  scrollbar-width: none; /* Firefox */
+}
+
+.gcall-thumbnails-scroll::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}
+
+.gcall-thumbnail {
+  width: 120px;
+  height: 72px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: box-shadow 0.2s ease;
+}
+
+.gcall-thumbnail.active {
+  box-shadow: 0 0 0 2px #33b1ff;
+}
+
+.gcall-thumbnail :deep(.gcall-tile) {
+  border-radius: 0;
+}
+
+.gcall-thumbnail :deep(.gcall-tile-info) {
+  display: none;
+}
+
+.gcall-thumbnail :deep(.gcall-tile-hover-icon) {
+  display: none;
+}
+
+/* 缩略图内 avatar 缩小适配，避免 80px 在 72px 容器里溢出变形 */
+.gcall-thumbnail :deep(.gcall-tile-avatar),
+.gcall-thumbnail :deep(.gcall-tile-avatar-fallback) {
+  width: 36px;
+  height: 36px;
+  font-size: 14px;
+}
+
+.gcall-thumbnail :deep(.gcall-tile-placeholder) {
+  gap: 4px;
+}
+
+.gcall-thumbnail :deep(.gcall-tile-hint) {
+  font-size: 10px;
+}
+
+.gcall-scroll-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  border: none;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.2s ease;
+}
+
+.gcall-scroll-btn:hover {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+/* ========== 响应式 ========== */
+@media (max-width: 768px) {
+  .gcall-thumbnails {
+    height: 76px;
+    min-height: 76px;
+    max-height: 76px;
+  }
+
+  .gcall-thumbnail {
+    width: 108px;
+    height: 64px;
+  }
+}
+
+@media (max-width: 480px) {
+  .gcall-thumbnails {
+    height: 68px;
+    min-height: 68px;
+    max-height: 68px;
+  }
+
+  .gcall-thumbnail {
+    width: 96px;
+    height: 56px;
+  }
+}
+</style>

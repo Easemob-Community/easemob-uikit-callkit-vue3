@@ -125,8 +125,33 @@ const invitingUserIds = computed(() =>
   participants.value.filter((p) => p.state === 'invited').map((p) => p.userId)
 )
 
+/* ========== 本地通话计时器（自管，不依赖 ViewModel） ========== */
+const callStartTime = ref<number>(0)
+const timerTick = ref(0)
+let _durationTimer: ReturnType<typeof setInterval> | null = null
+
+function startDurationTimer() {
+  if (_durationTimer) clearInterval(_durationTimer)
+  callStartTime.value = Date.now()
+  timerTick.value = 0
+  _durationTimer = setInterval(() => {
+    timerTick.value++
+  }, 1000)
+}
+
+function stopDurationTimer() {
+  if (_durationTimer) {
+    clearInterval(_durationTimer)
+    _durationTimer = null
+  }
+  callStartTime.value = 0
+  timerTick.value = 0
+}
+
 const formattedDuration = computed(() => {
-  const total = vm.callDuration.value
+  timerTick.value // 强制依赖，让 computed 每秒刷新
+  if (!callStartTime.value) return '00:00'
+  const total = Math.floor((Date.now() - callStartTime.value) / 1000)
   const m = Math.floor(total / 60)
     .toString()
     .padStart(2, '0')
@@ -158,6 +183,7 @@ defineExpose({
       localNickname: props.currentNickname || props.currentUserId,
       localAvatarUrl: props.currentAvatarUrl,
     })
+    startDurationTimer()
   },
 
   addRemoteParticipant: vm.addRemoteParticipant,
@@ -173,6 +199,11 @@ watch(
   (svc) => {
     if (svc) {
       vm.bindRtcService(svc)
+      // RtcService 传入后，如果 localStream 已存在，补同步本地 videoTrack
+      const localTrack = svc.getLocalVideoTrack?.()
+      if (localTrack && rtcChannelStore.localStream) {
+        vm.setLocalVideoTrack(localTrack)
+      }
     } else {
       vm.unbindRtcService()
     }
@@ -187,6 +218,11 @@ watch(
     if (stream) {
       logger.info('[GroupCallShell] 检测到本地视频流更新')
       vm.setLocalStream(stream)
+      // 同步本地 videoTrack 到 store，让 ParticipantTile 可用 Agora track.play() 播放
+      const localTrack = props.rtcService?.getLocalVideoTrack?.()
+      if (localTrack) {
+        vm.setLocalVideoTrack(localTrack)
+      }
     }
   },
   { immediate: true }
@@ -216,6 +252,7 @@ async function toggleCamera() {
 
 async function handleHangup() {
   await vm.hangup()
+  stopDurationTimer()
   emit('hangup')
 }
 

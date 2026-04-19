@@ -11,7 +11,7 @@ export interface UseGroupCallViewModelReturn {
   isActive: ComputedRef<boolean>
   participants: ComputedRef<Participant[]>
   localParticipant: ComputedRef<Participant | undefined>
-  callDuration: ComputedRef<number>
+  callDuration: Ref<number>
   selectedParticipantId: Ref<string | null>
 
   // 动作
@@ -36,6 +36,7 @@ export interface UseGroupCallViewModelReturn {
   setLocalStream: (stream: MediaStream | null) => void
   setLocalMute: (isMuted: boolean) => void
   setLocalCamera: (isCameraOn: boolean) => void
+  setLocalVideoTrack: (track: any) => void
 
   // 布局控制
   selectParticipant: (userId: string | null) => void
@@ -54,10 +55,25 @@ export function useGroupCallViewModel(): UseGroupCallViewModelReturn {
   const isActive = computed(() => store.session?.isActive ?? false)
   const participants = computed(() => store.participantList)
   const localParticipant = computed(() => store.localParticipant)
-  const callDuration = computed(() => {
-    if (!store.session?.startTime) return 0
-    return Math.floor((Date.now() - store.session.startTime) / 1000)
-  })
+  const callDuration = ref(0)
+  let _durationTimer: ReturnType<typeof setInterval> | null = null
+
+  function startDurationTimer() {
+    if (_durationTimer) clearInterval(_durationTimer)
+    _durationTimer = setInterval(() => {
+      if (store.session?.startTime) {
+        callDuration.value = Math.floor((Date.now() - store.session.startTime) / 1000)
+      }
+    }, 1000)
+  }
+
+  function stopDurationTimer() {
+    if (_durationTimer) {
+      clearInterval(_durationTimer)
+      _durationTimer = null
+    }
+    callDuration.value = 0
+  }
   const selectedParticipantId = ref<string | null>(null)
 
   function selectParticipant(userId: string | null) {
@@ -94,6 +110,7 @@ export function useGroupCallViewModel(): UseGroupCallViewModelReturn {
       isSpeaking: false,
     })
 
+    startDurationTimer()
     logger.info('[useGroupCallViewModel] 会话启动', payload.sessionId)
   }
 
@@ -147,6 +164,7 @@ export function useGroupCallViewModel(): UseGroupCallViewModelReturn {
     await signaling.hangup()
     unbindRtcService()
     store.destroySession()
+    stopDurationTimer()
   }
 
   function setLocalStream(stream: MediaStream | null) {
@@ -170,6 +188,13 @@ export function useGroupCallViewModel(): UseGroupCallViewModelReturn {
     }
   }
 
+  function setLocalVideoTrack(track: any) {
+    const local = store.localParticipant
+    if (local) {
+      store.setVideoTrack(local.userId, track)
+    }
+  }
+
   return {
     isActive,
     participants,
@@ -186,6 +211,7 @@ export function useGroupCallViewModel(): UseGroupCallViewModelReturn {
     setLocalStream,
     setLocalMute,
     setLocalCamera,
+    setLocalVideoTrack,
     selectParticipant,
   }
 }
