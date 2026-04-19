@@ -468,7 +468,7 @@ packages:
     engines: {node: '>= 0.4'}
 
   easemob-chat-callkit-vue3@file:../release/easemob-chat-callkit-vue3-1.0.0.tgz:
-    resolution: {integrity: sha512-UQa5Qgs3TWYHn08KbYMHs9byysnL7Qvr2az7OZQvGYfJ/xKhENTDZoEyg79urzQ8GsevoFp8MH06y0uWh2Sl5w==, tarball: file:../release/easemob-chat-callkit-vue3-1.0.0.tgz}
+    resolution: {integrity: sha512-KB6K0FID/1q7RwhXhuIo0iM5zXoIzhJQUeT71D/8SI9TuUbo0LF8XkS/qq7JhgHJRG6vaWbcszDtjgp8UbzUPQ==, tarball: file:../release/easemob-chat-callkit-vue3-1.0.0.tgz}
     version: 1.0.0
     peerDependencies:
       vue: ^3.0.0
