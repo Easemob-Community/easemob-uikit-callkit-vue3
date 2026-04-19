@@ -38,6 +38,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, type CSSProperties } from 'vue'
 import { useCallStateStore } from '../store/callState'
 import { useRtcChannelStore } from '../store/rtcChannel'
+import { useGlobalCallStore } from '../store/globalCall'
 import { useCornerDraggable } from '../composables/useDraggable'
 import { CALL_TYPE } from '../types/callstate.types'
 import { logger } from '../utils/logger'
@@ -49,6 +50,7 @@ const emit = defineEmits<{
 
 const callStateStore = useCallStateStore()
 const rtcChannelStore = useRtcChannelStore()
+const globalCallStore = useGlobalCallStore()
 
 // 小窗口引用
 const miniRemoteVideo = ref<HTMLVideoElement>()
@@ -60,7 +62,7 @@ const VIDEO_WIDTH = 180
 const VIDEO_HEIGHT = 240
 
 // 是否显示小窗口
-const isVisible = computed(() => callStateStore.isMinimized)
+const isVisible = computed(() => globalCallStore.isMinimized)
 
 // 通话类型
 const callType = computed(() => callStateStore.type)

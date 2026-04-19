@@ -49,6 +49,7 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import type { IAgoraRTCRemoteUser } from 'agora-rtc-sdk-ng'
 import { useCallStateStore } from '../../store/callState'
 import { useRtcChannelStore } from '../../store/rtcChannel'
+import { useGlobalCallStore } from '../../store/globalCall'
 import { useEndCall } from '../../composables/useEndCall'
 import { logger } from '../../utils/logger'
 import CallInfoBar from './CallInfoBar.vue'
@@ -67,6 +68,7 @@ const emit = defineEmits<{
 // 从 store 获取 RtcService 实例
 const callStateStore = useCallStateStore()
 const rtcChannelStore = useRtcChannelStore()
+const globalCallStore = useGlobalCallStore()
 const rtcService = computed(() => rtcChannelStore.rtcService)
 
 const localVideo = ref<HTMLVideoElement>()
@@ -84,7 +86,7 @@ const remoteUserName = computed(() => {
   const callState = callStateStore.getCallState
   const remoteUserId = callState.calleeUserId || callState.callerUserId
   if (remoteUserId) {
-    const userInfo = callStateStore.getUserInfo(remoteUserId)
+    const userInfo = globalCallStore.getUserInfo(remoteUserId)
     return userInfo.nickname || remoteUserId
   }
   return ''

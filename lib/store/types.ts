@@ -43,15 +43,11 @@ export interface INVITE_INFO {
 export interface CallState extends CALL_INFO {
   // 基础状态
   status: CallStatus;
-  userInfoMap?: Map<string, { nickname?: string; avatarURL?: string }>;
   callType: "audio" | "video" | null;
-  //超时时间，单位ms，默认30s
+  // 超时时间，单位ms，默认30s
   inviteTimeout?: number;
-  //超时定时器
+  // 超时定时器
   inviteTimeoutTimer?: any | null;
-  UIdToUserIdMap?: Map<string, string>; // UID到用户ID的映射
-  // 窗口模式状态
-  isMinimized?: boolean; // 是否为小窗口模式
 }
 
 // RTC频道状态类型

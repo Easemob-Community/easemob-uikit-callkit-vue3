@@ -26,10 +26,6 @@ export const useCallStateStore = defineStore("callState", {
     // 超时设置
     inviteTimeout: 30000, // 默认30秒超时
     inviteTimeoutTimer: null,
-    userInfoMap: new Map(), // 用户ID到用户信息的映射
-    UIdToUserIdMap: new Map(), // UID到用户ID的映射
-    // 窗口模式状态
-    isMinimized: false, // 默认为大窗口模式
   }),
 
   /**
@@ -53,15 +49,6 @@ export const useCallStateStore = defineStore("callState", {
 
       // 开始超时计时
       this.startTimeoutTimer();
-    },
-    /** 设置用户信息 */
-    setUserInfo(
-      userId: string,
-      userInfo: { nickname?: string; avatarURL?: string }
-    ) {
-      if (this.userInfoMap) {
-        this.userInfoMap.set(userId, userInfo);
-      }
     },
     // 注：updateInvitedMembers 已废弃，群聊成员管理请使用 GroupCallStore
     /**
@@ -141,13 +128,6 @@ export const useCallStateStore = defineStore("callState", {
       
       // 重置通话类型为默认值
       this.type = CALL_TYPE.AUDIO_1V1;
-      
-      // 清空用户信息映射
-      this.userInfoMap.clear();
-      this.UIdToUserIdMap.clear();
-      
-      // 重置窗口模式
-      this.isMinimized = false;
     },
 
     /**
@@ -180,18 +160,6 @@ export const useCallStateStore = defineStore("callState", {
     getCallState(): CallState {
       return this as CallState;
     },
-    /** 获取用户信息 */
-    getUserInfo(): (userId: string) => {
-      nickname?: string;
-      avatarURL?: string;
-    } {
-      return (userId: string) => {
-        if (!this.userInfoMap) {
-          return {};
-        }
-        return this.userInfoMap.get(userId) || {};
-      };
-    },
     //获取定时器状态
     getInviteTimeoutTimer(): number | null {
       return this.inviteTimeoutTimer;
@@ -213,11 +181,6 @@ export const useCallStateStore = defineStore("callState", {
 
     // 注：getInvitedMembers 已废弃，群聊成员请使用 GroupCallStore.participantList
     
-    /**
-     * 判断是否为小窗口模式
-     */
-    getIsMinimized(): boolean {
-      return this.isMinimized || false;
-    },
+    // 注：getIsMinimized 已迁移至 GlobalCallStore
   },
 });

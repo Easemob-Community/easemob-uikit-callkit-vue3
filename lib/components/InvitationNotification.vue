@@ -53,10 +53,12 @@ import { useAnswerCall } from '../composables/useAnswerCall'
 import { CALL_STATUS, CALL_TYPE } from '../types/callstate.types'
 import { logger } from '../utils/logger'
 import { useGroupCallStore } from '../modules/groupCall'
+import { useGlobalCallStore } from '../store/globalCall'
 
 const callStateStore = useCallStateStore()
 const chatClientStore = useChatClientStore()
 const groupCallStore = useGroupCallStore()
+const globalCallStore = useGlobalCallStore()
 const { acceptCall, rejectCall } = useAnswerCall()
 
 const visible = ref(false)
@@ -66,7 +68,7 @@ const processing = ref(false)
 const callerName = computed(() => {
   const callerUserId = callStateStore.getCallState.callerUserId
   if (callerUserId) {
-    const userInfo = callStateStore.getUserInfo(callerUserId)
+    const userInfo = globalCallStore.getUserInfo(callerUserId)
     return userInfo?.nickname || callerUserId
   }
   return '未知用户'
@@ -75,7 +77,7 @@ const callerName = computed(() => {
 const callerAvatar = computed(() => {
   const callerUserId = callStateStore.getCallState.callerUserId
   if (callerUserId) {
-    const userInfo = callStateStore.getUserInfo(callerUserId)
+    const userInfo = globalCallStore.getUserInfo(callerUserId)
     return userInfo?.avatarURL || ''
   }
   return ''

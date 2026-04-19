@@ -15,6 +15,7 @@ import { useSignalManager } from "./useSignalManager";
 import { useJoinChannel } from "./useJoinChannel";
 import { CallService } from "../services/CallService";
 import { useGroupCallStore } from "../modules/groupCall";
+import { useGlobalCallStore } from "../store/globalCall";
 
 // 定义CmdMsgBody接口以替代不存在的Chat.CmdMsgBody
 export interface CmdMsgBody {
@@ -216,8 +217,9 @@ export function useListenerManager(): ListenerManagerReturn {
     const callerName = userAttributes?.nickname || message.from;
     const callerAvatar = userAttributes?.avatarURL || "";
     const callerUserId = message.from as string;
-    //更新store中的userInfoMap
-    callStateStore.setUserInfo(callerUserId, {
+    // 更新全局用户资料
+    const globalCallStore = useGlobalCallStore()
+    globalCallStore.setUserInfo(callerUserId, {
       nickname: callerName,
       avatarURL: callerAvatar,
     });

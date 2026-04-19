@@ -5,8 +5,8 @@
     :group-id="groupId || ''"
     :group-name="groupName || ''"
     :current-user-id="props.currentUserId || chatClientStore.getChatClient?.user || ''"
-    :current-nickname="callStateStore.getUserInfo(chatClientStore.getChatClient?.user)?.nickname"
-    :current-avatar-url="callStateStore.getUserInfo(chatClientStore.getChatClient?.user)?.avatarURL"
+    :current-nickname="globalCallStore.getUserInfo(chatClientStore.getChatClient?.user)?.nickname"
+    :current-avatar-url="globalCallStore.getUserInfo(chatClientStore.getChatClient?.user)?.avatarURL"
     :rtc-service="rtcChannelStore.rtcService"
     @hangup="handleHangup"
     @add-participant="handleAddParticipant"
@@ -18,6 +18,7 @@ import { ref, computed, watch } from 'vue'
 import { useCallStateStore } from '../../store/callState'
 import { useRtcChannelStore } from '../../store/rtcChannel'
 import { useChatClientStore } from '../../store/chatClient'
+import { useGlobalCallStore } from '../../store/globalCall'
 import { CALL_STATUS, CALL_TYPE } from '../../types/callstate.types'
 import { GroupCallShell } from '../../modules/groupCall'
 
@@ -51,6 +52,7 @@ const emit = defineEmits<{
 const callStateStore = useCallStateStore()
 const rtcChannelStore = useRtcChannelStore()
 const chatClientStore = useChatClientStore()
+const globalCallStore = useGlobalCallStore()
 
 const groupCallShellRef = ref<InstanceType<typeof GroupCallShell> | null>(null)
 

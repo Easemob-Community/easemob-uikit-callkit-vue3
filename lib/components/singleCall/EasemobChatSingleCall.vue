@@ -79,7 +79,7 @@ const callStatus = computed(() => callStateStore.status)
 const isInCall = computed(() => callStateStore.status === CALL_STATUS.IN_CALL)
 
 // 小窗口模式状态
-const isMinimized = computed(() => callStateStore.isMinimized)
+const isMinimized = computed(() => globalCallStore.isMinimized)
 
 // 窗口尺寸常量
 const CONTAINER_WIDTH = 360
@@ -103,12 +103,12 @@ const {
 
 // 最小化窗口
 const handleMinimize = () => {
-  callStateStore.isMinimized = true
+  globalCallStore.isMinimized = true
 }
 
 // 展开窗口
 const handleExpand = () => {
-  callStateStore.isMinimized = false
+  globalCallStore.isMinimized = false
   // 延迟后通知子组件重新播放远程视频
   setTimeout(() => {
     // 触发一个自定义事件让 CallStream 组件重新播放视频

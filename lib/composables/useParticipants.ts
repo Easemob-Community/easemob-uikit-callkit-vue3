@@ -2,6 +2,7 @@ import { computed } from 'vue'
 import { useCallStateStore } from '../store/callState'
 import { useRtcChannelStore } from '../store/rtcChannel'
 import { useChatClientStore } from '../store/chatClient'
+import { useGlobalCallStore } from '../store/globalCall'
 import { logger } from '../utils/logger'
 
 export interface Participant {
@@ -21,6 +22,7 @@ export function useParticipants(currentUserId?: string) {
   const callStateStore = useCallStateStore()
   const rtcChannelStore = useRtcChannelStore()
   const chatClientStore = useChatClientStore()
+  const globalCallStore = useGlobalCallStore()
 
   /**
    * 动态生成群组参与者列表
@@ -49,8 +51,8 @@ export function useParticipants(currentUserId?: string) {
     if (currentUser) {
       participantList.push({
         userId: currentUser,
-        userName: callStateStore.getUserInfo(currentUser)?.nickname || currentUser,
-        avatar: callStateStore.getUserInfo(currentUser)?.avatarURL,
+        userName: globalCallStore.getUserInfo(currentUser)?.nickname || currentUser,
+        avatar: globalCallStore.getUserInfo(currentUser)?.avatarURL,
         isMuted: false,
         isInviting: false,
         hasJoined: true
@@ -73,8 +75,8 @@ export function useParticipants(currentUserId?: string) {
       if (shouldShowCaller) {
         participantList.push({
           userId: state.callerUserId,
-          userName: callStateStore.getUserInfo(state.callerUserId)?.nickname || state.callerUserId,
-          avatar: callStateStore.getUserInfo(state.callerUserId)?.avatarURL,
+          userName: globalCallStore.getUserInfo(state.callerUserId)?.nickname || state.callerUserId,
+          avatar: globalCallStore.getUserInfo(state.callerUserId)?.avatarURL,
           isMuted: false,
           isInviting: !hasJoined, // 根据RTC状态决定是否还在邀请中
           hasJoined: hasJoined
@@ -91,8 +93,8 @@ export function useParticipants(currentUserId?: string) {
           const hasJoined = rtcChannelStore.isUserInRtc(userId)
           participantList.push({
             userId,
-            userName: callStateStore.getUserInfo(userId)?.nickname || userId,
-            avatar: callStateStore.getUserInfo(userId)?.avatarURL,
+            userName: globalCallStore.getUserInfo(userId)?.nickname || userId,
+            avatar: globalCallStore.getUserInfo(userId)?.avatarURL,
             isMuted: false,
             isInviting: !hasJoined, // 根据RTC状态决定是否还在邀请中
             hasJoined: hasJoined
