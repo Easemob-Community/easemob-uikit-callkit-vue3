@@ -5,6 +5,7 @@ import EasemobChatSingleCall from "./components/singleCall/EasemobChatSingleCall
 import EasemobChatMultiCall from "./components/multiCall/EasemobChatMultiCall.vue";
 import InvitationNotification from "./components/InvitationNotification.vue";
 import EasemobChatMiniWindow from "./components/EasemobChatMiniWindow.vue";
+import { GroupCallShell } from "./modules/groupCall";
 import { useCallStateStore } from "./store/callState";
 import { useRtcChannelStore } from "./store/rtcChannel";
 import { useCallKit } from "./composables/useCallKit";
@@ -22,6 +23,7 @@ export {
   EasemobChatMultiCall,
   InvitationNotification,
   EasemobChatMiniWindow,
+  GroupCallShell,
 };
 
 // 导出store
@@ -59,5 +61,6 @@ export default {
     app.component("EasemobChatMultiCall", EasemobChatMultiCall);
     app.component("InvitationNotification", InvitationNotification);
     app.component("EasemobChatMiniWindow", EasemobChatMiniWindow);
+    app.component("GroupCallShell", GroupCallShell);
   },
 };

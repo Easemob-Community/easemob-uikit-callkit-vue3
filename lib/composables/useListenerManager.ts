@@ -14,6 +14,8 @@ import type { SignalingExt } from "../types/signal.types";
 import { useSignalManager } from "./useSignalManager";
 import { useJoinChannel } from "./useJoinChannel";
 import { CallService } from "../services/CallService";
+import { USE_NEW_GROUP_CALL } from "../config/featureFlags";
+import { useGroupCallStore } from "../modules/groupCall";
 
 // 定义CmdMsgBody接口以替代不存在的Chat.CmdMsgBody
 export interface CmdMsgBody {
@@ -125,6 +127,74 @@ export function useListenerManager(): ListenerManagerReturn {
       invitedMembers: ext?.invitedMembers || [],
     });
     logger.info("通话邀请已更新至store", callStateStore.getCallState);
+
+    // 新模块：群组通话提前初始化参与者列表
+    if (USE_NEW_GROUP_CALL && (ext?.type === CALL_TYPE.VIDEO_MULTI || ext?.type === CALL_TYPE.AUDIO_MULTI)) {
+      const groupCallStore = useGroupCallStore()
+      const currentUserId = chatClientStore.getChatClient?.context?.userId || chatClientStore.getChatClient?.user || ''
+      const callerUserId = ext?.callerIMName || message.from || ''
+      const groupId = ext?.callkitGroupInfo?.groupId || ''
+      const channel = ext?.channelName || ''
+      const callType = ext?.type === CALL_TYPE.VIDEO_MULTI ? 'video' : 'audio'
+      const invitedMembers: string[] = ext?.invitedMembers || []
+
+      groupCallStore.initSession({
+        sessionId: channel,
+        groupId,
+        callType,
+        isActive: true,
+        startTime: Date.now(),
+      })
+
+      // 本地用户
+      groupCallStore.addParticipant({
+        userId: currentUserId,
+        nickname: currentUserId,
+        state: 'invited',
+        isLocal: true,
+        videoTrack: null,
+        audioTrack: null,
+        localStream: null,
+        isMuted: false,
+        isCameraOn: callType === 'video',
+        isSpeaking: false,
+      })
+
+      // 主叫方
+      if (callerUserId && callerUserId !== currentUserId) {
+        groupCallStore.addParticipant({
+          userId: callerUserId,
+          nickname: callerUserId,
+          state: 'joinedRtc',
+          isLocal: false,
+          videoTrack: null,
+          audioTrack: null,
+          localStream: null,
+          isMuted: false,
+          isCameraOn: false,
+          isSpeaking: false,
+        })
+      }
+
+      // 其他被邀请成员
+      invitedMembers.forEach((m: string) => {
+        if (m !== currentUserId && m !== callerUserId) {
+          groupCallStore.addParticipant({
+            userId: m,
+            nickname: m,
+            state: 'invited',
+            isLocal: false,
+            videoTrack: null,
+            audioTrack: null,
+            localStream: null,
+            isMuted: false,
+            isCameraOn: false,
+            isSpeaking: false,
+          })
+        }
+      })
+      logger.info('[useListenerManager] 新模块 GroupCallStore 已初始化', { groupId, participants: groupCallStore.participantList.map(p => p.userId) })
+    }
     //发送alerting 信令
     sendAlertMessage(message.from as string).catch((err) => {
       // 错误已在useSignalManager内部记录
@@ -438,6 +508,12 @@ export function useListenerManager(): ListenerManagerReturn {
         rtcChannelStore.addPendingUserId(message.from)
         logger.debug('已将接受者添加到待加入RTC列表:', message.from)
       }
+
+      // 新模块：标记用户为已接受
+      if (USE_NEW_GROUP_CALL) {
+        const groupCallStore = useGroupCallStore()
+        groupCallStore.markAccepted(message.from as string)
+      }
       
       // 发送confirmCallee信令，通知对方已确认收到接受信息
       const confirmCalleePayload = {
@@ -595,7 +671,14 @@ export function useListenerManager(): ListenerManagerReturn {
       
       // 标记用户已离开RTC
       rtcChannelStore.markUserLeftRtc(message.from as string);
-      
+
+      // 新模块：标记用户为 left
+      if (USE_NEW_GROUP_CALL) {
+        const groupCallStore = useGroupCallStore()
+        groupCallStore.setParticipantState(message.from as string, 'left')
+        setTimeout(() => groupCallStore.removeParticipant(message.from as string), 2000)
+      }
+
       logger.debug(`成员 ${message.from} 已从通话中移除`);
       return;
     }

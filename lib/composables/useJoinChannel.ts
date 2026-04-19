@@ -14,6 +14,8 @@ import { useRtcChannelStore } from '../store/rtcChannel'
 import { useChatClientStore } from '../store/chatClient'
 import { CALL_TYPE } from '../types/callstate.types'
 import { logger } from '../utils/logger'
+import { USE_NEW_GROUP_CALL } from '../config/featureFlags'
+import { useGroupCallStore } from '../modules/groupCall'
 
 export interface UseJoinChannelReturn {
   joinChannel: () => Promise<void>
@@ -176,7 +178,18 @@ export function useJoinChannel(): UseJoinChannelReturn {
       if (currentUserId) {
         rtcChannelStore.markUserJoinedRtc(currentUserId)
       }
-      
+
+      // 新模块：同步本地用户到 GroupCallStore
+      if (USE_NEW_GROUP_CALL) {
+        const groupCallStore = useGroupCallStore()
+        const local = groupCallStore.participants.get(currentUserId || '')
+        if (local) {
+          groupCallStore.setParticipantState(currentUserId, 'joinedRtc')
+          groupCallStore.setLocalStream(currentUserId, rtcChannelStore.localStream)
+          logger.info('[useJoinChannel] 新模块：本地用户已标记为 joinedRtc')
+        }
+      }
+
       // 🔑 关键修复：被叫方场景下，将主叫方加入 pending 列表
       // 这样当主叫方加入RTC时，RtcService 的 user-joined 事件能正确将 uid 映射到 callerUserId
       if (callState.callerUserId && callState.callerUserId !== currentUserId) {

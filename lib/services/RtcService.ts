@@ -53,6 +53,7 @@ export class RtcService {
   private isAudioEnabled: boolean = true
   private isVideoEnabled: boolean = true
   private chatClient: any = null // 环信客户端实例
+  private autoSubscribe: boolean = true // 是否自动订阅远程用户
   
   // 回调函数
   private onNetworkQualityChange?: (quality: any) => void
@@ -101,6 +102,14 @@ export class RtcService {
   setAppId(appId: string): void {
     this.appId = appId
     logger.debug('RtcService: appId 已更新为', appId)
+  }
+
+  /**
+   * 设置是否自动订阅远程用户
+   */
+  setAutoSubscribe(enabled: boolean): void {
+    this.autoSubscribe = enabled
+    logger.debug('RtcService: 自动订阅已', enabled ? '开启' : '关闭')
   }
 
   /**
@@ -396,9 +405,12 @@ export class RtcService {
 
   /**
    * 订阅远程用户
+   * 支持传入 IAgoraRTCRemoteUser 对象或 uid（number/string）
+   * 当传入 uid 时，SDK 内部会通过 remoteUsers 查找对应的 RemoteUser 实例，
+   * 避免事件回调中的 user 对象与 SDK 内部实例引用不一致导致 INVALID_REMOTE_USER
    */
   async subscribeRemoteUser(
-    user: IAgoraRTCRemoteUser,
+    userOrUid: IAgoraRTCRemoteUser | number | string,
     mediaType: 'audio' | 'video'
   ): Promise<void> {
     if (!this.client) {
@@ -406,16 +418,20 @@ export class RtcService {
     }
 
     try {
-      await this.client.subscribe(user, mediaType)
+      await this.client.subscribe(userOrUid as any, mediaType)
       
-      if (mediaType === 'video' && user.videoTrack) {
-        this.remoteVideoTracks.set(user.uid.toString(), user.videoTrack)
-      } else if (mediaType === 'audio' && user.audioTrack) {
-        this.remoteAudioTracks.set(user.uid.toString(), user.audioTrack)
-        user.audioTrack.play()
+      // 订阅成功后，从 remoteUsers 中获取最新的 RemoteUser 对象以读取 track
+      const uid = typeof userOrUid === 'object' ? userOrUid.uid : userOrUid
+      const remoteUser = this.client.remoteUsers.find(u => u.uid === uid || u.uid.toString() === uid.toString())
+      
+      if (mediaType === 'video' && remoteUser?.videoTrack) {
+        this.remoteVideoTracks.set(remoteUser.uid.toString(), remoteUser.videoTrack)
+      } else if (mediaType === 'audio' && remoteUser?.audioTrack) {
+        this.remoteAudioTracks.set(remoteUser.uid.toString(), remoteUser.audioTrack)
+        remoteUser.audioTrack.play()
       }
       
-      logger.info('Subscribed to remote user:', { uid: user.uid, mediaType })
+      logger.info('Subscribed to remote user:', { uid, mediaType })
     } catch (error) {
       logger.error('Failed to subscribe remote user:', error)
       throw error
@@ -636,12 +652,14 @@ export class RtcService {
         }
       }
       
-      // 自动订阅远程用户
-      try {
-        await this.subscribeRemoteUser(user, mediaType)
-        logger.info('自动订阅远程用户成功:', { uid: user.uid, userId, mediaType })
-      } catch (error) {
-        logger.error('自动订阅远程用户失败:', error)
+      // 自动订阅远程用户（可被上层关闭，由上层统一处理订阅逻辑）
+      if (this.autoSubscribe) {
+        try {
+          await this.subscribeRemoteUser(user, mediaType)
+          logger.info('自动订阅远程用户成功:', { uid: user.uid, userId, mediaType })
+        } catch (error) {
+          logger.error('自动订阅远程用户失败:', error)
+        }
       }
       
       // 触发回调

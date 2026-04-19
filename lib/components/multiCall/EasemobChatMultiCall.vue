@@ -1,5 +1,17 @@
 <template>
-  <div v-if="isVisible">
+  <GroupCallShell
+    v-if="isVisible && USE_NEW_GROUP_CALL"
+    ref="groupCallShellRef"
+    :group-id="groupId || callStateStore.getCallState.groupId || ''"
+    :group-name="groupName || callStateStore.getCallState.groupName"
+    :current-user-id="props.currentUserId || chatClientStore.getChatClient?.user || ''"
+    :current-nickname="callStateStore.getUserInfo(chatClientStore.getChatClient?.user)?.nickname"
+    :current-avatar-url="callStateStore.getUserInfo(chatClientStore.getChatClient?.user)?.avatarURL"
+    :rtc-service="rtcChannelStore.rtcService"
+    @hangup="endCall"
+    @add-participant="handleAddParticipant"
+  />
+  <div v-else-if="isVisible">
     <!-- 大窗口模式 -->
     <div 
       v-if="!isMinimized"
@@ -153,10 +165,13 @@
 import { ref, computed, onMounted, onUnmounted, nextTick, watch, type CSSProperties } from 'vue'
 import { useCallStateStore } from '../../store/callState'
 import { useRtcChannelStore } from '../../store/rtcChannel'
+import { useChatClientStore } from '../../store/chatClient'
 import { CallService } from '../../services/CallService'
 import { HANGUP_REASON, CALL_STATUS, CALL_TYPE } from '../../types/callstate.types'
 import { logger } from '../../utils/logger'
 import { DEFAULT_BACKGROUND_IMAGE, ICONS, getAssetUrl } from '../../config/assets'
+import { USE_NEW_GROUP_CALL } from '../../config/featureFlags'
+import { GroupCallShell } from '../../modules/groupCall'
 import EasemobChatMiniWindow from '../../components/EasemobChatMiniWindow.vue'
 import EasemobChatGroupMemberList from './EasemobChatGroupMemberList.vue'
 import { useSignalManager } from '../../composables/useSignalManager'
@@ -218,9 +233,15 @@ const emit = defineEmits<{
 
 const callStateStore = useCallStateStore()
 const rtcChannelStore = useRtcChannelStore()
+const chatClientStore = useChatClientStore()
 
-// 🔑 关键优化：内部自动管理 participants
-const { participants: internalParticipants } = useParticipants(props.currentUserId)
+// 新模块引用
+const groupCallShellRef = ref<InstanceType<typeof GroupCallShell> | null>(null)
+
+// 🔑 关键优化：内部自动管理 participants（新架构下直接短路，避免后台计算和日志噪音）
+const internalParticipants = USE_NEW_GROUP_CALL
+  ? computed(() => [])
+  : useParticipants(props.currentUserId).participants
 
 // 最终使用的 participants（优先使用外部传入的，否则使用内部管理的）
 const participants = computed(() => props.participants ?? internalParticipants.value)
@@ -531,6 +552,7 @@ let renderTimer: ReturnType<typeof setTimeout> | null = null
 
 // 渲染视频流到video元素
 const renderVideoStreams = () => {
+  if (USE_NEW_GROUP_CALL) return // 新模块使用自己的渲染机制
   if (!videoRefs.value || videoRefs.value.size === 0) {
     logger.warn('无video元素可渲染')
     return
@@ -638,10 +660,11 @@ const renderVideoStreams = () => {
 
 // 防抖渲染函数
 const scheduleRender = (delay: number = 100) => {
+  if (USE_NEW_GROUP_CALL) return // 新模块使用自己的渲染机制
   if (renderTimer) {
     clearTimeout(renderTimer)
   }
-  
+
   renderTimer = setTimeout(() => {
     renderVideoStreams()
     renderTimer = null
@@ -867,57 +890,80 @@ const updateContainerSize = () => {
   }
 }
 
-// 监听参与者列表变化，自动渲染视频流
-watch(() => participants.value, (newParticipants) => {
-  // 🔑 关键修复：如果当前选中的主视频用户已不在参与者列表中，切换回本地视频
-  if (selectedVideoId.value) {
-    const stillExists = newParticipants.some(p => p.userId === selectedVideoId.value)
-    if (!stillExists) {
-      logger.info('选中的主视频用户已不在参与者列表中，自动切换回本地视频:', selectedVideoId.value)
-      selectedVideoId.value = null
+// 以下 watch 均为旧架构 UI 渲染逻辑，新架构下 GroupCallShell 自行管理，全部短路
+if (!USE_NEW_GROUP_CALL) {
+  // 监听参与者列表变化，自动渲染视频流
+  watch(() => participants.value, (newParticipants) => {
+    // 🔑 关键修复：如果当前选中的主视频用户已不在参与者列表中，切换回本地视频
+    if (selectedVideoId.value) {
+      const stillExists = newParticipants.some(p => p.userId === selectedVideoId.value)
+      if (!stillExists) {
+        logger.info('选中的主视频用户已不在参与者列表中，自动切换回本地视频:', selectedVideoId.value)
+        selectedVideoId.value = null
+      }
     }
-  }
-  
-  // 清空并重新收集 videoRefs
-  videoRefs.value = new Map()
-  
-  nextTick(() => {
-    scheduleRender(300)
-  })
-}, { deep: true })
-
-// 监听store中的本地视频流变化
-watch(() => rtcChannelStore.localStream, (newStream) => {
-  if (newStream) {
-    logger.info('本地视频流变化，重新渲染')
-    nextTick(() => {
-      scheduleRender(200)
-    })
-  }
-})
-
-// 监听小窗模式状态变化，恢复大窗时重新渲染视频流
-watch(isMinimized, (minimized) => {
-  if (!minimized) {
-    logger.info('小窗模式恢复到大窗，重新渲染视频流')
-    // 清空videoRefs，避免引用旧元素
+    
+    // 清空并重新收集 videoRefs
     videoRefs.value = new Map()
+    
     nextTick(() => {
-      // 延迟渲染，确保DOM已完全恢复
       scheduleRender(300)
     })
-  }
-})
+  }, { deep: true })
 
-// 监听已加入RTC的用户列表变化，当有新用户加入时重新渲染
-watch(() => rtcChannelStore.joinedRtcUsers, (newJoinedUsers) => {
-  logger.info('已加入RTC用户列表变化:', Array.from(newJoinedUsers))
-  nextTick(() => {
-    scheduleRender(300)
+  // 监听store中的本地视频流变化
+  watch(() => rtcChannelStore.localStream, (newStream) => {
+    if (newStream) {
+      logger.info('本地视频流变化，重新渲染')
+      nextTick(() => {
+        scheduleRender(200)
+      })
+    }
   })
-}, { deep: true })
+
+  // 监听小窗模式状态变化，恢复大窗时重新渲染视频流
+  watch(isMinimized, (minimized) => {
+    if (!minimized) {
+      logger.info('小窗模式恢复到大窗，重新渲染视频流')
+      // 清空videoRefs，避免引用旧元素
+      videoRefs.value = new Map()
+      nextTick(() => {
+        // 延迟渲染，确保DOM已完全恢复
+        scheduleRender(300)
+      })
+    }
+  })
+
+  // 监听已加入RTC的用户列表变化，当有新用户加入时重新渲染
+  watch(() => rtcChannelStore.joinedRtcUsers, (newJoinedUsers) => {
+    logger.info('已加入RTC用户列表变化:', Array.from(newJoinedUsers))
+    nextTick(() => {
+      scheduleRender(300)
+    })
+  }, { deep: true })
+}
 
 onMounted(async () => {
+  // 新模块初始化路径：只要启用了新架构，绝不进入旧逻辑（避免重复绑定事件和轮询）
+  if (USE_NEW_GROUP_CALL) {
+    // 如果 GroupCallShell 已渲染则直接初始化，否则等 nextTick 重试
+    const initShell = () => {
+      if (groupCallShellRef.value) {
+        const callType = callStateStore.getCallState.type === CALL_TYPE.AUDIO_MULTI ? 'audio' : 'video'
+        groupCallShellRef.value.startSession({
+          sessionId: callStateStore.getCallState.channel || '',
+          callType,
+        })
+      }
+    }
+    initShell()
+    if (!groupCallShellRef.value) {
+      nextTick(initShell)
+    }
+    window.addEventListener('resize', updateContainerSize)
+    return
+  }
+
   startCall()
   updateContainerSize()
   
@@ -1087,6 +1133,19 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('resize', updateContainerSize)
+
+  if (USE_NEW_GROUP_CALL) {
+    // 新模块路径：只清理旧组件自身的定时器，不碰 RTC（由 GroupCallShell 管理）
+    clearAllInvitationTimers()
+    if (renderTimer) {
+      clearTimeout(renderTimer)
+      renderTimer = null
+    }
+    stopRemoteUserCheck()
+    return
+  }
+
   // 🔑 关键修复：确保始终清理RTC资源，即使通话状态为IDLE
   const rtcService = rtcChannelStore.rtcService
   if (rtcService) {
@@ -1098,21 +1157,19 @@ onUnmounted(() => {
       logger.warn('EasemobChatMultiCall: 离开频道时出错:', error)
     }
   }
-  
+
   // 尝试发送挂断信令（如果通话仍在进行）
   endCall()
-  
-  window.removeEventListener('resize', updateContainerSize)
-  
+
   // 清理所有邀请定时器
   clearAllInvitationTimers()
-  
+
   // 清理渲染定时器
   if (renderTimer) {
     clearTimeout(renderTimer)
     renderTimer = null
   }
-  
+
   // 停止远程用户检查轮询
   stopRemoteUserCheck()
 })

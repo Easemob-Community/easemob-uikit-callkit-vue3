@@ -3,6 +3,8 @@ import { useChatClientStore } from "../store/chatClient";
 import { useSignalManager } from "./useSignalManager";
 import { logger } from "../utils/logger";
 import { CALL_STATUS, CALLKIT_CMD_MSG_RESULT_TYPE } from "../types/callstate.types";
+import { USE_NEW_GROUP_CALL } from "../config/featureFlags";
+import { useGroupCallStore } from "../modules/groupCall";
 
 export interface UseAnswerCallReturn {
   // 接受通话
@@ -66,9 +68,14 @@ export function useAnswerCall(): UseAnswerCallReturn {
       // 更新状态为ANSWER_CALL
       callStateStore.setCallStatus(CALL_STATUS.ANSWER_CALL);
 
-      // TODO: 这里需要加入 RTC 频道的逻辑
-      // 由于你提到 RTC 部分先不管，这里预留接口
-      // 实际应该调用类似: rtcService.joinChannel(callState.channel)
+      // 新模块：标记本地用户为已接受（等待 confirmCallee 后 joinChannel）
+      if (USE_NEW_GROUP_CALL) {
+        const groupCallStore = useGroupCallStore()
+        const currentUserId = chatClientStore.getChatClient?.user
+        if (currentUserId && groupCallStore.participants.has(currentUserId)) {
+          groupCallStore.markAccepted(currentUserId)
+        }
+      }
     } catch (error) {
       logger.error("useAnswerCall: 接受通话失败:", error);
       // 兜底：发送信令失败时（如被拉黑 blocked）也要重置状态，避免弹窗卡住
