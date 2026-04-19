@@ -8,7 +8,7 @@
     "dev:source": "vite --config vite.config.source.ts",
     "dev:tgz": "vite --config vite.config.tgz.ts",
     "switch:source": "node scripts/switch-mode.mjs source && pnpm install",
-    "switch:tgz": "node scripts/switch-mode.mjs tgz && pnpm install",
+    "switch:tgz": "node scripts/switch-mode.mjs tgz && pnpm add file:../release/easemob-chat-callkit-vue3-1.0.0.tgz",
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview"
   },

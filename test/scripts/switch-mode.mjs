@@ -36,21 +36,41 @@ if (mode === 'source') {
     console.log('✓ Already in SOURCE mode')
   }
 } else if (mode === 'tgz') {
+  const tgzPath = path.resolve(__dirname, '../../release/easemob-chat-callkit-vue3-1.0.0.tgz')
+  if (!fs.existsSync(tgzPath)) {
+    console.error('✗ Error: tgz file not found at ' + tgzPath)
+    console.error('  Please run "pnpm run build:pack" in the project root first')
+    process.exit(1)
+  }
+
   if (!hasTgzDep) {
-    // 检查 tgz 文件是否存在
-    const tgzPath = path.resolve(__dirname, '../../easemob-chat-callkit-vue3-1.0.0.tgz')
-    if (!fs.existsSync(tgzPath)) {
-      console.error('✗ Error: tgz file not found at ' + tgzPath)
-      console.error('  Please run "pnpm run build:pack" in the project root first')
-      process.exit(1)
-    }
-    
     pkg.dependencies = pkg.dependencies || {}
-    pkg.dependencies['easemob-chat-callkit-vue3'] = 'file:../easemob-chat-callkit-vue3-1.0.0.tgz'
+    pkg.dependencies['easemob-chat-callkit-vue3'] = 'file:../release/easemob-chat-callkit-vue3-1.0.0.tgz'
     fs.writeFileSync(packageJsonPath, JSON.stringify(pkg, null, 2) + '\n')
     console.log('✓ Switched to TGZ mode (using .tgz package)')
-    console.log('  Run "pnpm install" to install the tgz package')
   } else {
     console.log('✓ Already in TGZ mode')
   }
+
+  // 强制删除 pnpm 缓存的旧 tgz 包，确保后续安装重新读取最新文件
+  const nodeModulesPath = path.resolve(__dirname, '../node_modules')
+  const pnpmStorePath = path.join(nodeModulesPath, '.pnpm')
+  if (fs.existsSync(pnpmStorePath)) {
+    const callkitStorePaths = fs.readdirSync(pnpmStorePath)
+      .filter(name => name.startsWith('easemob-chat-callkit-vue3@'))
+      .map(name => path.join(pnpmStorePath, name))
+
+    for (const p of callkitStorePaths) {
+      fs.rmSync(p, { recursive: true, force: true })
+      console.log('  Cleared old package cache: ' + path.basename(p))
+    }
+  }
+
+  const callkitDepPath = path.join(nodeModulesPath, 'easemob-chat-callkit-vue3')
+  if (fs.existsSync(callkitDepPath)) {
+    fs.rmSync(callkitDepPath, { recursive: true, force: true })
+    console.log('  Cleared old node_modules/easemob-chat-callkit-vue3')
+  }
+
+  console.log('  Run "pnpm add file:../release/easemob-chat-callkit-vue3-1.0.0.tgz" to install the latest tgz package')
 }
