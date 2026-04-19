@@ -960,6 +960,16 @@ onMounted(async () => {
     if (!groupCallShellRef.value) {
       nextTick(initShell)
     }
+    // 被邀请方：GroupCallShell 可能因 v-if 延迟渲染，监听 ref 变化自动补初始化
+    watch(
+      groupCallShellRef,
+      (shell, prevShell) => {
+        if (shell && !prevShell) {
+          initShell()
+        }
+      },
+      { immediate: false }
+    )
     window.addEventListener('resize', updateContainerSize)
     return
   }

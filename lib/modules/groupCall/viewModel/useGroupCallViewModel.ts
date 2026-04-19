@@ -88,27 +88,37 @@ export function useGroupCallViewModel(): UseGroupCallViewModelReturn {
     localNickname: string
     localAvatarUrl?: string
   }) {
-    store.initSession({
-      sessionId: payload.sessionId,
-      groupId: payload.groupId,
-      callType: payload.callType,
-      isActive: true,
-      startTime: Date.now(),
-    })
+    const existingSession = store.session
+    if (!existingSession || existingSession.sessionId !== payload.sessionId) {
+      // 全新会话：清空并初始化
+      store.initSession({
+        sessionId: payload.sessionId,
+        groupId: payload.groupId,
+        callType: payload.callType,
+        isActive: true,
+        startTime: Date.now(),
+      })
+    } else {
+      // 被邀请方：store 已在收到 invite 时初始化，保留远程参与者，只更新会话元数据
+      store.session = { ...existingSession, isActive: true, startTime: Date.now() }
+    }
 
-    store.addParticipant({
-      userId: payload.localUserId,
-      nickname: payload.localNickname,
-      avatarUrl: payload.localAvatarUrl,
-      state: 'joinedRtc',
-      isLocal: true,
-      videoTrack: null,
-      audioTrack: null,
-      localStream: null,
-      isMuted: false,
-      isCameraOn: payload.callType === 'video',
-      isSpeaking: false,
-    })
+    // 确保本地用户存在（主叫/被叫都需要）
+    if (!store.participants.has(payload.localUserId)) {
+      store.addParticipant({
+        userId: payload.localUserId,
+        nickname: payload.localNickname,
+        avatarUrl: payload.localAvatarUrl,
+        state: 'joinedRtc',
+        isLocal: true,
+        videoTrack: null,
+        audioTrack: null,
+        localStream: null,
+        isMuted: false,
+        isCameraOn: payload.callType === 'video',
+        isSpeaking: false,
+      })
+    }
 
     startDurationTimer()
     logger.info('[useGroupCallViewModel] 会话启动', payload.sessionId)
