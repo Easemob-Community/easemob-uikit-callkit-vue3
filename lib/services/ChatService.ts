@@ -36,7 +36,7 @@ export class ChatService {
       ts: Date.now(),
       msgType: "rtcCallWithAgora",
       // 群组通话时携带被邀请成员列表，方便被叫方维护邀请列表
-      invitedMembers: callState.invitedMembers?.length > 0 ? callState.invitedMembers : undefined,
+      invitedMembers: (callState.invitedMembers?.length ?? 0) > 0 ? callState.invitedMembers : undefined,
       em_push_ext: {
         type: "call",
         custom: {

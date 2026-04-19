@@ -16,7 +16,7 @@
           @cancel="handleCancelCall"/>
 
         <!-- 通话中状态子组件 -->
-        <EasemobChatCallStream v-else :type="props.type" @ended="handleEndCall" />
+        <EasemobChatCallStream v-else :type="props.type || 'video'" @ended="handleEndCall" />
       </div>
       
       <!-- 最小化按钮 -->

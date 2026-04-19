@@ -216,14 +216,9 @@ const handleSingleCallEnd = () => {
   currentCallInfo.value = ''
 }
 
-const handleMultiCallStart = () => {
-  console.log('群组通话开始')
-}
-
-const handleMultiCallEnd = () => {
-  console.log('群组通话结束')
-  currentCallInfo.value = ''
-}
+// 群组通话回调（如需监听可在此添加）
+// const handleMultiCallStart = () => { console.log('群组通话开始') }
+// const handleMultiCallEnd = () => { currentCallInfo.value = '' }
 
 // 登录处理函数
 const handleLogin = () => {
@@ -266,7 +261,7 @@ const handleEndCall = () => {
       currentCallInfo.value = ''
       alert('通话已结束')
     })
-    .catch((error) => {
+    .catch((error: any) => {
       console.error('结束通话失败:', error)
       alert('结束通话失败')
     })

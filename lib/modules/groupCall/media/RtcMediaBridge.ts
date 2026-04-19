@@ -70,8 +70,9 @@ export class RtcMediaBridge {
 
     // 2. 兜底：尝试 API
     if (!userId) {
-      userId = await this.fetchUserIdByUid(uid)
-      if (userId) {
+      const fetched = await this.fetchUserIdByUid(uid)
+      if (fetched) {
+        userId = fetched
         this.store.setUidMapping(uid, userId)
       }
     }
@@ -141,8 +142,9 @@ export class RtcMediaBridge {
 
     // 兜底：尝试 API（可能 publish 比 joined 先到）
     if (!userId) {
-      userId = await this.fetchUserIdByUid(uidStr)
-      if (userId) {
+      const fetched = await this.fetchUserIdByUid(uidStr)
+      if (fetched) {
+        userId = fetched
         this.store.setUidMapping(uidStr, userId)
       }
     }

@@ -1,180 +1,232 @@
-# Easemob Chat CallKit Vue3 插件
+# Easemob Chat CallKit Vue3
 
-这是一个 Vue3 插件项目，用于集成环信聊天和音视频通话功能。
+基于 Vue 3 + Pinia + 环信 IM SDK + 声网 RTC SDK 的音视频通话 UI 组件库。
 
-## 项目结构
+支持 **单人通话（1v1）** 和 **群组通话（多人）**，提供完整的呼叫、接听、挂断、音视频控制等能力。
 
-```
-easemob-chat-callkit-vue3/
-├── lib/                          # 插件源码目录
-│   ├── components/               # 组件
-│   ├── composables/              # 组合式函数
-│   ├── core/                     # 核心逻辑
-│   ├── services/                 # 服务层
-│   ├── store/                    # Pinia Store
-│   ├── types/                    # 类型定义
-│   ├── utils/                    # 工具函数
-│   ├── index.ts                  # 插件入口
-│   └── style.css                 # 插件样式
-├── test/                         # 测试 Demo 目录
-│   ├── src/                      # 测试页面源码
-│   ├── scripts/                  # 辅助脚本
-│   │   └── switch-mode.mjs       # 模式切换脚本
-│   ├── vite.config.source.ts     # 源码模式配置
-│   ├── vite.config.tgz.ts        # tgz 包模式配置
-│   └── package.json
-├── release/                      # 构建产物目录
-│   └── dist/                     # 库构建输出
-├── vite.config.ts                # 开发环境配置
-├── vite.lib.config.ts            # 库构建配置
-└── package.json
-```
+---
 
-## 快速开始
+## 📦 两种集成方式
 
-### 1. 安装依赖
+本库提供两种引入方式，根据你的场景选择：
+
+| 方式 | 适用场景 | 优点 | 缺点 |
+|------|---------|------|------|
+| **方式一：npm / tgz 包引入** | 生产环境、常规项目 | 与源码解耦，构建产物稳定 | 修改源码需重新打包 |
+| **方式二：源码 / Vite Alias 引入** | 开发调试、需修改源码 | 实时热更新，修改立即生效 | 仅限 Vite 项目 |
+
+---
+
+## 方式一：npm / tgz 包引入（生产推荐）
+
+### 1. 安装
 
 ```bash
-# 在项目根目录安装依赖
-pnpm install
+# 安装核心依赖
+pnpm add easemob-websdk agora-rtc-sdk-ng pinia
 
-# 注意：不需要手动进入 test 目录安装依赖
-# 启动脚本会自动处理 test 目录的依赖
+# 方式 1a：从 npm 仓库安装（发布到 npm 后）
+pnpm add easemob-chat-callkit-vue3
+
+# 方式 1b：从本地 tgz 文件安装（私有部署或未发布时）
+pnpm add ./easemob-chat-callkit-vue3-1.0.0.tgz
 ```
 
-### 2. 启动测试环境
+### 2. 全局注册 Pinia
 
-本项目提供两种验证模式，**两种模式互不干扰**，会自动切换依赖配置：
-
-#### 模式一：源码模式（推荐开发时使用）
-
-直接引用 `lib/` 目录下的源代码，修改代码后实时生效，适合开发调试。
-
-```bash
-# 在项目根目录执行
-pnpm run test
-
-# 或
-pnpm run test:source
-```
-
-> 💡 **自动切换机制**：执行此命令时会自动将 `test/package.json` 切换到源码模式（移除 tgz 依赖），确保加载的是 `lib/` 目录下的源代码。
-
-#### 模式二：tgz 包模式（推荐发布前验证）
-
-使用打包后的 `.tgz` 文件作为依赖，模拟真实用户使用场景，验证构建产物是否正确。
-
-```bash
-# 在项目根目录执行（会自动构建 tgz 包并启动）
-pnpm run test:tgz
-```
-
-> 💡 **自动构建机制**：执行此命令时会先构建最新的 tgz 包，然后自动将 `test/package.json` 切换到 tgz 模式，确保加载的是打包后的产物。
-
-### 3. 访问测试页面
-
-启动后会显示访问地址，默认是：
-- 本地：`http://localhost:5173`
-- 网络：`http://localhost:5173`
-
-## 开发指南
-
-### 在 test 目录内切换模式（手动切换）
-
-如果你已经在 `test` 目录中，也可以手动切换验证模式：
-
-```bash
-cd test
-
-# 切换到源码模式（移除 tgz 依赖，安装源码依赖）
-pnpm run switch:source
-
-# 切换到 tgz 包模式（添加 tgz 依赖并安装）
-# 注意：需先在根目录执行 pnpm run build:pack 生成 tgz 包
-pnpm run switch:tgz
-
-# 启动开发服务器
-pnpm run dev:source   # 源码模式
-pnpm run dev:tgz      # tgz 包模式
-```
-
-> ⚠️ **注意**：`test/package.json` 中的依赖配置会在切换时被修改，请勿将此文件提交到版本控制（已配置在 `.gitignore` 中）。
-
-### 构建插件
-
-```bash
-# 构建库文件（输出到 release/dist/，每次构建会自动清空目录）
-pnpm run build:lib
-
-# 构建并打包为 tgz 文件（输出到 release/ 目录）
-pnpm run build:pack
-```
-
-## 可用脚本
-
-### 根目录脚本
-
-| 命令 | 说明 |
-|------|------|
-| `pnpm run dev` | 启动根目录开发服务器（一般不用） |
-| `pnpm run test` | 启动测试环境（源码模式） |
-| `pnpm run test:source` | 启动源码验证模式 |
-| `pnpm run test:tgz` | 构建 tgz 包并启动 tgz 验证模式 |
-| `pnpm run build:lib` | 构建库文件到 `release/dist/` |
-| `pnpm run build:pack` | 构建并打包为 tgz 文件 |
-
-### test 目录脚本
-
-| 命令 | 说明 |
-|------|------|
-| `pnpm run dev` | 启动当前模式的开发服务器 |
-| `pnpm run dev:source` | 以源码模式启动 |
-| `pnpm run dev:tgz` | 以 tgz 包模式启动 |
-| `pnpm run switch:source` | 切换到源码模式并安装依赖 |
-| `pnpm run switch:tgz` | 切换到 tgz 模式并安装依赖 |
-
-## 使用示例
-
-### 安装插件
+CallKit 依赖 Pinia 进行状态管理，需在你的 `main.ts` 中注册：
 
 ```typescript
 import { createApp } from 'vue'
-import EasemobChatCallKit from 'easemob-chat-callkit-vue3'
+import { createPinia } from 'pinia'
+import App from './App.vue'
 import 'easemob-chat-callkit-vue3/style.css'
 
 const app = createApp(App)
-
-app.use(EasemobChatCallKit, {
-  appKey: 'your-app-key',
-  userId: 'user-id',
-  accessToken: 'access-token',
-  debug: false
-})
-
+app.use(createPinia())
 app.mount('#app')
 ```
 
-### 在组件中使用
+> ⚠️ **注意**：`easemob-chat-callkit-vue3` 不提供 Vue 插件 `install` 方式。你需要手动 import 组件和 composables，在模板中使用。
+
+### 3. 使用组件
+
+在根组件（如 `App.vue`）中：
+
+```vue
+<template>
+  <EasemobChatCallKitProvider :chat-client="chatClient" :init-config="{ debug: false }">
+    <router-view />
+    <!-- 通话邀请通知弹窗 -->
+    <InvitationNotification />
+    <!-- 单人通话组件（自动显示/隐藏） -->
+    <EasemobChatSingleCall />
+    <!-- 群组通话组件（autoShow 默认开启） -->
+    <EasemobChatMultiCall :group-id="groupId" />
+  </EasemobChatCallKitProvider>
+</template>
+
+<script setup>
+import {
+  EasemobChatCallKitProvider,
+  InvitationNotification,
+  EasemobChatSingleCall,
+  EasemobChatMultiCall,
+} from 'easemob-chat-callkit-vue3'
+
+// chatClient 是你通过 easemob-websdk 创建的 Connection 实例
+const chatClient = /* ... */
+const groupId = /* ... */
+</script>
+```
+
+---
+
+## 方式二：源码 / Vite Alias 引入（开发调试）
+
+适用于**开发期间需要修改 CallKit 源码**的场景。通过 Vite 的 `resolve.alias` 将包名直接映射到源码目录，实现修改即生效。
+
+### 1. 在你的项目中配置 Vite Alias
+
+```typescript
+// vite.config.ts
+import { defineConfig } from 'vite'
+import path from 'path'
+
+export default defineConfig({
+  resolve: {
+    alias: {
+      'easemob-chat-callkit-vue3': path.resolve(
+        __dirname,
+        '../easemob-chat-callkit-vue3/lib/index.ts'
+      ),
+      'easemob-chat-callkit-vue3/style.css': path.resolve(
+        __dirname,
+        '../easemob-chat-callkit-vue3/lib/style.css'
+      ),
+    },
+  },
+})
+```
+
+### 2. 安装依赖（不需要安装 callkit 包）
+
+```bash
+pnpm add easemob-websdk agora-rtc-sdk-ng pinia
+```
+
+### 3. 使用方式与方式一完全相同
+
+import 路径不变，Vite 会自动通过 alias 解析到源码：
+
+```typescript
+import { useCallKit } from 'easemob-chat-callkit-vue3'
+import 'easemob-chat-callkit-vue3/style.css'
+```
+
+---
+
+## 🚀 快速开始（完整示例）
 
 ```vue
 <template>
   <div>
-    <EasemobChatCallKit />
+    <input v-model="targetUserId" placeholder="目标用户ID" />
+    <button @click="startCall('audio')">语音通话</button>
+    <button @click="startCall('video')">视频通话</button>
+    <button @click="handleEndCall">结束通话</button>
   </div>
+
+  <EasemobChatCallKitProvider :chat-client="chatClient">
+    <InvitationNotification />
+    <EasemobChatSingleCall />
+  </EasemobChatCallKitProvider>
 </template>
+
+<script setup>
+import { ref } from 'vue'
+import {
+  EasemobChatCallKitProvider,
+  InvitationNotification,
+  EasemobChatSingleCall,
+  useCallKit,
+  useEndCall,
+} from 'easemob-chat-callkit-vue3'
+
+const targetUserId = ref('')
+const chatClient = /* 你的环信 IM 实例 */
+
+const { startSingleCall } = useCallKit()
+const { hangup } = useEndCall()
+
+const startCall = async (type) => {
+  await startSingleCall(targetUserId.value, type)
+}
+
+const handleEndCall = async () => {
+  await hangup()
+}
+</script>
 ```
 
-## 发布流程
+---
 
-1. **开发调试**：使用 `pnpm run test:source` 进行开发
-2. **构建验证**：执行 `pnpm run test:tgz` 验证构建产物
-3. **打包发布**：执行 `pnpm run build:pack` 生成 tgz 文件
+## 🛠️ 开发 & 测试
+
+### 项目结构
+
+```
+easemob-chat-callkit-vue3/
+├── lib/                    # 插件源码（用户导入的入口）
+│   ├── components/         # Vue 组件
+│   ├── composables/        # 组合式 API
+│   ├── services/           # 纯 JS 服务层
+│   ├── store/              # Pinia Store
+│   ├── signaling/          # 信令路由与处理器
+│   ├── modules/groupCall/  # 群组通话新模块
+│   └── index.ts            # 库入口
+├── test/                   # 测试 Demo（验证两种引入方式）
+│   ├── src/App.vue         # 演示页面
+│   ├── vite.config.source.ts  # 源码模式配置
+│   ├── vite.config.tgz.ts     # tgz 包模式配置
+│   └── scripts/switch-mode.mjs # 模式切换脚本
+├── release/                # 构建产物
+│   ├── dist/               # 库构建输出（ES + UMD + d.ts + CSS）
+│   └── *.tgz               # 打包后的 npm 包
+└── vite.lib.config.ts      # 库的 Vite 构建配置
+```
+
+### 可用脚本
+
+| 命令 | 说明 |
+|------|------|
+| `pnpm install` | 安装根目录依赖 |
+| `pnpm run test` | 启动测试 Demo（源码模式，实时热更新） |
+| `pnpm run test:source` | 同上 |
+| `pnpm run test:tgz` | 构建 tgz 包并以包模式启动测试 Demo |
+| `pnpm run build:lib` | 构建库到 `release/dist/` |
+| `pnpm run build:pack` | 构建并打包为 `release/*.tgz` |
+
+### 验证两种引入方式
+
+本项目在 `test/` 目录中同时论证了两种引入方式：
+
+- **源码模式**：`test/vite.config.source.ts` 通过 Vite alias 将 `easemob-chat-callkit-vue3` 映射到 `../lib/index.ts`
+- **tgz 包模式**：`test/vite.config.tgz.ts` 不配置 alias，让 Vite 从 `node_modules` 正常解析已安装的 tgz 包
+
+切换脚本 `test/scripts/switch-mode.mjs` 会自动修改 `test/package.json` 的依赖配置，配合 `pnpm install` 完成模式切换。
+
+---
+
+## 📦 发布流程
+
+1. **开发调试**：使用 `pnpm run test:source` 进行源码模式开发
+2. **构建验证**：执行 `pnpm run build:pack` 生成 tgz 包
+3. **产物验证**：执行 `pnpm run test:tgz` 验证 tgz 包能否正常工作
 4. **发布**：将 `release/easemob-chat-callkit-vue3-*.tgz` 上传到 npm 或私有仓库
 
-## 注意事项
+---
 
-1. **构建前会自动清空**：每次执行 `pnpm run build:lib` 或 `pnpm run build:pack` 时，会自动清空 `release/dist/` 目录，确保产物是最新的。
+## 📖 详细使用文档
 
-2. **tgz 模式需要先构建**：使用 `pnpm run test:tgz` 或 `pnpm run switch:tgz` 前，需要先在根目录执行 `pnpm run build:pack` 生成 tgz 文件。
-
-3. **切换模式后需要重新安装依赖**：切换验证模式后会自动执行 `pnpm install`，请耐心等待安装完成。
+参见 [`USAGE.md`](./USAGE.md) 了解完整的 API 参考、组件 Props、事件回调和进阶用法。

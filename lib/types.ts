@@ -52,13 +52,13 @@ export interface UseCallKitReturn {
   startSingleCall: (
     targetId: string,
     type: "audio" | "video",
-    msg: string
+    msg?: string
   ) => Promise<void>;
   startGroupCall: (
     groupId: string,
     members: string[],
     type: "audio" | "video",
-    msg: string,
+    msg?: string,
     groupName?: string,
     groupAvatar?: string
   ) => Promise<void>;

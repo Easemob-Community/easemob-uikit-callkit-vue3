@@ -90,7 +90,7 @@ export const useRtcChannelStore = defineStore('rtcChannel', {
           onUidToUserIdMapping: (uid, userId) => singleCallRtcStore.setUidToUserIdMapping(uid, userId),
           onUserJoinedRtc: (userId) => singleCallRtcStore.markUserJoinedRtc(userId),
           onUserLeftRtc: (userId) => singleCallRtcStore.markUserLeftRtc(userId),
-          popPendingUserId: () => singleCallRtcStore.popPendingUserId(),
+          popPendingUserId: () => singleCallRtcStore.popPendingUserId() || undefined,
         })
         await service.initialize()
         _rtcServiceInstance = service
