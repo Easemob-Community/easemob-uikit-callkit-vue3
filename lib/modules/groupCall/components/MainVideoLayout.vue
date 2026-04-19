@@ -2,7 +2,9 @@
   <div class="gcall-main-layout">
     <!-- 主视频 -->
     <div class="gcall-main-video" @click="handleMainClick">
-      <ParticipantTile :participant="mainParticipant" />
+      <div class="gcall-main-video-inner">
+        <ParticipantTile :participant="mainParticipant" />
+      </div>
       <button class="gcall-main-video-exit" title="返回九宫格" @click.stop="handleExit">
         <CallKitIcon name="chevron-4-cluster" :width="16" :height="16" color="#fff" />
       </button>
