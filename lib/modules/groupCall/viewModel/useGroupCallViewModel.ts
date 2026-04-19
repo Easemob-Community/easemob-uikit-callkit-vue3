@@ -1,4 +1,4 @@
-import { ref, computed, type ComputedRef, type Ref } from 'vue'
+import { ref, computed, watch, type ComputedRef, type Ref } from 'vue'
 import { useGroupCallStore } from './GroupCallStore'
 import { RtcMediaBridge } from '../media/RtcMediaBridge'
 import { GroupCallSignalingAdapter } from '../signaling/GroupCallSignalingAdapter'
@@ -30,6 +30,7 @@ export interface UseGroupCallViewModelReturn {
   unbindRtcService: () => void
 
   sendInvite: (userIds: string[], groupId: string, message: string) => Promise<void>
+  clearInvitationTimer: (userId: string) => void
   hangup: () => Promise<void>
 
   // 本地媒体控制
@@ -51,6 +52,36 @@ export function useGroupCallViewModel(): UseGroupCallViewModelReturn {
   const signaling = new GroupCallSignalingAdapter()
 
   let mediaBridge: RtcMediaBridge | null = null
+
+  /* ========== 邀请超时定时器 ========== */
+  const _invitationTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  const INVITE_TIMEOUT_MS = 30000
+
+  function clearInvitationTimer(userId: string) {
+    const timer = _invitationTimers.get(userId)
+    if (timer) {
+      clearTimeout(timer)
+      _invitationTimers.delete(userId)
+    }
+  }
+
+  function clearAllInvitationTimers() {
+    _invitationTimers.forEach(timer => clearTimeout(timer))
+    _invitationTimers.clear()
+  }
+
+  // 监听参与者状态：用户加入后清理对应定时器，防止误删
+  watch(
+    () => store.participantList.map(p => ({ userId: p.userId, state: p.state })),
+    (list) => {
+      list.forEach(p => {
+        if (p.state !== 'invited' && _invitationTimers.has(p.userId)) {
+          clearInvitationTimer(p.userId)
+        }
+      })
+    },
+    { deep: true }
+  )
 
   const isActive = computed(() => store.session?.isActive ?? false)
   const participants = computed(() => store.participantList)
@@ -168,9 +199,21 @@ export function useGroupCallViewModel(): UseGroupCallViewModelReturn {
     userIds.forEach(id => {
       addRemoteParticipant(id, id) // nickname 兜底，实际应由外部传入
     })
+    // 3. 设置邀请超时定时器（30s 未接听自动移出）
+    userIds.forEach(id => {
+      clearInvitationTimer(id)
+      const timer = setTimeout(() => {
+        logger.info('[useGroupCallViewModel] 邀请超时，移除参与者', id)
+        signaling.cancelInvitation(id, groupId)
+        store.removeParticipant(id)
+        _invitationTimers.delete(id)
+      }, INVITE_TIMEOUT_MS)
+      _invitationTimers.set(id, timer)
+    })
   }
 
   async function hangup() {
+    clearAllInvitationTimers()
     await signaling.hangup()
     unbindRtcService()
     store.destroySession()
@@ -217,6 +260,7 @@ export function useGroupCallViewModel(): UseGroupCallViewModelReturn {
     bindRtcService,
     unbindRtcService,
     sendInvite,
+    clearInvitationTimer,
     hangup,
     setLocalStream,
     setLocalMute,

@@ -1,9 +1,6 @@
 /* ========== 容器 ========== */
 .gcall-shell {
-  width: 800px;
-  height: 600px;
-  max-width: 90vw;
-  max-height: 90vh;
+  /* 尺寸与定位由 JS (useDraggable) 控制，此处仅保留视觉样式 */
   background: #171a1c;
   color: #f9fafa;
   display: flex;
@@ -11,8 +8,22 @@
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-  position: relative;
   user-select: none;
+}
+
+/* 拖拽状态 */
+.gcall-shell.is-dragging {
+  cursor: grabbing;
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.6);
+}
+
+.gcall-header {
+  cursor: grab;
+}
+
+.gcall-header:active,
+.gcall-shell.is-dragging .gcall-header {
+  cursor: grabbing;
 }
 
 /* ========== Header ========== */

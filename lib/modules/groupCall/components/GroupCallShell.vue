@@ -1,7 +1,7 @@
 <template>
-  <div class="gcall-shell">
-    <!-- Header -->
-    <div class="gcall-header" :class="{ hidden: isClearScreen }">
+  <div ref="shellRef" class="gcall-shell" :class="{ 'is-dragging': isDragging }" :style="shellStyle">
+    <!-- Header（拖拽触发区） -->
+    <div class="gcall-header" :class="{ hidden: isClearScreen }" @mousedown="startDrag">
       <div class="gcall-header-left">
         <span class="gcall-title">{{ groupName || '群组通话' }}</span>
         <span class="gcall-duration">{{ formattedDuration }}</span>
@@ -93,6 +93,7 @@ import CallKitIcon from './CallKitIcon.vue'
 import EasemobChatGroupMemberList from '../../../components/multiCall/EasemobChatGroupMemberList.vue'
 import { useGroupCallViewModel } from '../viewModel/useGroupCallViewModel'
 import { useRtcChannelStore } from '../../../store/rtcChannel'
+import { useDraggable } from '../../../composables/useDraggable'
 import type { RtcService } from '../../../services/RtcService'
 import { logger } from '../../../utils/logger'
 
@@ -115,6 +116,34 @@ const vm = useGroupCallViewModel()
 const rtcChannelStore = useRtcChannelStore()
 const showAddMember = ref(false)
 const isClearScreen = ref(false)
+
+/* ========== 拖拽 + 居中定位 ========== */
+const SHELL_WIDTH = 800
+const SHELL_HEIGHT = 600
+const {
+  elementRef: shellRef,
+  isDragging,
+  hasDragged,
+  style: draggableStyle,
+  startDrag,
+} = useDraggable({
+  centered: true,
+  width: SHELL_WIDTH,
+  height: SHELL_HEIGHT,
+  boundary: true,
+  boundaryPadding: 10,
+})
+
+const shellStyle = computed(() => {
+  return {
+    ...(draggableStyle.value as Record<string, any>),
+    width: `${SHELL_WIDTH}px`,
+    height: `${SHELL_HEIGHT}px`,
+    maxWidth: '90vw',
+    maxHeight: '90vh',
+    zIndex: 1000,
+  }
+})
 
 const participants = computed(() => vm.participants.value)
 const localParticipant = computed(() => vm.localParticipant.value)

@@ -78,10 +78,18 @@ export class GroupCallSignalingAdapter {
 
   /**
    * 取消邀请（邀请超时或主动取消）
+   * 复用 useSignalManager.sendCancelMessage
    */
-  async cancelInvitation(userId: string): Promise<void> {
-    // 现有 CallService 内部应该有 cancel 逻辑
-    // 这里通过 callService 的 cancel 或 signalManager 发送
-    logger.info('[GroupCallSignalingAdapter] 取消邀请', userId)
+  async cancelInvitation(userId: string, groupId?: string): Promise<void> {
+    try {
+      await this.signalManager.sendCancelMessage(
+        groupId || this.callStateStore.getCallState.groupId || '',
+        'groupChat',
+        [userId]
+      )
+      logger.info('[GroupCallSignalingAdapter] 取消邀请信令已发送', userId)
+    } catch (error) {
+      logger.error('[GroupCallSignalingAdapter] 取消邀请失败', error)
+    }
   }
 }
