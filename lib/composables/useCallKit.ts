@@ -5,7 +5,6 @@ import { CALL_STATUS, CALL_TYPE } from "../types/callstate.types";
 import { logger } from "../utils/logger";
 import { useSignalManager } from "./useSignalManager";
 import { useJoinChannel } from "./useJoinChannel";
-import { USE_NEW_GROUP_CALL } from "../config/featureFlags";
 import { useGroupCallStore } from "../modules/groupCall";
 
 // 组合式API：useCallKit
@@ -104,44 +103,42 @@ export function useCallKit(): UseCallKitReturn {
         logger.info('startGroupCall: 主叫方立即加入RTC频道')
         callStateStore.setCallStatus(CALL_STATUS.IN_CALL)
 
-        // 如果启用了新群组通话模块，提前初始化 Store
-        if (USE_NEW_GROUP_CALL) {
-          const groupCallStore = useGroupCallStore()
-          const currentUserId = chatClientStore.getChatClient?.user || ''
-          groupCallStore.initSession({
-            sessionId: callStateStore.getCallState.channel || groupId,
-            groupId,
-            callType: type,
-            isActive: true,
-            startTime: Date.now(),
-          })
+        // 初始化新架构 GroupCallStore（幂等：GroupCallShell 后续会再次调用 startSession，重复初始化安全）
+        const groupCallStore = useGroupCallStore()
+        const currentUserId = chatClientStore.getChatClient?.user || ''
+        groupCallStore.initSession({
+          sessionId: callStateStore.getCallState.channel || groupId,
+          groupId,
+          callType: type,
+          isActive: true,
+          startTime: Date.now(),
+        })
+        groupCallStore.addParticipant({
+          userId: currentUserId,
+          nickname: currentUserId,
+          state: 'joinedRtc',
+          isLocal: true,
+          videoTrack: null,
+          audioTrack: null,
+          localStream: null,
+          isMuted: false,
+          isCameraOn: type === 'video',
+          isSpeaking: false,
+        })
+        members.forEach((m) => {
           groupCallStore.addParticipant({
-            userId: currentUserId,
-            nickname: currentUserId,
-            state: 'joinedRtc',
-            isLocal: true,
+            userId: m,
+            nickname: m,
+            state: 'invited',
+            isLocal: false,
             videoTrack: null,
             audioTrack: null,
             localStream: null,
             isMuted: false,
-            isCameraOn: type === 'video',
+            isCameraOn: false,
             isSpeaking: false,
           })
-          members.forEach((m) => {
-            groupCallStore.addParticipant({
-              userId: m,
-              nickname: m,
-              state: 'invited',
-              isLocal: false,
-              videoTrack: null,
-              audioTrack: null,
-              localStream: null,
-              isMuted: false,
-              isCameraOn: false,
-              isSpeaking: false,
-            })
-          })
-        }
+        })
 
         // 加入RTC频道
         const { joinChannel } = useJoinChannel()

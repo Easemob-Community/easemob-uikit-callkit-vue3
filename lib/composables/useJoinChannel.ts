@@ -14,9 +14,6 @@ import { useRtcChannelStore } from '../store/rtcChannel'
 import { useChatClientStore } from '../store/chatClient'
 import { CALL_TYPE } from '../types/callstate.types'
 import { logger } from '../utils/logger'
-import { USE_NEW_GROUP_CALL } from '../config/featureFlags'
-import { useGroupCallStore } from '../modules/groupCall'
-
 export interface UseJoinChannelReturn {
   joinChannel: () => Promise<void>
   isJoining: boolean
@@ -177,17 +174,6 @@ export function useJoinChannel(): UseJoinChannelReturn {
       const currentUserId = chatClientStore.getChatClient?.user
       if (currentUserId) {
         rtcChannelStore.markUserJoinedRtc(currentUserId)
-      }
-
-      // 新模块：同步本地用户到 GroupCallStore
-      if (USE_NEW_GROUP_CALL) {
-        const groupCallStore = useGroupCallStore()
-        const local = groupCallStore.participants.get(currentUserId || '')
-        if (local) {
-          groupCallStore.setParticipantState(currentUserId, 'joinedRtc')
-          groupCallStore.setLocalStream(currentUserId, rtcChannelStore.localStream)
-          logger.info('[useJoinChannel] 新模块：本地用户已标记为 joinedRtc')
-        }
       }
 
       // 🔑 关键修复：被叫方场景下，将主叫方加入 pending 列表

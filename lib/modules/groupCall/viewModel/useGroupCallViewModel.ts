@@ -1,5 +1,6 @@
 import { ref, computed, watch, type ComputedRef, type Ref } from 'vue'
 import { useGroupCallStore } from './GroupCallStore'
+import { useRtcChannelStore } from '../../../store/rtcChannel'
 import { RtcMediaBridge } from '../media/RtcMediaBridge'
 import { GroupCallSignalingAdapter } from '../signaling/GroupCallSignalingAdapter'
 import type { RtcService } from '../../../services/RtcService'
@@ -70,17 +71,38 @@ export function useGroupCallViewModel(): UseGroupCallViewModelReturn {
     _invitationTimers.clear()
   }
 
-  // 监听参与者状态：用户加入后清理对应定时器，防止误删
+  // 监听参与者列表：新 invited 成员自动设超时；加入/移除/拒绝时清理定时器
   watch(
     () => store.participantList.map(p => ({ userId: p.userId, state: p.state })),
-    (list) => {
+    (list, prevList) => {
+      const prevMap = new Map((prevList || []).map(p => [p.userId, p.state]))
+      const currentIds = new Set(list.map(p => p.userId))
+
       list.forEach(p => {
+        // 新 invited 成员：设置超时定时器
+        if (p.state === 'invited' && prevMap.get(p.userId) !== 'invited' && !_invitationTimers.has(p.userId)) {
+          const timer = setTimeout(() => {
+            logger.info('[useGroupCallViewModel] 邀请超时，移除参与者', p.userId)
+            signaling.cancelInvitation(p.userId, store.session?.groupId || '')
+            store.removeParticipant(p.userId)
+            _invitationTimers.delete(p.userId)
+          }, INVITE_TIMEOUT_MS)
+          _invitationTimers.set(p.userId, timer)
+        }
+        // 状态变为非 invited（加入/拒绝/离开）：清理定时器
         if (p.state !== 'invited' && _invitationTimers.has(p.userId)) {
           clearInvitationTimer(p.userId)
         }
       })
+
+      // 成员被完全移除（旧架构直接 removeParticipant）：清理残留定时器
+      prevList?.forEach(p => {
+        if (!currentIds.has(p.userId) && _invitationTimers.has(p.userId)) {
+          clearInvitationTimer(p.userId)
+        }
+      })
     },
-    { deep: true }
+    { deep: true, immediate: true }
   )
 
   const isActive = computed(() => store.session?.isActive ?? false)
@@ -182,6 +204,18 @@ export function useGroupCallViewModel(): UseGroupCallViewModelReturn {
     }
     mediaBridge = new RtcMediaBridge(rtcService)
     logger.info('[useGroupCallViewModel] 已绑定 RtcService')
+
+    // 本地用户已通过外部 joinChannel 加入 RTC，补标记状态并同步本地流
+    const local = store.localParticipant
+    if (local && local.state !== 'joinedRtc') {
+      store.setParticipantState(local.userId, 'joinedRtc')
+      logger.info('[useGroupCallViewModel] 本地用户已标记为 joinedRtc')
+    }
+    // 同步本地视频流（如果 RtcChannelStore 已生成 localStream）
+    const { localStream } = useRtcChannelStore()
+    if (localStream && local) {
+      store.setLocalStream(local.userId, localStream)
+    }
   }
 
   function unbindRtcService() {
@@ -195,20 +229,9 @@ export function useGroupCallViewModel(): UseGroupCallViewModelReturn {
   async function sendInvite(userIds: string[], groupId: string, message: string) {
     // 1. 信令发送
     await signaling.sendInvite(userIds, groupId, message)
-    // 2. 本地状态更新
+    // 2. 本地状态更新（watch 会自动为新 invited 成员设置超时定时器）
     userIds.forEach(id => {
       addRemoteParticipant(id, id) // nickname 兜底，实际应由外部传入
-    })
-    // 3. 设置邀请超时定时器（30s 未接听自动移出）
-    userIds.forEach(id => {
-      clearInvitationTimer(id)
-      const timer = setTimeout(() => {
-        logger.info('[useGroupCallViewModel] 邀请超时，移除参与者', id)
-        signaling.cancelInvitation(id, groupId)
-        store.removeParticipant(id)
-        _invitationTimers.delete(id)
-      }, INVITE_TIMEOUT_MS)
-      _invitationTimers.set(id, timer)
     })
   }
 

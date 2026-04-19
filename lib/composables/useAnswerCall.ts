@@ -3,9 +3,6 @@ import { useChatClientStore } from "../store/chatClient";
 import { useSignalManager } from "./useSignalManager";
 import { logger } from "../utils/logger";
 import { CALL_STATUS, CALLKIT_CMD_MSG_RESULT_TYPE } from "../types/callstate.types";
-import { USE_NEW_GROUP_CALL } from "../config/featureFlags";
-import { useGroupCallStore } from "../modules/groupCall";
-
 export interface UseAnswerCallReturn {
   // 接受通话
   acceptCall: () => Promise<void>;
@@ -67,15 +64,6 @@ export function useAnswerCall(): UseAnswerCallReturn {
 
       // 更新状态为ANSWER_CALL
       callStateStore.setCallStatus(CALL_STATUS.ANSWER_CALL);
-
-      // 新模块：标记本地用户为已接受（等待 confirmCallee 后 joinChannel）
-      if (USE_NEW_GROUP_CALL) {
-        const groupCallStore = useGroupCallStore()
-        const currentUserId = chatClientStore.getChatClient?.user
-        if (currentUserId && groupCallStore.participants.has(currentUserId)) {
-          groupCallStore.markAccepted(currentUserId)
-        }
-      }
     } catch (error) {
       logger.error("useAnswerCall: 接受通话失败:", error);
       // 兜底：发送信令失败时（如被拉黑 blocked）也要重置状态，避免弹窗卡住

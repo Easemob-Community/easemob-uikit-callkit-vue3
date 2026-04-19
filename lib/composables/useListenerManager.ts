@@ -14,7 +14,6 @@ import type { SignalingExt } from "../types/signal.types";
 import { useSignalManager } from "./useSignalManager";
 import { useJoinChannel } from "./useJoinChannel";
 import { CallService } from "../services/CallService";
-import { USE_NEW_GROUP_CALL } from "../config/featureFlags";
 import { useGroupCallStore } from "../modules/groupCall";
 
 // 定义CmdMsgBody接口以替代不存在的Chat.CmdMsgBody
@@ -128,8 +127,8 @@ export function useListenerManager(): ListenerManagerReturn {
     });
     logger.info("通话邀请已更新至store", callStateStore.getCallState);
 
-    // 新模块：群组通话提前初始化参与者列表
-    if (USE_NEW_GROUP_CALL && (ext?.type === CALL_TYPE.VIDEO_MULTI || ext?.type === CALL_TYPE.AUDIO_MULTI)) {
+    // 群组通话提前初始化参与者列表
+    if (ext?.type === CALL_TYPE.VIDEO_MULTI || ext?.type === CALL_TYPE.AUDIO_MULTI) {
       const groupCallStore = useGroupCallStore()
       const currentUserId = chatClientStore.getChatClient?.context?.userId || chatClientStore.getChatClient?.user || ''
       const callerUserId = ext?.callerIMName || message.from || ''
@@ -491,6 +490,9 @@ export function useListenerManager(): ListenerManagerReturn {
           (member) => member !== message.from
         );
         callStateStore.updateInvitedMembers(invitedMembers);
+        // 同步从 GroupCallStore 移除拒绝的用户
+        const groupCallStore = useGroupCallStore()
+        groupCallStore.removeParticipant(message.from as string)
       } else {
         //一对一通话执行挂断
         logger.info("收到对方拒绝，执行挂断操作");
@@ -509,11 +511,9 @@ export function useListenerManager(): ListenerManagerReturn {
         logger.debug('已将接受者添加到待加入RTC列表:', message.from)
       }
 
-      // 新模块：标记用户为已接受
-      if (USE_NEW_GROUP_CALL) {
-        const groupCallStore = useGroupCallStore()
-        groupCallStore.markAccepted(message.from as string)
-      }
+      // 标记用户为已接受
+      const groupCallStore = useGroupCallStore()
+      groupCallStore.markAccepted(message.from as string)
       
       // 发送confirmCallee信令，通知对方已确认收到接受信息
       const confirmCalleePayload = {
@@ -672,12 +672,10 @@ export function useListenerManager(): ListenerManagerReturn {
       // 标记用户已离开RTC
       rtcChannelStore.markUserLeftRtc(message.from as string);
 
-      // 新模块：标记用户为 left
-      if (USE_NEW_GROUP_CALL) {
-        const groupCallStore = useGroupCallStore()
-        groupCallStore.setParticipantState(message.from as string, 'left')
-        setTimeout(() => groupCallStore.removeParticipant(message.from as string), 2000)
-      }
+      // 标记用户为 left
+      const groupCallStore = useGroupCallStore()
+      groupCallStore.setParticipantState(message.from as string, 'left')
+      setTimeout(() => groupCallStore.removeParticipant(message.from as string), 2000)
 
       logger.debug(`成员 ${message.from} 已从通话中移除`);
       return;

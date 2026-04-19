@@ -15,7 +15,7 @@ export interface Participant {
 
 /**
  * 自动生成参与者列表的 composable
- * @deprecated 旧架构已废弃，群组通话请使用 useGroupCallViewModel / GroupCallStore
+ * 内部处理 leftUsers 逻辑，用户无需关心
  */
 export function useParticipants(currentUserId?: string) {
   const callStateStore = useCallStateStore()
