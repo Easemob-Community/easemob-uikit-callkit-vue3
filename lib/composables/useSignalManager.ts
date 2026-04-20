@@ -9,7 +9,8 @@ export interface UseSignalManagerReturn {
     targetId: string | string[],
     chatType: Chat.ChatType,
     message: string,
-    groupId?: string
+    groupId?: string,
+    userInfo?: { nickname?: string; avatarURL?: string }
   ) => Promise<Chat.SendMsgResult>;
   sendAnswerMessage: (
     targetId: string,
