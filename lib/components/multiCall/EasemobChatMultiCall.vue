@@ -2,8 +2,10 @@
   <GroupCallShell
     v-if="isVisible"
     ref="groupCallShellRef"
-    :group-id="groupId || ''"
-    :group-name="groupName || ''"
+    :group-id="effectiveGroupId"
+    :group-name="effectiveGroupName"
+    :group-avatar="effectiveGroupAvatar"
+    :group-members="props.groupMembers"
     :current-user-id="props.currentUserId || chatClientStore.getChatClient?.user || ''"
     :current-nickname="globalCallStore.getUserInfo(chatClientStore.getChatClient?.user)?.nickname"
     :current-avatar-url="globalCallStore.getUserInfo(chatClientStore.getChatClient?.user)?.avatarURL"
@@ -20,7 +22,7 @@ import { useRtcChannelStore } from '../../store/rtcChannel'
 import { useChatClientStore } from '../../store/chatClient'
 import { useGlobalCallStore } from '../../store/globalCall'
 import { CALL_STATUS, CALL_TYPE } from '../../types/callstate.types'
-import { GroupCallShell } from '../../modules/groupCall'
+import { GroupCallShell, useGroupCallStore } from '../../modules/groupCall'
 import { logger } from '../../utils/logger'
 
 const props = withDefaults(defineProps<{
@@ -30,6 +32,7 @@ const props = withDefaults(defineProps<{
   type?: 'audio' | 'video'
   currentUserId?: string
   autoShow?: boolean
+  groupMembers?: Array<{ userId: string; userName: string; avatar?: string }>
 }>(), {
   autoShow: true,
 })
@@ -51,8 +54,20 @@ const callStateStore = useCallStateStore()
 const rtcChannelStore = useRtcChannelStore()
 const chatClientStore = useChatClientStore()
 const globalCallStore = useGlobalCallStore()
+const groupCallStore = useGroupCallStore()
 
 const groupCallShellRef = ref<InstanceType<typeof GroupCallShell> | null>(null)
+
+// groupId/groupName/groupAvatar 优先使用外部 prop，无则从 store 兜底
+// 被叫方场景：calleeUserId / groupCallStore.session.groupId 就是 groupId
+const effectiveGroupId = computed(() =>
+  props.groupId || callStateStore.calleeUserId || groupCallStore.session?.groupId || ''
+)
+const effectiveGroupName = computed(() => {
+  if (props.groupName) return props.groupName
+  return groupCallStore.session?.groupName || ''
+})
+const effectiveGroupAvatar = computed(() => props.groupAvatar || '')
 
 const isVisible = computed(() => {
   if (props.autoShow === false) return true

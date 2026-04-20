@@ -12,7 +12,7 @@ import { useChatClientStore } from '../store/chatClient';
 import { useCallStateStore } from '../store/callState';
 import { useRtcChannelStore } from '../store/rtcChannel';
 import { logger, LogLevel } from '../utils/logger';
-import { registerUserInfoProvider, registerGroupInfoProvider, clearProfileProviders } from '../services/UserProfileService';
+import { registerUserInfoProvider, registerGroupInfoProvider, clearProfileProviders, type UserInfoProvider } from '../services/UserProfileService';
 
 // 确保组件挂载完成后再渲染插槽
 const mounted = ref(false)
@@ -107,11 +107,29 @@ watchEffect(() => {
   }
 })
 
+// 构建默认用户资料 Provider（基于环信 SDK fetchUserInfoById）
+function createDefaultUserInfoProvider(chatClient: any): UserInfoProvider {
+  return async (userIds: string[]) => {
+    const response = await chatClient.fetchUserInfoById(userIds, ['nickname', 'avatarurl'])
+    const data = response.data || {}
+    return Object.entries(data).map(([userId, info]: [string, any]) => ({
+      userId,
+      nickname: info?.nickname,
+      avatarUrl: info?.avatarurl,
+    }))
+  }
+}
+
 // 注册用户/群组资料 Provider
 watchEffect(() => {
   if (props.getUserInfo) {
     registerUserInfoProvider(props.getUserInfo)
     logger.debug('CallKit Provider 已注册用户资料 Provider')
+  } else if (chatClientStore.getChatClient) {
+    // 未传入自定义 provider，使用环信 SDK 内置接口作为默认实现
+    const defaultProvider = createDefaultUserInfoProvider(chatClientStore.getChatClient)
+    registerUserInfoProvider(defaultProvider)
+    logger.debug('CallKit Provider 已注册默认用户资料 Provider（基于环信 SDK）')
   }
   if (props.getGroupInfo) {
     registerGroupInfoProvider(props.getGroupInfo)

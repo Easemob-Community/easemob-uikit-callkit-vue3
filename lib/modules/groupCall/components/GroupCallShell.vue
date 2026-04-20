@@ -78,6 +78,7 @@
     <EasemobChatGroupMemberList
       v-if="showAddMember"
       :group-id="groupId"
+      :members="groupMembers"
       :existing-user-ids="existingUserIds"
       :inviting-user-ids="invitingUserIds"
       @close="showAddMember = false"
@@ -104,6 +105,7 @@ export interface GroupCallShellProps {
   currentNickname?: string
   currentAvatarUrl?: string
   rtcService?: RtcService | null
+  groupMembers?: Array<{ userId: string; userName: string; avatar?: string }>
 }
 
 const props = defineProps<GroupCallShellProps>()

@@ -15,7 +15,7 @@
           <div class="spinner" />
           <span>加载中...</span>
         </div>
-        <div v-else-if="members.length === 0" class="empty-state">
+        <div v-else-if="displayMembers.length === 0" class="empty-state">
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
             <circle cx="9" cy="7" r="4" />
@@ -26,7 +26,7 @@
         </div>
         <div v-else class="list">
           <div
-            v-for="member in members"
+            v-for="member in displayMembers"
             :key="member.userId"
             class="member-item"
             :class="{
@@ -73,8 +73,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useChatClientStore } from '../../store/chatClient'
+import { resolveUserProfiles } from '../../services/UserProfileService'
 import { logger } from '../../utils/logger'
 
 function getFirstChar(name: string) {
@@ -98,6 +99,7 @@ interface Member {
 
 const props = defineProps<{
   groupId: string
+  members?: Member[] // 外部传入的群成员列表（双轨制：传了直接用，不传内部获取）
   existingUserIds: string[] // 已经在通话中的用户ID
   invitingUserIds?: string[] // 邀请中的用户ID
 }>()
@@ -108,9 +110,17 @@ const emit = defineEmits<{
 }>()
 
 const chatClientStore = useChatClientStore()
-const members = ref<Member[]>([])
+const internalMembers = ref<Member[]>([])
 const selectedUsers = ref<string[]>([])
 const loading = ref(false)
+
+// 双轨制：优先使用外部传入的 members，无则使用内部获取的
+const displayMembers = computed<Member[]>(() => {
+  if (props.members && props.members.length > 0) {
+    return props.members
+  }
+  return internalMembers.value
+})
 
 const fetchGroupMembers = async () => {
   const client = chatClientStore.getChatClient
@@ -124,22 +134,50 @@ const fetchGroupMembers = async () => {
 
   loading.value = true
   try {
-    // 环信 SDK 获取群成员列表
-    // @ts-ignore
-    const response = await client.listGroupMembers({
-      groupId: props.groupId,
-      pageNum: 1,
-      pageSize: 100
-    })
-    
     const currentUserId = client.user
-    // @ts-ignore
-    members.value = (response.data || [])
-      .filter((m: any) => (m.member || m.owner) !== currentUserId)
-      .map((m: any) => ({
-        userId: m.member || m.owner,
-        userName: m.member || m.owner, // 实际应用中可能需要获取用户昵称
-      }))
+    const allMembers: Array<{ userId: string }> = []
+    let cursor: string | null = null
+    const pageSize = 100
+
+    do {
+      // 环信 SDK 4.x 获取群成员列表
+      // @ts-ignore
+      const response = await client.getGroupMembers({
+        groupId: props.groupId,
+        pageSize,
+        cursor,
+      })
+
+      const fetched = response.data?.members || []
+      fetched.forEach((m: any) => {
+        const userId = m.userId
+        if (userId && userId !== currentUserId) {
+          allMembers.push({ userId })
+        }
+      })
+
+      cursor = response.data?.cursor || null
+    } while (cursor)
+
+    // 通过 UserProfileService 批量 enrich 昵称头像
+    if (allMembers.length > 0) {
+      const profiles = await resolveUserProfiles(allMembers.map(m => m.userId))
+      const profileMap = new Map(profiles.map(p => [p.userId, p]))
+      internalMembers.value = allMembers.map(m => {
+        const profile = profileMap.get(m.userId)
+        return {
+          userId: m.userId,
+          userName: profile?.nickname || m.userId,
+          avatar: profile?.avatarUrl,
+        }
+      })
+      logger.info('EasemobChatGroupMemberList: 获取并 enrich 群成员成功', {
+        groupId: props.groupId,
+        count: allMembers.length,
+      })
+    } else {
+      internalMembers.value = []
+    }
   } catch (error) {
     logger.error('EasemobChatGroupMemberList: 获取群成员失败', error)
   } finally {
@@ -150,8 +188,7 @@ const fetchGroupMembers = async () => {
 const toggleSelect = (userId: string) => {
   // 已在通话中的用户不能选择
   if (props.existingUserIds.includes(userId)) return
-  // 邀请中的用户可以重新选择（重新邀请）
-  
+
   const index = selectedUsers.value.indexOf(userId)
   if (index > -1) {
     selectedUsers.value.splice(index, 1)
@@ -166,6 +203,13 @@ const handleInvite = () => {
 }
 
 onMounted(() => {
+  // 双轨制：外部传了 members 就不内部获取
+  if (props.members && props.members.length > 0) {
+    logger.info('EasemobChatGroupMemberList: 使用外部传入的成员列表', {
+      count: props.members.length,
+    })
+    return
+  }
   fetchGroupMembers()
 })
 </script>

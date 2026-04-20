@@ -132,7 +132,7 @@ export function useListenerManager(): ListenerManagerReturn {
       callerUserId: ext?.callerIMName || message.from,
       calleeUserId:
         ext?.type === CALL_TYPE.VIDEO_MULTI || ext?.type === CALL_TYPE.AUDIO_MULTI
-          ? ext?.groupId
+          ? ext?.callkitGroupInfo?.groupId || ext?.groupId
           : message.to,
       inviteMessageId: message.id,
     })
