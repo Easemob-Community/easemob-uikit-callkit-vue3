@@ -979,7 +979,7 @@ onCallEnded((e) => {
 
 ### Q1：组件为什么不显示？
 
-1. 已注册 Pinia（`app.use(createPinia())`）
+1. 已调用 `app.use(EasemobChatCallKit)` 注册插件
 2. `EasemobChatCallKitProvider` 已正确传入 `chatClient`
 3. 组件已放置在 Provider 内部
 4. 已调用 `call()` / `groupCall()` 发起通话

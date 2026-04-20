@@ -9,12 +9,11 @@
 ## 前置条件
 
 - Vue 3 项目
-- 已安装并初始化 **Pinia**
 - 已安装 **环信 IM SDK**（`easemob-websdk`）并完成登录
 - 已安装 **声网 RTC SDK**（`agora-rtc-sdk-ng`）
 
 ```bash
-pnpm add vue pinia easemob-websdk agora-rtc-sdk-ng
+pnpm add vue easemob-websdk agora-rtc-sdk-ng
 ```
 
 ---
@@ -31,17 +30,17 @@ pnpm add ./easemob-chat-callkit-vue3-1.0.0.tgz
 
 ---
 
-## Step 1：注册 Pinia + 引入样式
+## Step 1：注册插件 + 引入样式
 
 ```typescript
 // main.ts
 import { createApp } from 'vue'
-import { createPinia } from 'pinia'
+import EasemobChatCallKit from 'easemob-chat-callkit-vue3'
 import App from './App.vue'
 import 'easemob-chat-callkit-vue3/style.css'
 
 const app = createApp(App)
-app.use(createPinia())
+app.use(EasemobChatCallKit)
 app.mount('#app')
 ```
 

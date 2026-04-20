@@ -1,6 +1,8 @@
 # Easemob Chat CallKit Vue3
 
-基于 **Vue 3 + Pinia + 环信 IM SDK + 声网 RTC SDK** 的音视频通话 UI 组件库。
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+基于 **Vue 3 + 环信 IM SDK + 声网 RTC SDK** 的音视频通话 UI 组件库。内置 Pinia 状态管理，用户无需感知。
 
 支持**单人通话（1v1）**和**群组通话（多人）**，内置完整的呼叫、接听、挂断、音视频控制、邀请通知等能力，开箱即用。
 
@@ -21,12 +23,11 @@
 ## 📋 前置条件
 
 - Vue 3 项目
-- 已安装并初始化 **Pinia**
 - 已安装 **环信 IM SDK**（`easemob-websdk`）并完成登录
 - 已安装 **声网 RTC SDK**（`agora-rtc-sdk-ng`）
 
 ```bash
-pnpm add vue pinia easemob-websdk agora-rtc-sdk-ng
+pnpm add vue easemob-websdk agora-rtc-sdk-ng
 ```
 
 ---
@@ -178,4 +179,4 @@ pnpm run build:lib
 
 ## 📄 License
 
-MIT
+[MIT](./LICENSE)
