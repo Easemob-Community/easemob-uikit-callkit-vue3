@@ -10,6 +10,40 @@
   overflow: hidden;
 }
 
+/* ========== 语音通话模式 ========== */
+.call-stream-container.is-audio {
+  background: #1a1a2e;
+}
+
+.is-audio .remote-video-container {
+  background: #1a1a2e;
+}
+
+.is-audio .remote-placeholder {
+  color: #fff;
+}
+
+.is-audio .avatar-placeholder {
+  width: 160px;
+  height: 160px;
+  background: #2d2d44;
+  border: 3px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: none;
+}
+
+.is-audio .user-icon {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.is-audio .remote-name {
+  color: #fff;
+  font-size: 28px;
+}
+
+.is-audio .call-status-text {
+  color: rgba(255, 255, 255, 0.6);
+}
+
 /* ========== 远程视频区域 ========== */
 .remote-video-container {
   position: absolute;

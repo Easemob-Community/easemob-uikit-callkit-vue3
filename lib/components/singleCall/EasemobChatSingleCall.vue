@@ -5,7 +5,7 @@
       v-if="!isMinimized" 
       ref="elementRef"
       class="easemob-chat-single-call"
-      :class="{ 'is-dragging': isDragging, 'has-dragged': hasDragged }"
+      :class="{ 'is-dragging': isDragging, 'has-dragged': hasDragged, 'is-audio': props.type === 'audio' }"
       :style="[style, backgroundStyle]"
       @mousedown="startDrag"
     >
@@ -178,7 +178,11 @@ const handleEndCall = () => {
 }
 
 // ========== 背景图配置 ==========
+// 语音通话不使用背景图，使用纯色背景；视频通话使用背景图
 const backgroundStyle = computed<CSSProperties>(() => {
+  if (props.type === 'audio') {
+    return { background: '#1a1a2e' }
+  }
   const bgUrl = getAssetUrl(props.backgroundImage, DEFAULT_BACKGROUND_IMAGE)
   return {
     backgroundImage: `url(${bgUrl})`

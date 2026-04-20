@@ -1,5 +1,5 @@
 <template>
-  <div class="call-stream-container">
+  <div class="call-stream-container" :class="{ 'is-audio': props.type === 'audio' }">
     <!-- 远程视频 - 全屏背景 -->
     <div class="remote-video-container">
       <!-- 只有视频通话才显示远程视频元素 -->
