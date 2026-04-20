@@ -50,5 +50,26 @@
     "vue": "^3.5.18",
     "vue-tsc": "^3.0.5"
   },
+  "license": "MIT",
+  "author": "Easemob",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Easemob-Community/easemob-uikit-callkit-vue3.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Easemob-Community/easemob-uikit-callkit-vue3/issues"
+  },
+  "homepage": "https://github.com/Easemob-Community/easemob-uikit-callkit-vue3#readme",
+  "keywords": [
+    "easemob",
+    "chat",
+    "callkit",
+    "vue3",
+    "webrtc",
+    "agora",
+    "video-call",
+    "audio-call",
+    "group-call"
+  ],
   "packageManager": "pnpm@10.10.0"
 }
