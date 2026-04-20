@@ -1,4 +1,4 @@
-import { type App } from "vue";
+import { type App, type Plugin } from "vue";
 import { createPinia } from "pinia";
 import "./style.css";
 import EasemobChatCallKitProvider from "./components/EasemobChatCallKitProvider.vue";
@@ -79,7 +79,7 @@ export { LogLevel } from "./utils/logger";
 // 导出静态资源配置
 export { DEFAULT_BACKGROUND_IMAGE, ICONS, getAssetUrl } from "./config/assets";
 
-export default {
+const EasemobChatCallKit: Plugin = {
   install(app: App) {
     // 自动注入 Pinia（用户项目无需额外安装/配置 Pinia）
     if (!app.config.globalProperties.$pinia) {
@@ -94,3 +94,5 @@ export default {
     app.component("GroupCallShell", GroupCallShell);
   },
 };
+
+export default EasemobChatCallKit;
