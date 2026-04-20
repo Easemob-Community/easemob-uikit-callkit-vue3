@@ -6,6 +6,7 @@ import { useCallStateStore } from "./callState";
 export const useChatClientStore = defineStore("chatClient", {
   state: (): ChatClientState => ({
     client: null,
+    isMiniCore: false,
   }),
   actions: {
     setClient(client: Chat.Connection) {
@@ -14,9 +15,13 @@ export const useChatClientStore = defineStore("chatClient", {
       this.client = client;
       callStateStore.initCallState(client);
     },
+    setIsMiniCore(value: boolean) {
+      this.isMiniCore = value;
+    },
   },
   getters: {
     getChatClient: (state) => state.client,
     getClientDeviceId: (state) => state.client?.context.jid.clientResource,
+    getIsMiniCore: (state) => state.isMiniCore,
   },
 });

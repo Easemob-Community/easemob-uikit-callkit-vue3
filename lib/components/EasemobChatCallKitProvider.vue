@@ -112,10 +112,18 @@ watchEffect(() => {
   }
 })
 
+// 同步 isMiniCore 配置到 store
+watchEffect(() => {
+  chatClientStore.setIsMiniCore(!!props.isMiniCore);
+  if (props.isMiniCore) {
+    logger.info('CallKit Provider: 已启用 miniCore 兼容模式');
+  }
+})
+
 // 构建默认用户资料 Provider（基于环信 SDK fetchUserInfoById，兼容 full/miniCore）
-function createDefaultUserInfoProvider(chatClient: any): UserInfoProvider {
+function createDefaultUserInfoProvider(chatClient: any, isMiniCore: boolean): UserInfoProvider {
   return async (userIds: string[]) => {
-    const response = await fetchUserInfoById(chatClient, userIds, ['nickname', 'avatarurl'])
+    const response = await fetchUserInfoById(chatClient, userIds, ['nickname', 'avatarurl'], isMiniCore)
     const data = response.data || {}
     return Object.entries(data).map(([userId, info]: [string, any]) => ({
       userId,
@@ -132,7 +140,7 @@ watchEffect(() => {
     logger.debug('CallKit Provider 已注册用户资料 Provider')
   } else if (chatClientStore.getChatClient) {
     // 未传入自定义 provider，使用环信 SDK 内置接口作为默认实现
-    const defaultProvider = createDefaultUserInfoProvider(chatClientStore.getChatClient)
+    const defaultProvider = createDefaultUserInfoProvider(chatClientStore.getChatClient, !!props.isMiniCore)
     registerUserInfoProvider(defaultProvider)
     logger.debug('CallKit Provider 已注册默认用户资料 Provider（基于环信 SDK）')
   }

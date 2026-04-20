@@ -1,12 +1,9 @@
 /**
  * IM SDK 兼容适配层
  *
- * 环信 IM SDK 存在 full 版与 miniCore 版（含插件模式）两种形态：
- * - full 版：API 直接挂在 Connection 实例上，如 client.fetchUserInfoById()
- * - miniCore 插件模式：API 挂在命名空间下，如 client.contact.fetchUserInfoById()
- *
- * 本模块通过"存在性探测"做兼容，不显式判断版本，优先尝试命名空间 API，
- * fallback 到实例 API，两者皆无时抛出明确错误。
+ * 通过外层传入的 isMiniCore 标志显式切换调用方式：
+ * - isMiniCore = false (默认): 使用 full 版 API，直接挂在 Connection 实例上
+ * - isMiniCore = true: 使用 miniCore 插件模式 API，挂在命名空间下
  */
 
 import { logger } from "./logger";
@@ -19,21 +16,26 @@ import { logger } from "./logger";
 export async function fetchUserInfoById(
   client: any,
   userIds: string[],
-  properties?: string[]
+  properties?: string[],
+  isMiniCore?: boolean
 ): Promise<any> {
-  // 优先 miniCore 插件模式命名空间
-  if (typeof client.contact?.fetchUserInfoById === "function") {
-    logger.debug("[IMSdkAdapter] 使用 miniCore contact.fetchUserInfoById");
-    return client.contact.fetchUserInfoById(userIds, properties);
+  if (isMiniCore) {
+    if (typeof client.contact?.fetchUserInfoById === "function") {
+      logger.debug("[IMSdkAdapter] miniCore: contact.fetchUserInfoById");
+      return client.contact.fetchUserInfoById(userIds, properties);
+    }
+    throw new Error(
+      "[IMSdkAdapter] miniCore 模式下无法获取用户资料：client.contact.fetchUserInfoById 不存在，" +
+        "请确认 miniCore 已正确注册用户资料插件"
+    );
   }
-  // fallback full 版或 miniCore 未注册插件
   if (typeof client.fetchUserInfoById === "function") {
-    logger.debug("[IMSdkAdapter] 使用实例 fetchUserInfoById");
+    logger.debug("[IMSdkAdapter] full: fetchUserInfoById");
     return client.fetchUserInfoById(userIds, properties);
   }
   throw new Error(
-    "[IMSdkAdapter] 无法获取用户资料：当前 IM SDK 缺少 fetchUserInfoById API，" +
-      "请确认 SDK 版本或手动传入 getUserInfo Provider"
+    "[IMSdkAdapter] full 模式下无法获取用户资料：client.fetchUserInfoById 不存在，" +
+      "请确认 easemob-websdk 已正确安装"
   );
 }
 
@@ -44,21 +46,26 @@ export async function fetchUserInfoById(
  */
 export async function getGroupMembers(
   client: any,
-  params: { groupId: string; pageSize: number; cursor?: string | null }
+  params: { groupId: string; pageSize: number; cursor?: string | null },
+  isMiniCore?: boolean
 ): Promise<any> {
-  // 优先 miniCore 插件模式命名空间
-  if (typeof client.group?.getGroupMembers === "function") {
-    logger.debug("[IMSdkAdapter] 使用 miniCore group.getGroupMembers");
-    return client.group.getGroupMembers(params);
+  if (isMiniCore) {
+    if (typeof client.group?.getGroupMembers === "function") {
+      logger.debug("[IMSdkAdapter] miniCore: group.getGroupMembers");
+      return client.group.getGroupMembers(params);
+    }
+    throw new Error(
+      "[IMSdkAdapter] miniCore 模式下无法获取群成员列表：client.group.getGroupMembers 不存在，" +
+        "请确认 miniCore 已正确注册群组插件"
+    );
   }
-  // fallback full 版或 miniCore 未注册插件
   if (typeof client.getGroupMembers === "function") {
-    logger.debug("[IMSdkAdapter] 使用实例 getGroupMembers");
+    logger.debug("[IMSdkAdapter] full: getGroupMembers");
     return client.getGroupMembers(params);
   }
   throw new Error(
-    "[IMSdkAdapter] 无法获取群成员列表：当前 IM SDK 缺少 getGroupMembers API，" +
-      "请确认 SDK 版本或手动传入 getGroupInfo Provider"
+    "[IMSdkAdapter] full 模式下无法获取群成员列表：client.getGroupMembers 不存在，" +
+      "请确认 easemob-websdk 已正确安装"
   );
 }
 
@@ -67,14 +74,23 @@ export async function getGroupMembers(
  * full: client.getContacts(params)
  * miniCore(插件): client.contact.getContacts(params)
  */
-export async function getContacts(client: any, params?: any): Promise<any> {
-  if (typeof client.contact?.getContacts === "function") {
-    return client.contact.getContacts(params);
+export async function getContacts(
+  client: any,
+  params?: any,
+  isMiniCore?: boolean
+): Promise<any> {
+  if (isMiniCore) {
+    if (typeof client.contact?.getContacts === "function") {
+      return client.contact.getContacts(params);
+    }
+    throw new Error(
+      "[IMSdkAdapter] miniCore 模式下无法获取好友列表：client.contact.getContacts 不存在"
+    );
   }
   if (typeof client.getContacts === "function") {
     return client.getContacts(params);
   }
   throw new Error(
-    "[IMSdkAdapter] 无法获取好友列表：当前 IM SDK 缺少 getContacts API"
+    "[IMSdkAdapter] full 模式下无法获取好友列表：client.getContacts 不存在"
   );
 }

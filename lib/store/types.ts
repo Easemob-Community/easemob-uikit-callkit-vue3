@@ -9,6 +9,8 @@ import type {
 export type CallStatus = CALL_STATUS;
 export interface ChatClientState {
   client: Chat.Connection | null;
+  /** 是否使用环信 IM SDK miniCore 版本（插件模式） */
+  isMiniCore: boolean;
 }
 export interface CallParticipant {
   userId: string;

@@ -19,9 +19,11 @@ import { logger } from "../utils/logger";
 import { getUserInfoProvider, getGroupInfoProvider } from "./UserProfileService";
 export class ChatService {
   private chatClient: Chat.Connection | null = null;
+  private isMiniCore = false;
   private callStateStore = useCallStateStore();
-  constructor(chatClient: Chat.Connection) {
+  constructor(chatClient: Chat.Connection, isMiniCore?: boolean) {
     this.chatClient = chatClient;
+    this.isMiniCore = !!isMiniCore;
   }
   //构建邀请信息的ext
   private async buildInviteMessageExt(groupId?: string, userInfo?: { nickname?: string; avatarURL?: string }) {
@@ -232,18 +234,23 @@ export class ChatService {
    * miniCore 版: client.Message.create(options)
    */
   private createMessage(options: any): any {
-    // 优先 full 版本静态 API
+    if (this.isMiniCore) {
+      const client = this.chatClient as any;
+      if (client?.Message?.create) {
+        return client.Message.create(options);
+      }
+      throw new Error(
+        "[ChatService] miniCore 模式下无法创建消息：client.Message.create 不存在，" +
+          "请确认 miniCore 已正确注册消息插件"
+      );
+    }
+    // full 版本静态 API
     if (ChatSDK.message?.create) {
       return ChatSDK.message.create(options);
     }
-    // fallback miniCore 实例 API
-    const client = this.chatClient as any;
-    if (client?.Message?.create) {
-      return client.Message.create(options);
-    }
     throw new Error(
-      "[ChatService] 无法创建消息：当前 IM SDK 缺少 message.create API，" +
-        "请确认使用的是 easemob-websdk full 版或 miniCore 版"
+      "[ChatService] full 模式下无法创建消息：ChatSDK.message.create 不存在，" +
+        "请确认 easemob-websdk 已正确安装"
     );
   }
 

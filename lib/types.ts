@@ -40,6 +40,12 @@ export interface ProviderConfig {
   chatClient?: Chat.Connection; // 可选，支持延迟初始化
   agoraClient?: IAgoraRTCClient; // 可选，外部传入的 Agora RTC 客户端实例
   agoraAppId?: string; // [已废弃] Agora AppId 将从环信服务器动态获取，此参数仅用于向后兼容
+  /**
+   * 是否使用环信 IM SDK miniCore 版本（插件模式）
+   * 启用后 callkit 内部将使用命名空间 API（client.contact.* / client.group.* / client.Message.create）
+   * 默认 false，使用 full 版本 API（实例直调）
+   */
+  isMiniCore?: boolean;
   initConfig?: {
     debug?: boolean; // 开启调试模式（等价于 logLevel: LogLevel.VERBOSE）
     logLevel?: LogLevel; // 日志输出级别：0=ERROR, 1=WARN, 2=INFO, 3=DEBUG, 4=VERBOSE

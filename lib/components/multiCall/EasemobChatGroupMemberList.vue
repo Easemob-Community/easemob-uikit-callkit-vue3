@@ -136,6 +136,7 @@ const fetchGroupMembers = async () => {
   loading.value = true
   try {
     const currentUserId = client.user
+    const isMiniCore = chatClientStore.getIsMiniCore
     const allMembers: Array<{ userId: string }> = []
     let cursor: string | null = null
     const pageSize = 100
@@ -146,7 +147,7 @@ const fetchGroupMembers = async () => {
         groupId: props.groupId,
         pageSize,
         cursor,
-      })
+      }, isMiniCore)
 
       const fetched = response.data?.members || []
       fetched.forEach((m: any) => {

@@ -84,7 +84,8 @@ export function useSignalManager(): UseSignalManagerReturn {
     );
 
     const client = getClient();
-    const chatService = new ChatService(client);
+    const isMiniCore = chatClientStore.getIsMiniCore;
+    const chatService = new ChatService(client, isMiniCore);
 
     try {
       const result = await chatService.sendTextMessage(
@@ -120,7 +121,8 @@ export function useSignalManager(): UseSignalManagerReturn {
     );
 
     const client = getClient();
-    const chatService = new ChatService(client);
+    const isMiniCore = chatClientStore.getIsMiniCore;
+    const chatService = new ChatService(client, isMiniCore);
 
     try {
       const result_sendSignal = await chatService.sendSignalMessage(
@@ -155,7 +157,8 @@ export function useSignalManager(): UseSignalManagerReturn {
     );
 
     const client = getClient();
-    const chatService = new ChatService(client);
+    const isMiniCore = chatClientStore.getIsMiniCore;
+    const chatService = new ChatService(client, isMiniCore);
 
     try {
       const result = await chatService.sendSignalMessage(
@@ -190,7 +193,8 @@ export function useSignalManager(): UseSignalManagerReturn {
     );
 
     const client = getClient();
-    const chatService = new ChatService(client);
+    const isMiniCore = chatClientStore.getIsMiniCore;
+    const chatService = new ChatService(client, isMiniCore);
 
     try {
       const result = await chatService.sendSignalMessage(
@@ -221,7 +225,8 @@ export function useSignalManager(): UseSignalManagerReturn {
     logger.debug(`useSignalManager: 发送alerting信令，目标ID: ${targetId}`);
 
     const client = getClient();
-    const chatService = new ChatService(client);
+    const isMiniCore = chatClientStore.getIsMiniCore;
+    const chatService = new ChatService(client, isMiniCore);
 
     try {
       const result = await chatService.sendSignalMessage(
@@ -253,7 +258,8 @@ export function useSignalManager(): UseSignalManagerReturn {
     logger.debug(`useSignalManager: 发送确认响铃信令，目标ID: ${targetId}`);
 
     const client = getClient();
-    const chatService = new ChatService(client);
+    const isMiniCore = chatClientStore.getIsMiniCore;
+    const chatService = new ChatService(client, isMiniCore);
 
     try {
       const result = await chatService.sendSignalMessage(
@@ -286,7 +292,8 @@ export function useSignalManager(): UseSignalManagerReturn {
     );
 
     const client = getClient();
-    const chatService = new ChatService(client);
+    const isMiniCore = chatClientStore.getIsMiniCore;
+    const chatService = new ChatService(client, isMiniCore);
 
     try {
       const result = await chatService.sendSignalMessage(
@@ -321,7 +328,8 @@ export function useSignalManager(): UseSignalManagerReturn {
     );
 
     const client = getClient();
-    const chatService = new ChatService(client);
+    const isMiniCore = chatClientStore.getIsMiniCore;
+    const chatService = new ChatService(client, isMiniCore);
 
     try {
       const result = await chatService.sendSignalMessage(
