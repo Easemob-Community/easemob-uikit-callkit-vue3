@@ -232,25 +232,22 @@ export class ChatService {
    * 兼容 full 版与 miniCore 版的消息创建
    * full 版: ChatSDK.message.create(options)
    * miniCore 版: client.Message.create(options)
+   *
+   * 采用自动探测：先尝试静态 API，fallback 到实例 API，无需用户配置 isMiniCore
    */
   private createMessage(options: any): any {
-    if (this.isMiniCore) {
-      const client = this.chatClient as any;
-      if (client?.Message?.create) {
-        return client.Message.create(options);
-      }
-      throw new Error(
-        "[ChatService] miniCore 模式下无法创建消息：client.Message.create 不存在，" +
-          "请确认 miniCore 已正确注册消息插件"
-      );
-    }
-    // full 版本静态 API
+    // 优先 full 版本静态 API
     if (ChatSDK.message?.create) {
       return ChatSDK.message.create(options);
     }
+    // fallback miniCore 实例 API
+    const client = this.chatClient as any;
+    if (client?.Message?.create) {
+      return client.Message.create(options);
+    }
     throw new Error(
-      "[ChatService] full 模式下无法创建消息：ChatSDK.message.create 不存在，" +
-        "请确认 easemob-websdk 已正确安装"
+      "[ChatService] 无法创建消息：当前环境缺少 message.create API。" +
+        "请确认 easemob-websdk 已安装（full 版），或 miniCore 已注册消息插件。"
     );
   }
 
