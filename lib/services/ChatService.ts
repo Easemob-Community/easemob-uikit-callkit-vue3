@@ -226,6 +226,27 @@ export class ChatService {
    * @param message 消息内容
    * @param groupId 群组ID（群聊时必须）
    */
+  /**
+   * 兼容 full 版与 miniCore 版的消息创建
+   * full 版: ChatSDK.message.create(options)
+   * miniCore 版: client.Message.create(options)
+   */
+  private createMessage(options: any): any {
+    // 优先 full 版本静态 API
+    if (ChatSDK.message?.create) {
+      return ChatSDK.message.create(options);
+    }
+    // fallback miniCore 实例 API
+    const client = this.chatClient as any;
+    if (client?.Message?.create) {
+      return client.Message.create(options);
+    }
+    throw new Error(
+      "[ChatService] 无法创建消息：当前 IM SDK 缺少 message.create API，" +
+        "请确认使用的是 easemob-websdk full 版或 miniCore 版"
+    );
+  }
+
   async sendTextMessage(
     targetId: string | string[],
     chatType: Chat.ChatType,
@@ -259,7 +280,7 @@ export class ChatService {
       options.receiverList = targetId;
     }
     
-    const msg = ChatSDK.message.create(options);
+    const msg = this.createMessage(options);
     return new Promise((resolve, reject) => {
       this.chatClient
         ?.send(msg)
@@ -317,7 +338,7 @@ export class ChatService {
       },
       receiverList,
     };
-    const msg = ChatSDK.message.create(options);
+    const msg = this.createMessage(options);
     return new Promise((resolve, reject) => {
       this.chatClient
         ?.send(msg)
