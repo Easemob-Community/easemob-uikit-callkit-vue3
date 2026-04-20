@@ -43,6 +43,8 @@ export type {
   EasemobChatCallKitInstance,
   ProviderConfig,
   UseCallKitReturn,
+  CallParams,
+  GroupCallParams,
 } from "./types";
 
 export type {

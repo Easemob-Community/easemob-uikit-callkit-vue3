@@ -257,7 +257,16 @@ const startCall = async (type: 'audio' | 'video') => {
 
   singleCallType.value = type
   currentCallInfo.value = `单人${type === 'audio' ? '语音' : '视频'}通话: ${targetUserId.value}`
-  await call({ targetId: targetUserId.value, type })
+  const params = {
+    targetId: targetUserId.value,
+    type: type,
+    msg: 'Hello, this is a call from Easemob Chat CallKit!',
+    userInfo: {
+      nickname: '哈哈哈哈',
+      avatarURL: 'https://example.com/avatar.png'
+    }
+  }
+  await call(params)
 }
 
 const startMultiCall = async (type: 'audio' | 'video') => {
@@ -276,15 +285,22 @@ const startMultiCall = async (type: 'audio' | 'video') => {
 
   multiCallType.value = type
   const members = groupMembers.value.split(',').map((id) => id.trim()).filter((id) => id.length > 0)
-
+  const params = {
+    groupId: groupId.value,
+    members: members,
+    type: type,
+    msg: 'Hello, this is a group call from Easemob Chat CallKit!',
+    groupName: groupName.value || undefined,
+    groupAvatar: groupAvatar.value || undefined,
+    userInfo: {
+      nickname: '哈哈哈哈',
+      avatarURL: 'https://example.com/avatar.png'
+    }
+  }
   try {
-    await groupCall({
-      groupId: groupId.value,
-      members,
-      type,
-      groupName: groupName.value || undefined,
-      groupAvatar: groupAvatar.value || undefined,
-    })
+    await groupCall(
+      params
+    )
     currentCallInfo.value = `群组${type === 'audio' ? '语音' : '视频'}通话: ${groupId.value}`
   } catch (error) {
     console.error('发起群组通话失败:', error)

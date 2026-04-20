@@ -112,11 +112,11 @@ const targetUserId = ref('')
 const { call, groupCall, hangup } = useCallKit()
 
 const startAudio = async () => {
-  await call(targetUserId.value, 'audio')
+  await call({ targetId: targetUserId.value, type: 'audio' })
 }
 
 const startVideo = async () => {
-  await call(targetUserId.value, 'video')
+  await call({ targetId: targetUserId.value, type: 'video' })
 }
 
 const endCall = async () => {

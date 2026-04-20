@@ -277,41 +277,56 @@ const {
 } = useCallKit()
 ```
 
-#### call(targetId, type, msg?)
+#### call(params)
 
 发起单人通话。
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `targetId` | `string` | ✅ | 目标用户 ID |
-| `type` | `'audio' \| 'video'` | ✅ | 通话类型 |
-| `msg` | `string` | ❌ | 邀请消息。不传时默认：`"邀请您进行语音通话"` / `"邀请您进行视频通话"` |
+| `params.targetId` | `string` | ✅ | 目标用户 ID |
+| `params.type` | `'audio' \| 'video'` | ✅ | 通话类型 |
+| `params.msg` | `string` | ❌ | 邀请消息。不传时默认：`"邀请您进行语音通话"` / `"邀请您进行视频通话"` |
+| `params.userInfo` | `{ nickname?: string; avatarURL?: string }` | ❌ | 主叫方头像昵称。传入后优先写入 invite 消息扩展字段，被叫方可直接显示 |
 
 ```typescript
-await call('user123', 'video')
-await call('user123', 'audio', '快来语音聊天')
+await call({ targetId: 'user123', type: 'video' })
+await call({ targetId: 'user123', type: 'audio', msg: '快来语音聊天' })
+await call({
+  targetId: 'user123',
+  type: 'video',
+  userInfo: { nickname: '张三', avatarURL: 'https://example.com/avatar.png' }
+})
 ```
 
-#### groupCall(groupId, members, type, msg?, groupName?, groupAvatar?)
+#### groupCall(params)
 
 发起群组通话。
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `groupId` | `string` | ✅ | 群组 ID |
-| `members` | `string[]` | ✅ | 被邀请成员列表 |
-| `type` | `'audio' \| 'video'` | ✅ | 通话类型 |
-| `msg` | `string` | ❌ | 邀请消息 |
-| `groupName` | `string` | ❌ | 群组名称 |
-| `groupAvatar` | `string` | ❌ | 群组头像 URL |
+| `params.groupId` | `string` | ✅ | 群组 ID |
+| `params.members` | `string[]` | ✅ | 被邀请成员列表 |
+| `params.type` | `'audio' \| 'video'` | ✅ | 通话类型 |
+| `params.msg` | `string` | ❌ | 邀请消息 |
+| `params.groupName` | `string` | ❌ | 群组名称 |
+| `params.groupAvatar` | `string` | ❌ | 群组头像 URL |
+| `params.userInfo` | `{ nickname?: string; avatarURL?: string }` | ❌ | 主叫方头像昵称 |
 
 ```typescript
-await groupCall(
-  'group123',
-  ['user1', 'user2', 'user3'],
-  'video',
-  '邀请加入视频会议'
-)
+await groupCall({
+  groupId: 'group123',
+  members: ['user1', 'user2', 'user3'],
+  type: 'video',
+  msg: '邀请加入视频会议'
+})
+
+await groupCall({
+  groupId: 'group123',
+  members: ['user1', 'user2'],
+  type: 'video',
+  groupName: '产品组',
+  userInfo: { nickname: '张三', avatarURL: 'https://example.com/avatar.png' }
+})
 ```
 
 #### hangup(reason?)
