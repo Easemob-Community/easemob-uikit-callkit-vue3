@@ -80,7 +80,7 @@ export { LogLevel } from "./utils/logger";
 export { DEFAULT_BACKGROUND_IMAGE, ICONS, getAssetUrl } from "./config/assets";
 
 const EasemobChatCallKit: Plugin = {
-  install(app: App) {
+  install(app: App, ...options: any[]) {
     // 自动注入 Pinia（用户项目无需额外安装/配置 Pinia）
     if (!app.config.globalProperties.$pinia) {
       app.use(createPinia());
