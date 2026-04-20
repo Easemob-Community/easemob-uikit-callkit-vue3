@@ -29,8 +29,9 @@
 
 ## 更新摘要
 **变更内容**
-- **类型安全性改进**：EasemobChatMultiCall.vue 已更新为使用运行时 defineProps 定义 props，提供更好的类型安全性和开发体验
-- **参与者数据防御性检查**：GroupCallShell.vue 新增 Array.isArray 检查，确保 participants 始终返回纯数组，避免 Pinia computed 解包不一致的问题
+- **重大改进**：autoShow 属性默认值处理优化
+  - autoShow 属性默认值从 undefined 改为 true，提供更明确的显示控制
+  - isVisible 计算属性的逻辑增强，支持更灵活的组件显示控制
 - **架构重构**：EasemobChatMultiCall.vue 已重构为条件渲染组件，集成新的 GroupCallShell 组件
 - **用户信息获取优化**：组件现在使用 GlobalCallStore 获取当前用户的昵称和头像信息，移除了对 callStateStore 的直接依赖
 - **群组信息管理**：群组 ID 和名称现在通过 GroupCallStore 获取，实现更清晰的数据流
@@ -132,7 +133,8 @@ A --> T
 ## 核心组件
 - **主组件**：EasemobChatMultiCall.vue
   - **新增**：条件渲染逻辑，支持新旧架构切换
-  - **新增**：isVisible 计算属性，智能控制组件显示/隐藏
+  - **重大更新**：autoShow 属性默认值从 undefined 改为 true，提供更明确的显示控制
+  - **重大更新**：isVisible 计算属性逻辑增强，支持更灵活的组件显示控制
   - **新增**：groupCallShellRef 引用，管理新架构组件实例
   - **新增**：Vue watcher 机制，处理被邀请参与者会话初始化时机
   - **重大更新**：当 USE_NEW_GROUP_CALL = true 时，渲染 GroupCallShell 替代传统 UI
@@ -238,8 +240,11 @@ end
 - **新增**：条件渲染逻辑
   - `<GroupCallShell v-if="isVisible"`：新架构渲染
   - 支持动态切换新旧架构模式
-- **新增**：isVisible 计算属性
-  - 智能控制组件显示/隐藏
+- **重大更新**：autoShow 属性默认值处理
+  - autoShow 属性默认值从 undefined 改为 true，提供更明确的显示控制
+  - isVisible 计算属性逻辑增强，支持更灵活的组件显示控制
+- **重大更新**：isVisible 计算属性逻辑增强
+  - 当 props.autoShow === false 时，直接返回 true，绕过状态检查
   - 仅在群组通话且 IN_CALL 或 INVITING 状态时显示
   - 支持 autoShow 属性控制是否启用自动显示
 - **新增**：groupCallShellRef 引用
@@ -425,8 +430,8 @@ end
   - 第一段：新架构渲染（条件满足时）
   - 第二段：旧架构渲染（条件满足时）
   - 第三段：隐藏（条件不满足时）
-- **新增**：isVisible 计算属性
-  - 智能判断是否显示组件
+- **重大更新**：isVisible 计算属性逻辑增强
+  - 当 props.autoShow === false 时，直接返回 true，绕过状态检查
   - 仅在群组通话且通话状态有效时显示
   - 支持 autoShow 属性控制
 
@@ -550,6 +555,9 @@ end
   - 提供更好的类型安全性和编译时检查
   - 明确指定每个 prop 的类型、默认值和验证规则
   - 支持复杂的类型约束，如联合类型 'audio' | 'video'
+- **重大更新**：autoShow 属性默认值处理
+  - autoShow：Boolean 类型，默认为 true（从 undefined 改变）
+  - 提供更明确的显示控制行为
 - **新增**：类型定义改进
   - groupId：String 类型，默认为空字符串
   - groupName：String 类型，默认为空字符串
@@ -636,6 +644,9 @@ Z --> C
 - **重大优化**：统一媒体处理
   - RtcMediaBridge 避免重复订阅
   - 统一处理 INVALID_REMOTE_USER 错误
+- **重大更新**：autoShow 属性默认值优化
+  - autoShow 默认值从 undefined 改为 true，提供更明确的显示控制
+  - isVisible 计算属性逻辑增强，支持更灵活的组件显示控制
 - **新增**：Vue watcher 优化
   - 防止重复初始化，提高初始化效率
   - 延迟渲染场景下的自动补救机制
@@ -694,6 +705,10 @@ Z --> C
   - 检查 Array.isArray 检查逻辑
   - 确认 participants 计算属性的返回值
   - 验证下游组件的数据接收
+- **autoShow 属性问题**
+  - 检查 autoShow 属性默认值是否为 true
+  - 确认 isVisible 计算属性逻辑是否正确处理 autoShow === false 的情况
+  - 验证组件显示控制行为是否符合预期
 
 **章节来源**
 - [EasemobChatMultiCall.vue:249-263](file://lib/components/multiCall/EasemobChatMultiCall.vue#L249-L263)
@@ -710,7 +725,7 @@ EasemobChatMultiCall 通过条件渲染机制成功集成了全新的 GroupCallS
 
 **更新** 类型安全性方面，EasemobChatMultiCall.vue 已更新为使用运行时 defineProps 定义 props，提供更好的类型安全性和开发体验。同时，GroupCallShell.vue 新增了 Array.isArray 防御性检查，确保 participants 始终返回纯数组，避免 Pinia computed 解包不一致导致的问题。这些改进显著提升了代码质量和运行时稳定性。
 
-这一系列重大架构升级标志着群组通话组件向现代化、模块化、高可靠性的方向迈出了重要一步。
+**更新** 最重要的改进是 autoShow 属性默认值从 undefined 改为 true，提供了更明确的显示控制行为。isVisible 计算属性的逻辑也得到了增强，支持更灵活的组件显示控制。这一系列重大架构升级标志着群组通话组件向现代化、模块化、高可靠性的方向迈出了重要一步。
 
 ## 附录
 
@@ -721,7 +736,7 @@ EasemobChatMultiCall 通过条件渲染机制成功集成了全新的 GroupCallS
   - groupAvatar：群组头像（可选）
   - type：通话类型（'audio' | 'video'）
   - currentUserId：当前用户 ID（可选）
-  - autoShow：**新增** 自动显示/隐藏控制（默认 true）
+  - autoShow：**重大更新** 自动显示/隐藏控制（默认 true）
   - currentNickname：**新增** 当前用户昵称（可选）
   - currentAvatarUrl：**新增** 当前用户头像 URL（可选）
 - **状态**
@@ -730,7 +745,7 @@ EasemobChatMultiCall 通过条件渲染机制成功集成了全新的 GroupCallS
   - isCallActive：通话开始
   - isClearScreen：清屏模式
   - isMinimized：小窗模式（来自 store）
-  - isVisible：**新增** 智能显示控制
+  - isVisible：**重大更新** 智能显示控制，支持 autoShow 属性
   - **重大更新** videoRefs：**Map结构**，彻底解决内存泄漏
   - **新增** groupCallShellRef：**新增** GroupCallShell 组件引用
   - **新增** participants：**新增** 防御性检查的参与者数组
@@ -761,6 +776,7 @@ EasemobChatMultiCall 通过条件渲染机制成功集成了全新的 GroupCallS
   - **新增** 可以通过 GlobalCallStore 管理用户信息缓存
   - **新增** 运行时 defineProps 提供更好的类型安全体验
   - **新增** 防御性检查确保参与者数据的稳定性
+  - **重大更新** autoShow 属性默认值为 true，提供更明确的显示控制
 - **最佳实践**
   - 传入 currentUserId 以正确区分本地/远端视频
   - 合理设置 maxParticipants 与 backgroundImage 提升用户体验
@@ -776,6 +792,7 @@ EasemobChatMultiCall 通过条件渲染机制成功集成了全新的 GroupCallS
   - **新增** 通过 GroupCallStore 统一管理群组状态，确保数据一致性
   - **新增** 利用运行时 defineProps 提升开发体验和代码质量
   - **新增** 通过防御性检查避免潜在的运行时错误
+  - **重大更新** 利用 autoShow 属性的默认值优化，提供更明确的显示控制行为
 
 **章节来源**
 - [README.md:136-166](file://README.md#L136-L166)

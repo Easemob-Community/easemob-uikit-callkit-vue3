@@ -223,8 +223,22 @@ export class GroupCallSignalHandler implements SignalHandler {
       return
     }
 
-    // callId 匹配时，群聊 cancelCall 不执行挂断（由单聊 Handler 处理或忽略）
-    logger.debug('[GroupCallSignalHandler] 群聊 cancelCall callId 匹配，不额外处理')
+    // callId 匹配时，来自主叫方的 cancelCall 执行远程挂断
+    const currentStatus = this.callStateStore.getCallStatus
+    const isFromCaller = message.from === this.callStateStore.getCallState.callerUserId
+
+    if (
+      isFromCaller &&
+      (currentStatus === CALL_STATUS.ALERTING || currentStatus === CALL_STATUS.INVITING)
+    ) {
+      logger.info('[GroupCallSignalHandler] 群聊收到主叫方 cancelCall，执行远程挂断')
+      const callService = new CallService()
+      callService.handleRemoteCancel().catch((err) => {
+        logger.error('[GroupCallSignalHandler] 执行挂断失败:', err)
+      })
+    } else {
+      logger.debug('[GroupCallSignalHandler] 群聊 cancelCall callId 匹配，但状态不符，忽略')
+    }
   }
 
   /**
@@ -266,7 +280,7 @@ export class GroupCallSignalHandler implements SignalHandler {
     const currentStatus = this.callStateStore.getCallStatus
     const isFromCaller = message.from === this.callStateStore.getCallState.callerUserId
 
-    // 被叫方在 ALERTING/INVITING 状态收到主叫方 leaveCall，挂断整个通话
+    // 被叫方在 ALERTING/INVITING 状态收到主叫方 leaveCall，挂断整个通话（不发信令）
     if (
       (currentStatus === CALL_STATUS.ALERTING || currentStatus === CALL_STATUS.INVITING) &&
       isFromCaller
@@ -275,7 +289,7 @@ export class GroupCallSignalHandler implements SignalHandler {
         `[GroupCallSignalHandler] 被叫方收到主叫方(${message.from})离开信令，挂断整个通话`
       )
       const callService = new CallService()
-      callService.hangup(HANGUP_REASON.HANGUP).catch((err) => {
+      callService.handleRemoteCancel().catch((err) => {
         logger.error('[GroupCallSignalHandler] 执行挂断失败:', err)
       })
       return

@@ -360,19 +360,29 @@ export class SingleCallSignalHandler implements SignalHandler {
 
     logger.info('收到对方取消，执行挂断操作')
     const callState = this.callStateStore.getCallState
-    callKitEventBus.emit('callCanceled', {
-      callId: callState.callId,
-      channel: callState.channel,
-      type: callState.type,
-      isRemote: true,
-      callerUserId: callState.callerUserId,
-      calleeUserId: callState.calleeUserId,
-      groupId: undefined,
-    })
+    const isGroupCall =
+      callState.type === CALL_TYPE.VIDEO_MULTI || callState.type === CALL_TYPE.AUDIO_MULTI
     const callService = new CallService()
-    callService.hangup(HANGUP_REASON.CANCEL).catch((err) => {
-      logger.error('执行挂断失败:', err)
-    })
+
+    if (isGroupCall) {
+      // 群通话：使用 REMOTE_CANCEL，避免 callee 再次发送 cancel 信令
+      callService.handleRemoteCancel().catch((err) => {
+        logger.error('执行挂断失败:', err)
+      })
+    } else {
+      callKitEventBus.emit('callCanceled', {
+        callId: callState.callId,
+        channel: callState.channel,
+        type: callState.type,
+        isRemote: true,
+        callerUserId: callState.callerUserId,
+        calleeUserId: callState.calleeUserId,
+        groupId: undefined,
+      })
+      callService.hangup(HANGUP_REASON.CANCEL).catch((err) => {
+        logger.error('执行挂断失败:', err)
+      })
+    }
   }
 
   /**

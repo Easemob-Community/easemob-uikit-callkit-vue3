@@ -40,12 +40,22 @@ export class GroupCallSignalingAdapter {
   }
 
   /**
-   * 挂断 / 离开通话
-   * 复用 CallService.hangup
+   * 挂断 / 离开通话 / 取消邀请
+   * 复用 CallService.hangup / cancelCall
+   * 区分：有成员已加入时发 leaveCall，仅邀请阶段发 cancelCall
    */
   async hangup(): Promise<void> {
-    await this.callService.hangup()
-    logger.info('[GroupCallSignalingAdapter] 挂断完成')
+    const groupCallStore = useGroupCallStore()
+    const hasJoinedMembers = groupCallStore.participantList.some(
+      (p) => !p.isLocal && p.state !== 'invited' && p.state !== 'left'
+    )
+    if (hasJoinedMembers) {
+      await this.callService.hangup() // 有成员已加入，发 leaveCall
+      logger.info('[GroupCallSignalingAdapter] 挂断完成（leaveCall）')
+    } else {
+      await this.callService.cancelCall() // 无人加入，发 cancelCall
+      logger.info('[GroupCallSignalingAdapter] 取消完成（cancelCall）')
+    }
   }
 
   /**
