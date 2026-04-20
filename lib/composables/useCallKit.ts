@@ -9,6 +9,7 @@ import { useJoinChannel } from "./useJoinChannel";
 import { useGroupCallStore } from "../modules/groupCall";
 import { callService } from "../services/CallService";
 import { callKitEventBus } from "../core/events/CallKitEventBus";
+import { resolveUserProfiles } from "../services/UserProfileService";
 
 // 组合式API：useCallKit —— 统一的通话控制入口
 export function useCallKit(): UseCallKitReturn {
@@ -68,6 +69,14 @@ export function useCallKit(): UseCallKitReturn {
 
       const message = await sendInviteMessage(members, "groupChat" as any, msg, groupId, userInfo);
       logger.info(`groupCall: 邀请发送成功，msgId: ${message.serverMsgId}`);
+
+      // 批量获取被邀请成员资料（先查缓存 → 未命中调 Provider → 回写缓存）
+      try {
+        await resolveUserProfiles(members)
+        logger.info('groupCall: 已 enrich 被邀请成员资料')
+      } catch (err) {
+        logger.warn('groupCall: 获取被邀请成员资料失败，回退到 userId', err)
+      }
 
       // 主叫方立即进入 IN_CALL 并加入 RTC
       callStateStore.setCallStatus(CALL_STATUS.IN_CALL);
