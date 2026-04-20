@@ -5,18 +5,18 @@
       v-if="!isMinimized" 
       ref="elementRef"
       class="easemob-chat-single-call"
-      :class="{ 'is-dragging': isDragging, 'has-dragged': hasDragged, 'is-audio': props.type === 'audio' }"
+      :class="{ 'is-dragging': isDragging, 'has-dragged': hasDragged, 'is-audio': callType === 'audio' }"
       :style="[style, backgroundStyle]"
       @mousedown="startDrag"
     >
       <!-- 通话内容区域 -->
       <div class="call-content">
         <!-- 待接听状态子组件 - 只要不在通话中就显示等待界面 -->
-        <EasemobChatCallWaiting v-if="!isInCall" :targetUser="displayTargetUser" :type="props.type || 'video'"
+        <EasemobChatCallWaiting v-if="!isInCall" :targetUser="displayTargetUser" :type="callType"
           @cancel="handleCancelCall"/>
 
         <!-- 通话中状态子组件 -->
-        <EasemobChatCallStream v-else :type="props.type || 'video'" @ended="handleEndCall" />
+        <EasemobChatCallStream v-else :type="callType" @ended="handleEndCall" />
       </div>
       
       <!-- 最小化按钮 -->
@@ -108,6 +108,18 @@ const isCallVisible = computed(() =>
   )
 )
 
+// 通话类型：优先从 store 读取（call/groupCall 时已写入），fallback 到 props
+const callType = computed<'audio' | 'video'>(() => {
+  const storeType = callStateStore.type
+  if (storeType === CALL_TYPE.AUDIO_1V1 || storeType === CALL_TYPE.AUDIO_MULTI) {
+    return 'audio'
+  }
+  if (storeType === CALL_TYPE.VIDEO_1V1 || storeType === CALL_TYPE.VIDEO_MULTI) {
+    return 'video'
+  }
+  return props.type || 'video'
+})
+
 // 目标用户：优先使用 props，否则从 store 自动推断
 const displayTargetUser = computed(() => {
   return props.targetUser || callStateStore.calleeUserId || callStateStore.callerUserId || ''
@@ -158,7 +170,7 @@ const startCall = async () => {
     emit('callStarted')
 
     // 这里应该集成实际的通话SDK
-    logger.info(`Starting ${props.type || 'video'} call with ${displayTargetUser}`)
+    logger.info(`Starting ${callType} call with ${displayTargetUser}`)
   } catch (error) {
     logger.error('Failed to start call:', error)
     handleEndCall()
@@ -180,7 +192,7 @@ const handleEndCall = () => {
 // ========== 背景图配置 ==========
 // 语音通话不使用背景图，使用纯色背景；视频通话使用背景图
 const backgroundStyle = computed<CSSProperties>(() => {
-  if (props.type === 'audio') {
+  if (callType.value === 'audio') {
     return { background: '#1a1a2e' }
   }
   const bgUrl = getAssetUrl(props.backgroundImage, DEFAULT_BACKGROUND_IMAGE)
