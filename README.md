@@ -43,89 +43,11 @@ pnpm add ./easemob-chat-callkit-vue3-1.0.0.tgz
 
 ---
 
-## 🚀 3 分钟快速开始
+## 🚀 快速开始
 
-### Step 1：注册 Pinia + 引入样式
+参见 **[QUICK_START.md](./QUICK_START.md)** — 5 分钟跑通单聊/群聊通话，包含 Pinia 注册、Provider 放置、发起通话完整示例。
 
-```typescript
-// main.ts
-import { createApp } from 'vue'
-import { createPinia } from 'pinia'
-import App from './App.vue'
-import 'easemob-chat-callkit-vue3/style.css'
-
-const app = createApp(App)
-app.use(createPinia())
-app.mount('#app')
-```
-
-### Step 2：在根组件放置 Provider 和通话组件
-
-```vue
-<template>
-  <EasemobChatCallKitProvider :chat-client="chatClient">
-    <!-- 你的应用内容 -->
-    <router-view />
-
-    <!-- 通话邀请通知（被叫时自动弹出） -->
-    <InvitationNotification />
-
-    <!-- 单人通话组件（自动显示/隐藏） -->
-    <EasemobChatSingleCall />
-
-    <!-- 群组通话组件（自动显示/隐藏） -->
-    <EasemobChatMultiCall :group-id="groupId" />
-  </EasemobChatCallKitProvider>
-</template>
-
-<script setup>
-import {
-  EasemobChatCallKitProvider,
-  InvitationNotification,
-  EasemobChatSingleCall,
-  EasemobChatMultiCall,
-} from 'easemob-chat-callkit-vue3'
-
-// 你的环信 IM Connection 实例
-const chatClient = /* easemob-websdk Connection */
-const groupId = /* 群组 ID */
-</script>
-```
-
-### Step 3：在业务组件中发起/结束通话
-
-```vue
-<template>
-  <div>
-    <input v-model="targetUserId" placeholder="输入用户ID" />
-    <button @click="startAudio">语音通话</button>
-    <button @click="startVideo">视频通话</button>
-    <button @click="endCall">结束通话</button>
-  </div>
-</template>
-
-<script setup>
-import { ref } from 'vue'
-import { useCallKit } from 'easemob-chat-callkit-vue3'
-
-const targetUserId = ref('')
-const { call, groupCall, hangup } = useCallKit()
-
-const startAudio = async () => {
-  await call({ targetId: targetUserId.value, type: 'audio' })
-}
-
-const startVideo = async () => {
-  await call({ targetId: targetUserId.value, type: 'video' })
-}
-
-const endCall = async () => {
-  await hangup()
-}
-</script>
-```
-
-> ✅ 就这么简单。`EasemobChatSingleCall` 会根据通话状态自动显示/隐藏，不需要写 `v-if`。
+> 完整 API 参考、事件订阅、进阶用法参见 [USAGE.md](./USAGE.md)。
 
 ---
 
