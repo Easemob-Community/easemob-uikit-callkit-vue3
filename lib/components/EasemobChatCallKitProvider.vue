@@ -13,6 +13,7 @@ import { useCallStateStore } from '../store/callState';
 import { useRtcChannelStore } from '../store/rtcChannel';
 import { logger, LogLevel } from '../utils/logger';
 import { registerUserInfoProvider, registerGroupInfoProvider, clearProfileProviders, type UserInfoProvider } from '../services/UserProfileService';
+import { fetchUserInfoById } from '../utils/imSdkAdapter';
 
 // 确保组件挂载完成后再渲染插槽
 const mounted = ref(false)
@@ -111,10 +112,10 @@ watchEffect(() => {
   }
 })
 
-// 构建默认用户资料 Provider（基于环信 SDK fetchUserInfoById）
+// 构建默认用户资料 Provider（基于环信 SDK fetchUserInfoById，兼容 full/miniCore）
 function createDefaultUserInfoProvider(chatClient: any): UserInfoProvider {
   return async (userIds: string[]) => {
-    const response = await chatClient.fetchUserInfoById(userIds, ['nickname', 'avatarurl'])
+    const response = await fetchUserInfoById(chatClient, userIds, ['nickname', 'avatarurl'])
     const data = response.data || {}
     return Object.entries(data).map(([userId, info]: [string, any]) => ({
       userId,

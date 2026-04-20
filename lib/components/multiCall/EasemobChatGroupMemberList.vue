@@ -77,6 +77,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useChatClientStore } from '../../store/chatClient'
 import { resolveUserProfiles } from '../../services/UserProfileService'
 import { logger } from '../../utils/logger'
+import { getGroupMembers } from '../../utils/imSdkAdapter'
 
 function getFirstChar(name: string) {
   return name?.charAt(0)?.toUpperCase() || '?'
@@ -140,9 +141,8 @@ const fetchGroupMembers = async () => {
     const pageSize = 100
 
     do {
-      // 环信 SDK 4.x 获取群成员列表
-      // @ts-ignore
-      const response = await client.getGroupMembers({
+      // 环信 SDK 4.x 获取群成员列表（兼容 full/miniCore）
+      const response = await getGroupMembers(client, {
         groupId: props.groupId,
         pageSize,
         cursor,
