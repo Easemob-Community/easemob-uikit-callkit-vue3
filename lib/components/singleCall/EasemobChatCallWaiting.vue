@@ -1,7 +1,10 @@
 <template>
   <div class="call-waiting">
     <div class="caller-info">
-      <div class="caller-avatar"></div>
+      <div class="caller-avatar">
+        <img v-if="targetUserInfo.avatarURL" :src="targetUserInfo.avatarURL" :alt="displayName" />
+        <div v-else class="avatar-fallback">{{ displayName?.[0]?.toUpperCase() || '?' }}</div>
+      </div>
       <div class="caller-details">
         <h3>正在呼叫</h3>
         <p>{{ displayName }}</p>
@@ -35,9 +38,12 @@ interface CallWaitingProps {
 const props = defineProps<CallWaitingProps>()
 const globalCallStore = useGlobalCallStore()
 
+const targetUserInfo = computed(() => {
+  return globalCallStore.getUserInfo(props.targetUser)
+})
+
 const displayName = computed(() => {
-  const userInfo = globalCallStore.getUserInfo(props.targetUser)
-  return userInfo.nickname || props.targetUser
+  return targetUserInfo.value.nickname || props.targetUser
 })
 
 const { cancel: hangupCall } = useCallKit()

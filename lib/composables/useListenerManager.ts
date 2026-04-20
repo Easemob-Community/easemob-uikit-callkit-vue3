@@ -10,6 +10,7 @@ import {
 import type { SignalingExt } from '../types/signal.types'
 import { useSignalManager } from './useSignalManager'
 import { useGlobalCallStore } from '../store/globalCall'
+import { resolveUserProfiles } from '../services/UserProfileService'
 import { SignalRouter } from '../signaling/SignalRouter'
 import { SingleCallSignalHandler } from '../signaling/SingleCallSignalHandler'
 import { GroupCallSignalHandler } from '../signaling/GroupCallSignalHandler'
@@ -59,7 +60,7 @@ export function useListenerManager(): ListenerManagerReturn {
   /**
    * 处理通话邀请消息（文本消息）
    */
-  const handleInvitationMessage = (message: Chat.TextMsgBody) => {
+  const handleInvitationMessage = async (message: Chat.TextMsgBody) => {
     const client = chatClientStore.getChatClient as Chat.Connection
     if (!client) {
       logger.warn('ChatClient 未初始化，无法处理邀请')
@@ -166,6 +167,17 @@ export function useListenerManager(): ListenerManagerReturn {
       groupAvatar: ext?.callkitGroupInfo?.groupAvatar,
       invitedMembers: ext?.invitedMembers,
     })
+
+    // 如果消息 ext 中没有用户属性，尝试通过 Provider 查询主叫方资料
+    const userAttributes = ext?.ease_chat_uikit_user_info
+    if (!userAttributes && message.from) {
+      try {
+        await resolveUserProfiles([message.from])
+        logger.info(`[邀请处理] 已通过 Provider 查询主叫方资料: ${message.from}`)
+      } catch (err) {
+        logger.warn(`[邀请处理] Provider 查询主叫方资料失败: ${message.from}`, err)
+      }
+    }
 
     // 设置超时计时器
     callStateStore.startTimeoutTimer(() => {

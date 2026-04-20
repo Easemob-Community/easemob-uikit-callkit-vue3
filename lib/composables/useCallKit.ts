@@ -37,6 +37,14 @@ export function useCallKit(): UseCallKitReturn {
     try {
       const message = await sendInviteMessage(targetId, "singleChat" as any, msg, undefined, userInfo);
       logger.info(`call: 邀请发送成功，msgId: ${message.serverMsgId}`);
+
+      // 批量获取被叫方资料（先查缓存 → 未命中调 Provider → 回写缓存）
+      try {
+        await resolveUserProfiles([targetId])
+        logger.info('call: 已 enrich 被叫方资料')
+      } catch (err) {
+        logger.warn('call: 获取被叫方资料失败，回退到 userId', err)
+      }
     } catch (error) {
       logger.error(`call: 邀请发送失败`, error);
     }

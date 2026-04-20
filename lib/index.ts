@@ -84,8 +84,7 @@ const VERSION = "1.0.1";
 
 const EasemobChatCallKit: Plugin = {
   install(app: App, ...options: any[]) {
-    // eslint-disable-next-line no-console
-    console.log(`%c[EasemobChatCallKit] v${VERSION} initialized`, "color: #4ade80; font-weight: bold;");
+    console.info(`%c[EasemobChatCallKit] v${VERSION} initialized`, "color: #4ade80; font-weight: bold;");
     // 自动注入 Pinia（用户项目无需额外安装/配置 Pinia）
     if (!app.config.globalProperties.$pinia) {
       app.use(createPinia());
