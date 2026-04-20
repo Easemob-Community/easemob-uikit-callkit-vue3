@@ -9,12 +9,14 @@ import type {
   CALLKIT_SIGNALING_CMD_ACTION,
 } from "../types/signal.types";
 import { useCallStateStore } from "../store/callState";
+import { useGlobalCallStore } from "../store/globalCall";
 import {
   CALL_TYPE,
   type CALLKIT_CMD_MSG_ACTION_TYPE,
   CALLKIT_CMD_MSG_RESULT_TYPE,
 } from "../types/callstate.types";
 import { logger } from "../utils/logger";
+import { getUserInfoProvider, getGroupInfoProvider } from "./UserProfileService";
 export class ChatService {
   private chatClient: Chat.Connection | null = null;
   private callStateStore = useCallStateStore();
@@ -22,7 +24,7 @@ export class ChatService {
     this.chatClient = chatClient;
   }
   //构建邀请信息的ext
-  private buildInviteMessageExt() {
+  private async buildInviteMessageExt(groupId?: string) {
     const callState = this.callStateStore.getCallState;
     const ext: InviteSignalingExt = {
       action: "invite",
@@ -58,6 +60,77 @@ export class ChatService {
         em_push_type: "voip",
       },
     };
+
+    // 获取当前用户资料：优先从 GlobalCallStore 读取，没有则通过 Provider 查询
+    const currentUserId = this.chatClient?.user || '';
+    const globalCallStore = useGlobalCallStore();
+    const cachedInfo = globalCallStore.getUserInfo(currentUserId);
+
+    let nickname = cachedInfo.nickname;
+    let avatarURL = cachedInfo.avatarURL;
+
+    // 如果缓存中没有完整资料，尝试通过 Provider 查询
+    if ((!nickname || !avatarURL) && currentUserId) {
+      const userInfoProvider = getUserInfoProvider();
+      if (userInfoProvider) {
+        try {
+          const profiles = await userInfoProvider([currentUserId]);
+          const profile = profiles.find(p => p.userId === currentUserId);
+          if (profile) {
+            nickname = profile.nickname || nickname;
+            avatarURL = profile.avatarUrl || avatarURL;
+            // 缓存到 GlobalCallStore
+            globalCallStore.setUserInfo(currentUserId, {
+              nickname: nickname || currentUserId,
+              avatarURL: avatarURL || '',
+            });
+          }
+        } catch (error) {
+          logger.warn('[ChatService] 获取当前用户资料失败', error);
+        }
+      }
+    }
+
+    // 写入 caller 资料到 ext
+    if (nickname || avatarURL) {
+      ext.ease_chat_uikit_user_info = {
+        nickname: nickname || currentUserId,
+        avatarURL: avatarURL || '',
+      };
+      // 同时更新 push ext 中的 callerNickname
+      ext.em_push_ext.custom.callerNickname = nickname || currentUserId;
+    }
+
+    // 群通话：补充群信息
+    if (groupId || callState.type === CALL_TYPE.VIDEO_MULTI || callState.type === CALL_TYPE.AUDIO_MULTI) {
+      const gid = groupId || callState.groupId || '';
+      if (gid) {
+        const groupInfoProvider = getGroupInfoProvider();
+        let groupName: string | undefined;
+        let groupAvatar: string | undefined;
+
+        // 优先从 Provider 查询
+        if (groupInfoProvider) {
+          try {
+            const groupProfiles = await groupInfoProvider([gid]);
+            const groupProfile = groupProfiles.find(p => p.groupId === gid);
+            if (groupProfile) {
+              groupName = groupProfile.groupName;
+              groupAvatar = groupProfile.groupAvatar;
+            }
+          } catch (error) {
+            logger.warn('[ChatService] 获取群组信息失败', error);
+          }
+        }
+
+        ext.callkitGroupInfo = {
+          groupId: gid,
+          groupName: groupName || gid,
+          groupAvatar,
+        };
+      }
+    }
+
     return ext;
   }
   //构建信令消息扩展字段
@@ -144,7 +217,7 @@ export class ChatService {
    * @param message 消息内容
    * @param groupId 群组ID（群聊时必须）
    */
-  sendTextMessage(
+  async sendTextMessage(
     targetId: string | string[],
     chatType: Chat.ChatType,
     message: string,
@@ -156,7 +229,7 @@ export class ChatService {
     
     // 判断是否为群组通话
     const isGroupChat = Array.isArray(targetId);
-    const inviteExt = this.buildInviteMessageExt();
+    const inviteExt = await this.buildInviteMessageExt(groupId);
     
     interface ITextInviteMessage extends Chat.CreateTextMsgParameters {
       ext: InviteSignalingExt;

@@ -210,7 +210,7 @@ onUnmounted(() => {
 })
 
 // 登录相关状态
-const loginUserId = ref('ppp')
+const loginUserId = ref('pfh')
 const loginPassword = ref('1')
 
 // 环信客户端实例

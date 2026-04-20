@@ -12,6 +12,7 @@ import { useChatClientStore } from '../store/chatClient';
 import { useCallStateStore } from '../store/callState';
 import { useRtcChannelStore } from '../store/rtcChannel';
 import { logger, LogLevel } from '../utils/logger';
+import { registerUserInfoProvider, registerGroupInfoProvider, clearProfileProviders } from '../services/UserProfileService';
 
 // 确保组件挂载完成后再渲染插槽
 const mounted = ref(false)
@@ -106,14 +107,27 @@ watchEffect(() => {
   }
 })
 
+// 注册用户/群组资料 Provider
+watchEffect(() => {
+  if (props.getUserInfo) {
+    registerUserInfoProvider(props.getUserInfo)
+    logger.debug('CallKit Provider 已注册用户资料 Provider')
+  }
+  if (props.getGroupInfo) {
+    registerGroupInfoProvider(props.getGroupInfo)
+    logger.debug('CallKit Provider 已注册群组资料 Provider')
+  }
+})
+
 // 组件挂载完成
 onMounted(() => {
   mounted.value = true
 })
 
-// 组件卸载时清理RTC服务
+// 组件卸载时清理RTC服务和Provider
 onUnmounted(async () => {
   await rtcChannelStore.destroyRtcService();
+  clearProfileProviders();
 });
 
 </script>

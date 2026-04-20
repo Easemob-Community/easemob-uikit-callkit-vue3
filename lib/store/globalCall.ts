@@ -19,6 +19,20 @@ export const useGlobalCallStore = defineStore('globalCall', {
       this.userInfoMap.set(userId, userInfo)
     },
 
+    /**
+     * 批量设置用户信息
+     */
+    batchSetUserInfo(
+      entries: Array<{
+        userId: string
+        userInfo: { nickname?: string; avatarURL?: string }
+      }>
+    ) {
+      for (const { userId, userInfo } of entries) {
+        this.userInfoMap.set(userId, userInfo)
+      }
+    },
+
     setMinimized(value: boolean) {
       this.isMinimized = value
     },

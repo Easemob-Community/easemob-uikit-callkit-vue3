@@ -56,11 +56,11 @@ import { logger } from '../../utils/logger'
 import CallInfoBar from './CallInfoBar.vue'
 import CallControls from './CallControls.vue'
 
-interface Props {
+interface CallStreamProps {
   type: 'audio' | 'video'
 }
 
-const props = defineProps<Props>()
+const props = defineProps<CallStreamProps>()
 
 const emit = defineEmits<{
   ended: []

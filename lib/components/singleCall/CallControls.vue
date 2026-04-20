@@ -42,13 +42,13 @@
 </template>
 
 <script setup lang="ts">
-interface Props {
+interface CallControlsProps {
   isMuted: boolean
   isVideoEnabled?: boolean
   showVideo?: boolean
 }
 
-withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<CallControlsProps>(), {
   isVideoEnabled: true,
   showVideo: true
 })

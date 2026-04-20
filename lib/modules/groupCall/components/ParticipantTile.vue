@@ -59,11 +59,11 @@ import CallKitIcon from './CallKitIcon.vue'
 import type { Participant } from '../types'
 import { logger } from '../../../utils/logger'
 
-interface Props {
+interface ParticipantTileProps {
   participant: Participant
 }
 
-const props = defineProps<Props>()
+const props = defineProps<ParticipantTileProps>()
 const emit = defineEmits<{
   click: [userId: string]
 }>()

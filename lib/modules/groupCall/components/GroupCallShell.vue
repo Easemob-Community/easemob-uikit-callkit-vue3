@@ -97,7 +97,7 @@ import { useDraggable } from '../../../composables/useDraggable'
 import type { RtcService } from '../../../services/RtcService'
 import { logger } from '../../../utils/logger'
 
-interface Props {
+export interface GroupCallShellProps {
   groupId: string
   groupName?: string
   currentUserId: string
@@ -106,7 +106,7 @@ interface Props {
   rtcService?: RtcService | null
 }
 
-const props = defineProps<Props>()
+const props = defineProps<GroupCallShellProps>()
 const emit = defineEmits<{
   hangup: []
   addParticipant: []

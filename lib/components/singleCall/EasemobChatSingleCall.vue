@@ -48,7 +48,7 @@ import EasemobChatCallWaiting from './EasemobChatCallWaiting.vue'
 import EasemobChatCallStream from './EasemobChatCallStream.vue'
 import EasemobChatMiniWindow from '../EasemobChatMiniWindow.vue'
 
-interface Props {
+interface SingleCallProps {
   /**
    * 目标用户ID（主叫方传入）。组件内部也会自动从 callStateStore 读取
    */
@@ -63,7 +63,7 @@ interface Props {
   backgroundImage?: string
 }
 
-const props = withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<SingleCallProps>(), {
   enableRingtone: true
 })
 
@@ -189,7 +189,11 @@ const backgroundStyle = computed<CSSProperties>(() => {
 let stopStateWatch: Function | null = null
 
 onMounted(() => {
-  startCall()
+  // 只有当前处于非 IDLE 状态时才认为通话已激活
+  // 避免组件挂载时无条件自动"启动通话"
+  if (callStateStore.status !== CALL_STATUS.IDLE) {
+    startCall()
+  }
 
   // 设置状态监听器
   stopStateWatch = callStateStore.$subscribe((_mutation, state) => {

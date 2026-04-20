@@ -21,14 +21,17 @@ import { useChatClientStore } from '../../store/chatClient'
 import { useGlobalCallStore } from '../../store/globalCall'
 import { CALL_STATUS, CALL_TYPE } from '../../types/callstate.types'
 import { GroupCallShell } from '../../modules/groupCall'
+import { logger } from '../../utils/logger'
 
-const props = defineProps({
-  groupId: { type: String, default: '' },
-  groupName: { type: String, default: '' },
-  groupAvatar: { type: String, default: '' },
-  type: { type: String as () => 'audio' | 'video', default: 'video' },
-  currentUserId: { type: String, default: '' },
-  autoShow: { type: Boolean, default: true }
+const props = withDefaults(defineProps<{
+  groupId?: string
+  groupName?: string
+  groupAvatar?: string
+  type?: 'audio' | 'video'
+  currentUserId?: string
+  autoShow?: boolean
+}>(), {
+  autoShow: true,
 })
 
 const emit = defineEmits<{
@@ -52,12 +55,24 @@ const globalCallStore = useGlobalCallStore()
 const groupCallShellRef = ref<InstanceType<typeof GroupCallShell> | null>(null)
 
 const isVisible = computed(() => {
-  if (!props.autoShow) return true
+  if (props.autoShow === false) return true
   const status = callStateStore.getCallStatus
   const callType = callStateStore.getCallState.type
+  const callId = callStateStore.getCallState.callId
   const isGroupCall = callType === CALL_TYPE.VIDEO_MULTI || callType === CALL_TYPE.AUDIO_MULTI
   const isInCall = status === CALL_STATUS.IN_CALL || status === CALL_STATUS.INVITING
-  return isGroupCall && isInCall
+  const hasValidCall = !!callId && callId.length > 0
+  const result = isGroupCall && isInCall && hasValidCall
+  logger.debug('[EasemobChatMultiCall] isVisible check:', {
+    status,
+    callType,
+    callId,
+    isGroupCall,
+    isInCall,
+    hasValidCall,
+    result,
+  })
+  return result
 })
 
 const handleHangup = () => {
@@ -74,7 +89,16 @@ watch(
   groupCallShellRef,
   (shell, prevShell) => {
     if (shell && !prevShell) {
-      const callType = callStateStore.getCallState.type === CALL_TYPE.AUDIO_MULTI ? 'audio' : 'video'
+      const status = callStateStore.getCallStatus
+      const type = callStateStore.getCallState.type
+      // 只有真正处于群通话状态中才补调 startSession，避免 autoShow=false 时误触发
+      const isGroupCall = type === CALL_TYPE.VIDEO_MULTI || type === CALL_TYPE.AUDIO_MULTI
+      const isInCall = status === CALL_STATUS.IN_CALL || status === CALL_STATUS.INVITING
+      if (!isGroupCall || !isInCall) {
+        logger.info('[EasemobChatMultiCall] shell 渲染但不在群通话状态，跳过 startSession')
+        return
+      }
+      const callType = type === CALL_TYPE.AUDIO_MULTI ? 'audio' : 'video'
       shell.startSession({
         sessionId: callStateStore.getCallState.channel || '',
         callType,

@@ -1,6 +1,7 @@
 import { ref, computed, watch, type ComputedRef, type Ref } from 'vue'
 import { useGroupCallStore } from './GroupCallStore'
 import { useRtcChannelStore } from '../../../store/rtcChannel'
+import { useGlobalCallStore } from '../../../store/globalCall'
 import { RtcMediaBridge } from '../media/RtcMediaBridge'
 import { GroupCallSignalingAdapter } from '../signaling/GroupCallSignalingAdapter'
 import type { RtcService } from '../../../services/RtcService'
@@ -230,8 +231,11 @@ export function useGroupCallViewModel(): UseGroupCallViewModelReturn {
     // 1. 信令发送
     await signaling.sendInvite(userIds, groupId, message)
     // 2. 本地状态更新（watch 会自动为新 invited 成员设置超时定时器）
+    const globalCallStore = useGlobalCallStore()
     userIds.forEach(id => {
-      addRemoteParticipant(id, id) // nickname 兜底，实际应由外部传入
+      // 从 GlobalCallStore 获取成员资料，没有则回退到 userId
+      const userInfo = globalCallStore.getUserInfo(id)
+      addRemoteParticipant(id, userInfo.nickname || id, userInfo.avatarURL)
     })
   }
 

@@ -1,6 +1,7 @@
 import type { IAgoraRTCRemoteUser, IRemoteVideoTrack, IRemoteAudioTrack } from 'agora-rtc-sdk-ng'
 import type { RtcService } from '../../../services/RtcService'
 import { useGroupCallStore } from '../viewModel/GroupCallStore'
+import { useGlobalCallStore } from '../../../store/globalCall'
 import { useChatClientStore } from '../../../store/chatClient'
 import { logger } from '../../../utils/logger'
 
@@ -86,6 +87,8 @@ export class RtcMediaBridge {
       } else {
         this.store.setParticipantState(userId, 'joinedRtc')
       }
+      // 解析成功后，尝试用 GlobalCallStore 的资料更新参与者
+      this.enrichParticipantProfile(userId)
     } else {
       // 创建临时未知用户占位，等后续解析
       logger.warn('[RtcMediaBridge] 无法解析 uid，创建临时占位', uid)
@@ -214,10 +217,16 @@ export class RtcMediaBridge {
 
     logger.info('[RtcMediaBridge] 迁移临时参与者到真实 userId', { tempUserId, realUserId })
 
+    // 从 GlobalCallStore 查询真实用户资料
+    const globalCallStore = useGlobalCallStore()
+    const userInfo = globalCallStore.getUserInfo(realUserId)
+    const nickname = userInfo.nickname || (temp.nickname === '未知用户' ? realUserId : temp.nickname)
+    const avatarUrl = userInfo.avatarURL || temp.avatarUrl
+
     this.store.addParticipant({
       userId: realUserId,
-      nickname: temp.nickname === '未知用户' ? realUserId : temp.nickname,
-      avatarUrl: temp.avatarUrl,
+      nickname,
+      avatarUrl,
       state: temp.state,
       isLocal: temp.isLocal,
       videoTrack: temp.videoTrack,
@@ -231,6 +240,20 @@ export class RtcMediaBridge {
     })
 
     this.store.removeParticipant(tempUserId)
+  }
+
+  /**
+   * 用 GlobalCallStore 中的资料丰富参与者信息
+   */
+  private enrichParticipantProfile(userId: string) {
+    const globalCallStore = useGlobalCallStore()
+    const userInfo = globalCallStore.getUserInfo(userId)
+    if (userInfo.nickname || userInfo.avatarURL) {
+      this.store.updateParticipantProfile(userId, {
+        nickname: userInfo.nickname,
+        avatarUrl: userInfo.avatarURL,
+      })
+    }
   }
 
   private async fetchUserIdByUid(uid: string): Promise<string | null> {

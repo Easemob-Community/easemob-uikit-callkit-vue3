@@ -4,7 +4,7 @@
       <div class="caller-avatar"></div>
       <div class="caller-details">
         <h3>正在呼叫</h3>
-        <p>{{ targetUser }}</p>
+        <p>{{ displayName }}</p>
         <div class="call-type-indicator">{{ callType === 'audio' ? '语音通话' : '视频通话' }}</div>
       </div>
     </div>
@@ -23,15 +23,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useCallKit } from '../../composables/useCallKit'
+import { useGlobalCallStore } from '../../store/globalCall'
 
-interface Props {
+interface CallWaitingProps {
   targetUser: string
   type: 'audio' | 'video'
 }
 
-const props = defineProps<Props>()
+const props = defineProps<CallWaitingProps>()
+const globalCallStore = useGlobalCallStore()
+
+const displayName = computed(() => {
+  const userInfo = globalCallStore.getUserInfo(props.targetUser)
+  return userInfo.nickname || props.targetUser
+})
 
 const { cancel: hangupCall } = useCallKit()
 

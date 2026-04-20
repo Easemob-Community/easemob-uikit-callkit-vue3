@@ -46,6 +46,20 @@ export interface ProviderConfig {
     draggable?: boolean; // 开启可拖动
     inviteTimeout?: number; // 邀请超时时间，单位毫秒，默认 30000 毫秒
   };
+  /**
+   * 用户信息查询 Provider
+   * 用于获取通话参与者的昵称和头像
+   * @param userIds 用户ID数组
+   * @returns 用户信息数组 { userId, nickname?, avatarUrl? }
+   */
+  getUserInfo?: (userIds: string[]) => Promise<Array<{ userId: string; nickname?: string; avatarUrl?: string }>>;
+  /**
+   * 群组信息查询 Provider
+   * 用于获取群组的名称和头像
+   * @param groupIds 群组ID数组
+   * @returns 群组信息数组 { groupId, groupName?, groupAvatar? }
+   */
+  getGroupInfo?: (groupIds: string[]) => Promise<Array<{ groupId: string; groupName?: string; groupAvatar?: string }>>;
 }
 
 // 导出类型别名，避免导入错误

@@ -7,14 +7,14 @@ import { computed } from 'vue'
 import { iconRegistry } from './iconRegistry'
 import { logger } from '../../../utils/logger'
 
-interface Props {
+interface CallKitIconProps {
   name: string
   width?: number | string
   height?: number | string
   color?: string
 }
 
-const props = withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<CallKitIconProps>(), {
   width: 24,
   height: 24,
   color: 'currentColor',

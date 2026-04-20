@@ -8,11 +8,11 @@
 </template>
 
 <script setup lang="ts">
-interface Props {
+interface CallInfoBarProps {
   duration: string
 }
 
-defineProps<Props>()
+defineProps<CallInfoBarProps>()
 </script>
 
 <style scoped src="./styles/CallInfoBar.css"></style>

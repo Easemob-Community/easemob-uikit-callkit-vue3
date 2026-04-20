@@ -192,6 +192,34 @@ export const useGroupCallStore = defineStore('groupCall', () => {
     }
   }
 
+  /**
+   * 更新参与者的用户资料（昵称/头像）
+   */
+  function updateParticipantProfile(
+    userId: string,
+    profile: { nickname?: string; avatarUrl?: string }
+  ) {
+    const p = participants.value.get(userId)
+    if (!p) {
+      logger.warn('[GroupCallStore] 尝试更新不存在参与者的资料', userId)
+      return
+    }
+    let changed = false
+    if (profile.nickname !== undefined && p.nickname !== profile.nickname) {
+      p.nickname = profile.nickname
+      changed = true
+    }
+    if (profile.avatarUrl !== undefined && p.avatarUrl !== profile.avatarUrl) {
+      p.avatarUrl = profile.avatarUrl
+      changed = true
+    }
+    if (changed) {
+      // Vue3 ref(Map) 对内部对象属性修改是浅响应的，需重新赋值触发更新
+      participants.value = new Map(participants.value)
+      logger.info('[GroupCallStore] 更新参与者资料', { userId, ...profile })
+    }
+  }
+
   return {
     // state
     session,
@@ -218,5 +246,6 @@ export const useGroupCallStore = defineStore('groupCall', () => {
     setMuteState,
     setCameraState,
     setSpeakingState,
+    updateParticipantProfile,
   }
 })

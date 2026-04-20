@@ -2,6 +2,7 @@ import { useChatClientStore } from '../store/chatClient'
 import { useCallStateStore } from '../store/callState'
 import { useSingleCallRtcStore } from '../store/singleCallRtc'
 import { useGroupCallStore } from '../modules/groupCall'
+import { useGlobalCallStore } from '../store/globalCall'
 import { CallService } from '../services/CallService'
 import { CALL_STATUS, CALL_TYPE, HANGUP_REASON } from '../types/callstate.types'
 import { logger } from '../utils/logger'
@@ -49,9 +50,21 @@ export class GroupCallSignalHandler implements SignalHandler {
     const callerUserId = ext?.callerIMName || message.from || ''
     const groupId = ext?.callkitGroupInfo?.groupId || ''
     const groupName = ext?.callkitGroupInfo?.groupName || ''
+    const groupAvatar = ext?.callkitGroupInfo?.groupAvatar || ''
     const channel = ext?.channelName || ''
     const callType = ext?.type === CALL_TYPE.VIDEO_MULTI ? 'video' : 'audio'
     const invitedMembers: string[] = ext?.invitedMembers || []
+
+    const globalCallStore = useGlobalCallStore()
+
+    // 解析 caller 资料并存入 GlobalCallStore
+    const callerUserInfo = ext?.ease_chat_uikit_user_info
+    if (callerUserInfo && callerUserId) {
+      globalCallStore.setUserInfo(callerUserId, {
+        nickname: callerUserInfo.nickname || callerUserId,
+        avatarURL: callerUserInfo.avatarURL || '',
+      })
+    }
 
     this.groupCallStore.initSession({
       sessionId: channel,
@@ -63,9 +76,11 @@ export class GroupCallSignalHandler implements SignalHandler {
     })
 
     // 本地用户
+    const localUserInfo = globalCallStore.getUserInfo(currentUserId)
     this.groupCallStore.addParticipant({
       userId: currentUserId,
-      nickname: currentUserId,
+      nickname: localUserInfo.nickname || currentUserId,
+      avatarUrl: localUserInfo.avatarURL,
       state: 'invited',
       isLocal: true,
       videoTrack: null,
@@ -78,9 +93,11 @@ export class GroupCallSignalHandler implements SignalHandler {
 
     // 主叫方
     if (callerUserId && callerUserId !== currentUserId) {
+      const callerInfo = globalCallStore.getUserInfo(callerUserId)
       this.groupCallStore.addParticipant({
         userId: callerUserId,
-        nickname: callerUserId,
+        nickname: callerInfo.nickname || callerUserId,
+        avatarUrl: callerInfo.avatarURL,
         state: 'joinedRtc',
         isLocal: false,
         videoTrack: null,
@@ -95,9 +112,11 @@ export class GroupCallSignalHandler implements SignalHandler {
     // 其他被邀请成员
     invitedMembers.forEach((m: string) => {
       if (m !== currentUserId && m !== callerUserId) {
+        const memberInfo = globalCallStore.getUserInfo(m)
         this.groupCallStore.addParticipant({
           userId: m,
-          nickname: m,
+          nickname: memberInfo.nickname || m,
+          avatarUrl: memberInfo.avatarURL,
           state: 'invited',
           isLocal: false,
           videoTrack: null,
@@ -112,7 +131,12 @@ export class GroupCallSignalHandler implements SignalHandler {
 
     logger.info('[GroupCallSignalHandler] GroupCallStore 已初始化', {
       groupId,
-      participants: this.groupCallStore.participantList.map((p) => p.userId),
+      groupName,
+      groupAvatar,
+      participants: this.groupCallStore.participantList.map((p) => ({
+        userId: p.userId,
+        nickname: p.nickname,
+      })),
     })
   }
 

@@ -3,37 +3,25 @@
 <cite>
 **本文档引用的文件**
 - [lib/composables/useCallKit.ts](file://lib/composables/useCallKit.ts)
-- [lib/composables/useCallService.ts](file://lib/composables/useCallService.ts)
 - [lib/composables/useEndCall.ts](file://lib/composables/useEndCall.ts)
 - [lib/composables/useAnswerCall.ts](file://lib/composables/useAnswerCall.ts)
 - [lib/composables/useJoinChannel.ts](file://lib/composables/useJoinChannel.ts)
-- [lib/composables/useSignalManager.ts](file://lib/composables/useSignalManager.ts)
-- [lib/composables/useListenerManager.ts](file://lib/composables/useListenerManager.ts)
-- [lib/composables/useParticipants.ts](file://lib/composables/useParticipants.ts)
+- [lib/composables/useCallKitEvents.ts](file://lib/composables/useCallKitEvents.ts)
+- [lib/core/events/CallKitEventBus.ts](file://lib/core/events/CallKitEventBus.ts)
+- [lib/core/events/types.ts](file://lib/core/events/types.ts)
 - [lib/services/CallService.ts](file://lib/services/CallService.ts)
 - [lib/store/callState.ts](file://lib/store/callState.ts)
-- [lib/store/types.ts](file://lib/store/types.ts)
-- [lib/types/callstate.types.ts](file://lib/types/callstate.types.ts)
-- [lib/config/featureFlags.ts](file://lib/config/featureFlags.ts)
-- [lib/modules/groupCall/index.ts](file://lib/modules/groupCall/index.ts)
-- [lib/modules/groupCall/viewModel/GroupCallStore.ts](file://lib/modules/groupCall/viewModel/GroupCallStore.ts)
-- [lib/modules/groupCall/types.ts](file://lib/modules/groupCall/types.ts)
-- [lib/modules/groupCall/viewModel/useGroupCallViewModel.ts](file://lib/modules/groupCall/viewModel/useGroupCallViewModel.ts)
-- [lib/modules/groupCall/signaling/GroupCallSignalingAdapter.ts](file://lib/modules/groupCall/signaling/GroupCallSignalingAdapter.ts)
-- [lib/ARCHITECTURE.md](file://lib/ARCHITECTURE.md)
-- [lib/SIGNALING_IMPLEMENTATION.md](file://lib/SIGNALING_IMPLEMENTATION.md)
+- [lib/types.ts](file://lib/types.ts)
+- [test/src/App.vue](file://test/src/App.vue)
 </cite>
 
 ## 更新摘要
 **变更内容**
-- 新增 GroupCallModule 架构支持，包含条件逻辑以启用新功能
-- 更新 useAnswerCall.ts 和 useJoinChannel.ts 的增强功能
-- 新增 useGroupCallStore 状态管理模块
-- 更新错误处理改进章节，包含新的兜底状态重置机制
-- 新增群组通话参与者状态管理功能
-- 更新故障排除指南，包含新架构的调试方法
-- **重构**：useCallKit.ts、useAnswerCall.ts、useJoinChannel.ts 移除了旧架构依赖，简化了调用逻辑并通过功能开关集成新架构
-- **废弃**：useParticipants.ts 标记为废弃，推荐使用新的 GroupCallModule
+- useCallKit.ts 重大增强：统一了单人和群组通话 API，新增完整的事件发射机制
+- 新增 useCallKitEvents 组合式 API，提供完整的事件订阅能力
+- 改进错误处理和状态管理，增强 UI 卡住问题的兜底机制
+- CallKitEventBus 提供类型安全的发布/订阅机制
+- 完善群组通话的会话管理和参与者状态跟踪
 
 ## 目录
 1. [简介](#简介)
@@ -41,7 +29,7 @@
 3. [核心组件](#核心组件)
 4. [架构概览](#架构概览)
 5. [详细组件分析](#详细组件分析)
-6. [GroupCallModule 架构](#groupcallmodule-架构)
+6. [事件系统](#事件系统)
 7. [错误处理改进](#错误处理改进)
 8. [依赖关系分析](#依赖关系分析)
 9. [性能考虑](#性能考虑)
@@ -50,11 +38,9 @@
 
 ## 简介
 
-本文档详细介绍 Easemob Vue3 通话控制相关的组合式 API，重点涵盖 `useCallKit`、`useCallService`、`useEndCall`、`useAnswerCall`、`useJoinChannel` 等核心函数。这些 API 提供了完整的通话生命周期管理能力，包括发起单人和群组通话、接听来电、结束通话等操作。
+本文档详细介绍 Easemob Vue3 通话控制相关的组合式 API，重点涵盖 `useCallKit`、`useEndCall`、`useAnswerCall`、`useJoinChannel` 和新增的 `useCallKitEvents` 等核心函数。这些 API 提供了完整的通话生命周期管理能力，包括发起单人和群组通话、接听来电、结束通话等操作。
 
-该系统采用组合式 API 设计模式，结合 Pinia 状态管理、信令管理和 RTC 集成，为开发者提供了简洁而强大的通话控制接口。最新版本引入了全新的 GroupCallModule 架构，通过条件逻辑支持新的群组通话管理模式，并增强了错误处理机制，在信令发送失败时能够自动重置状态，避免 UI 卡住的问题。
-
-**重构更新**：本次更新反映了组合式函数的重大重构，移除了对旧架构的依赖，简化了调用逻辑，并通过功能开关集成了新的 GroupCallModule 架构。
+**重大更新**：本次更新反映了 useCallKit.ts 的重大增强，统一了单人和群组通话 API，新增了完整的事件发射机制，改进了错误处理和状态管理。新增的 useCallKitEvents 提供了类型安全的事件订阅能力，CallKitEventBus 实现了轻量级的事件总线系统。
 
 ## 项目结构
 
@@ -63,92 +49,65 @@
 ```mermaid
 graph TB
 subgraph "组合式 API 层"
-CK[useCallKit]
-CS[useCallService]
-EC[useEndCall]
-AC[useAnswerCall]
-JC[useJoinChannel]
-SM[useSignalManager]
-LM[useListenerManager]
-UP[useParticipants - 废弃]
+CK[useCallKit - 统一通话控制]
+EC[useEndCall - 通话结束控制]
+AC[useAnswerCall - 通话应答控制]
+JC[useJoinChannel - RTC频道加入]
+CE[useCallKitEvents - 事件订阅]
 end
-subgraph "群组通话模块"
-GCS[useGroupCallStore]
-GCV[useGroupCallViewModel]
-GCA[GroupCallSignalingAdapter]
+subgraph "事件系统"
+EB[CallKitEventBus - 事件总线]
+ET[事件类型定义]
 end
 subgraph "服务层"
-CSVC[CallService]
+CS[CallService - 通话服务]
 end
 subgraph "状态管理层"
-CSS[callStateStore]
-RCS[rtcChannelStore]
-CCS[chatClientStore]
+CSS[callStateStore - 通话状态]
 end
 subgraph "类型定义层"
-CT[callsate.types]
-ST[store.types]
-GF[featureFlags]
-end
-CK --> SM
-CK --> CSS
-EC --> CSVC
-AC --> SM
-AC --> CSS
-JC --> RCS
-JC --> CSS
-CSVC --> CSS
-CSVC --> RCS
-CSVC --> CCS
-LM --> CSS
-LM --> CCS
-GCS --> GCV
-GCV --> GCA
-GF --> AC
-GF --> JC
-UP -.-> CSS
-UP -.-> RCS
+UT[UseCallKitReturn - API类型]
+CT[CallKitEventType - 事件类型]
 ```
 
 **图表来源**
-- [lib/composables/useCallKit.ts:1-157](file://lib/composables/useCallKit.ts#L1-L157)
-- [lib/composables/useEndCall.ts:1-131](file://lib/composables/useEndCall.ts#L1-L131)
-- [lib/composables/useAnswerCall.ts:1-169](file://lib/composables/useAnswerCall.ts#L1-L169)
-- [lib/composables/useJoinChannel.ts:1-209](file://lib/composables/useJoinChannel.ts#L1-L209)
-- [lib/composables/useListenerManager.ts](file://lib/composables/useListenerManager.ts)
-- [lib/composables/useParticipants.ts:1-127](file://lib/composables/useParticipants.ts#L1-L127)
-- [lib/services/CallService.ts](file://lib/services/CallService.ts)
-- [lib/config/featureFlags.ts:1-10](file://lib/config/featureFlags.ts#L1-L10)
+- [lib/composables/useCallKit.ts:1-224](file://lib/composables/useCallKit.ts#L1-L224)
+- [lib/composables/useCallKitEvents.ts:1-142](file://lib/composables/useCallKitEvents.ts#L1-L142)
+- [lib/core/events/CallKitEventBus.ts:1-112](file://lib/core/events/CallKitEventBus.ts#L1-L112)
 
 **章节来源**
-- [lib/composables/useCallKit.ts:1-157](file://lib/composables/useCallKit.ts#L1-L157)
-- [lib/composables/useEndCall.ts:1-131](file://lib/composables/useEndCall.ts#L1-L131)
-- [lib/composables/useAnswerCall.ts:1-169](file://lib/composables/useAnswerCall.ts#L1-L169)
-- [lib/composables/useJoinChannel.ts:1-209](file://lib/composables/useJoinChannel.ts#L1-L209)
-- [lib/composables/useListenerManager.ts](file://lib/composables/useListenerManager.ts)
+- [lib/composables/useCallKit.ts:1-224](file://lib/composables/useCallKit.ts#L1-L224)
+- [lib/composables/useCallKitEvents.ts:1-142](file://lib/composables/useCallKitEvents.ts#L1-L142)
+- [lib/core/events/CallKitEventBus.ts:1-112](file://lib/core/events/CallKitEventBus.ts#L1-L112)
 
 ## 核心组件
 
-### useCallKit - 通话发起控制器
+### useCallKit - 统一通话控制入口
 
-`useCallKit` 是通话发起的核心组合式 API，提供单人和群组通话的发起能力。
+`useCallKit` 是通话控制的核心组合式 API，现已统一了单人和群组通话的 API 设计。
 
 **主要功能：**
 - 发起单人语音/视频通话
 - 发起群组语音/视频通话
 - 管理通话状态初始化
 - 处理信令发送
+- 触发通话生命周期事件
 
 **核心方法：**
-- `startSingleCall(targetId, type, msg)` - 发起单人通话
-- `startGroupCall(groupId, members, type, msg, groupName?, groupAvatar?)` - 发起群组通话
+- `call(targetId, type, msg)` - 发起单人通话
+- `groupCall(groupId, members, type, msg, groupName?, groupAvatar?)` - 发起群组通话
+- `hangup(reason)` - 挂断通话
+- `cancel()` - 取消通话邀请
+- `accept()` - 接听通话
+- `reject()` - 拒绝通话
+- `rejectBusy()` - 忙碌拒绝通话
 
-**重构更新**：新增对 GroupCallModule 的集成支持，通过功能开关控制新架构的启用
+**重大更新**：新增完整的事件发射机制，群组通话发起时会触发 `callStarted` 事件，包含主叫方标识和群组信息。
 
 **章节来源**
-- [lib/composables/useCallKit.ts:10-157](file://lib/composables/useCallKit.ts#L10-L157)
+- [lib/composables/useCallKit.ts:13-224](file://lib/composables/useCallKit.ts#L13-L224)
 
-### useEndCall - 通话结束控制器
+### useEndCall - 通话结束控制
 
 `useEndCall` 提供多种通话结束场景的便捷方法。
 
@@ -166,7 +125,7 @@ UP -.-> RCS
 **章节来源**
 - [lib/composables/useEndCall.ts:10-131](file://lib/composables/useEndCall.ts#L10-L131)
 
-### useAnswerCall - 通话应答控制器
+### useAnswerCall - 通话应答控制
 
 `useAnswerCall` 专门处理被叫方的通话应答操作。
 
@@ -175,17 +134,12 @@ UP -.-> RCS
 - 拒绝通话 (`rejectCall`)
 - 忙碌拒绝通话 (`busyRejectCall`)
 
-**状态管理：**
-- 自动处理超时计时器
-- 更新通话状态为 `ANSWER_CALL`
-- 发送相应的信令消息
-
 **错误处理改进**：新增兜底状态重置机制，当信令发送失败时自动重置通话状态，避免 UI 卡住
 
 **章节来源**
-- [lib/composables/useAnswerCall.ts:15-169](file://lib/composables/useAnswerCall.ts#L15-L169)
+- [lib/composables/useAnswerCall.ts:19-169](file://lib/composables/useAnswerCall.ts#L19-L169)
 
-### useJoinChannel - RTC 频道加入控制器
+### useJoinChannel - RTC频道加入控制
 
 `useJoinChannel` 提供 RTC 频道加入的统一接口。
 
@@ -194,128 +148,71 @@ UP -.-> RCS
 - 管理音视频轨道创建和发布
 - 处理单聊和群聊的加入逻辑
 
-**状态管理：**
-- 获取和验证 RTC Token
-- 创建音视频轨道
-- 更新频道连接状态
-
 **关键修复**：新增被叫方场景下的主叫方用户 ID 管理，确保 user-joined 事件能正确映射 UID 到用户 ID
 
 **章节来源**
-- [lib/composables/useJoinChannel.ts:22-209](file://lib/composables/useJoinChannel.ts#L22-L209)
+- [lib/composables/useJoinChannel.ts:27-209](file://lib/composables/useJoinChannel.ts#L27-L209)
 
-### useCallService - 通话服务适配器
+### useCallKitEvents - 事件订阅控制
 
-`useCallService` 提供类型安全的通话服务访问接口。
+**新增功能**：提供类型安全的通话事件订阅能力。
 
-**主要职责：**
-- 管理通话状态生命周期
-- 提供类型安全的通话操作接口
-- 自动处理服务初始化和清理
-
-**核心接口：**
-- `startCall(targetId, callType)` - 发起通话
-- `acceptCall(callId)` - 接受通话
-- `rejectCall(callId)` - 拒绝通话
-- `endCall(callId?)` - 结束通话
+**核心功能：**
+- 通用事件订阅 (`on`)
+- 一次性事件订阅 (`once`)
+- 取消事件订阅 (`off`)
+- 语义化便捷方法：`onStatusChanged`、`onIncomingCall`、`onCallStarted`、`onCallEnded`、`onCallCanceled`、`onCallRefused`、`onCallTimeout`、`onCallBusy`、`onParticipantJoined`、`onParticipantLeft`
 
 **章节来源**
-- [lib/composables/useCallService.ts:82-299](file://lib/composables/useCallService.ts#L82-L299)
-
-### useParticipants - 参与者管理（已废弃）
-
-**重要说明**：此组件已被废弃，不再推荐使用。
-
-**主要功能：**
-- 自动生成群组参与者列表
-- 自动过滤已离开的用户
-- 标记用户的加入状态
-
-**废弃原因**：
-- 被新的 GroupCallModule 替代
-- 群组通话管理迁移到新的架构
-- 更好的状态管理和性能优化
-
-**替代方案**：使用 `useGroupCallViewModel` 和 `useGroupCallStore` 获取新的群组通话参与者管理功能
-
-**章节来源**
-- [lib/composables/useParticipants.ts:18-127](file://lib/composables/useParticipants.ts#L18-L127)
+- [lib/composables/useCallKitEvents.ts:36-142](file://lib/composables/useCallKitEvents.ts#L36-L142)
 
 ## 架构概览
 
-系统采用分层架构设计，各层职责清晰分离，支持新旧两种通话架构：
+系统采用分层架构设计，各层职责清晰分离，支持统一的通话控制和事件管理：
 
 ```mermaid
 graph TB
 subgraph "应用层"
-VC[Vue 组件]
+VC[Vue组件]
 end
 subgraph "组合式 API 层"
 UCK[useCallKit]
 UEK[useEndCall]
 UAC[useAnswerCall]
-UCS[useCallService]
 UJC[useJoinChannel]
-USM[useSignalManager]
-ULM[useListenerManager]
-UGCS[useGroupCallStore]
-UGCV[useGroupCallViewModel]
-UP[useParticipants - 废弃]
+UCE[useCallKitEvents]
+end
+subgraph "事件系统层"
+CEB[CallKitEventBus]
+CET[事件类型定义]
 end
 subgraph "服务层"
 CSVC[CallService]
-RSS[RtcService]
-CHS[ChatService]
 end
 subgraph "状态管理层"
 CSS[CallStateStore]
-RCS[RtcChannelStore]
-CCS[ChatClientStore]
-GCS[GroupCallStore]
 end
 subgraph "外部集成"
 AG[Agora RTC SDK]
 IM[Easemob IM SDK]
-FF[Feature Flags]
-end
+```
+
 VC --> UCK
-VC --> UEK
-VC --> UAC
-VC --> UCS
-VC --> UJC
+VC --> UCE
 UCK --> CSS
-UCK --> USM
+UCK --> CEB
 UEK --> CSVC
 UAC --> CSS
-UAC --> USM
-UJC --> RCS
 UJC --> CSS
-UJC --> GCS
-ULM --> CSS
-ULM --> CCS
-ULM --> GCS
-UGCS --> GCV
-UGCV --> GCS
-GCS --> FF
+UCE --> CEB
+CEB --> CET
 CSVC --> CSS
-CSVC --> RCS
-CSVC --> CCS
-CSVC --> CHS
-USM --> CCS
-USM --> CHS
-RCS --> AG
-CCS --> IM
-UP -.-> CSS
-UP -.-> RCS
 ```
 
 **图表来源**
-- [lib/composables/useCallKit.ts:1-157](file://lib/composables/useCallKit.ts#L1-L157)
-- [lib/composables/useEndCall.ts:1-131](file://lib/composables/useEndCall.ts#L1-L131)
-- [lib/composables/useAnswerCall.ts:1-169](file://lib/composables/useAnswerCall.ts#L1-L169)
-- [lib/composables/useListenerManager.ts](file://lib/composables/useListenerManager.ts)
-- [lib/services/CallService.ts](file://lib/services/CallService.ts)
-- [lib/config/featureFlags.ts:1-10](file://lib/config/featureFlags.ts#L1-L10)
+- [lib/composables/useCallKit.ts:13-224](file://lib/composables/useCallKit.ts#L13-L224)
+- [lib/composables/useCallKitEvents.ts:36-142](file://lib/composables/useCallKitEvents.ts#L36-L142)
+- [lib/core/events/CallKitEventBus.ts:14-112](file://lib/core/events/CallKitEventBus.ts#L14-L112)
 
 ## 详细组件分析
 
@@ -327,36 +224,36 @@ UP -.-> RCS
 sequenceDiagram
 participant VC as Vue组件
 participant CK as useCallKit
-participant SM as useSignalManager
+participant EB as CallKitEventBus
 participant CSS as callStateStore
 participant RCS as rtcChannelStore
-VC->>CK : startSingleCall(targetId, type, msg)
+VC->>CK : call(targetId, type, msg)
 CK->>CSS : initInviteInfo()
-CK->>SM : sendInviteMessage()
-SM-->>CK : InviteMessage
+CK->>CK : sendInviteMessage()
 CK-->>VC : Promise
 Note over VC,CSS : 群组通话额外流程
-VC->>CK : startGroupCall(groupId, members, type, msg)
+VC->>CK : groupCall(groupId, members, type, msg)
 CK->>CSS : initInviteInfo()
-CK->>SM : sendInviteMessage()
+CK->>CK : sendInviteMessage()
+CK->>EB : emit('callStarted')
 CK->>CSS : setCallStatus(IN_CALL)
-CK->>RCS : joinChannel()
+CK->>CK : joinChannel()
 ```
 
 **图表来源**
-- [lib/composables/useCallKit.ts:13-157](file://lib/composables/useCallKit.ts#L13-L157)
-- [lib/composables/useJoinChannel.ts:75-209](file://lib/composables/useJoinChannel.ts#L75-L209)
+- [lib/composables/useCallKit.ts:20-127](file://lib/composables/useCallKit.ts#L20-L127)
 
 #### 核心实现要点
 
-1. **状态初始化**：通过 `initInviteInfo` 方法设置初始通话状态
-2. **信令发送**：使用 `useSignalManager` 统一封装信令发送逻辑
-3. **群组特殊处理**：群组通话会在发送邀请后立即加入 RTC 频道
+1. **统一 API 设计**：单人和群组通话使用相同的调用模式
+2. **事件发射机制**：群组通话发起时触发 `callStarted` 事件，包含主叫方标识
+3. **状态管理**：通过 `callStateStore` 统一管理通话状态
+4. **错误处理**：完善的 try-catch 机制和日志记录
 
-**重构更新**：新增对 GroupCallModule 的集成，群组通话发起时会初始化新的会话状态
+**重大更新**：新增群组通话的完整事件发射机制，包括会话初始化和参与者管理
 
 **章节来源**
-- [lib/composables/useCallKit.ts:52-151](file://lib/composables/useCallKit.ts#L52-L151)
+- [lib/composables/useCallKit.ts:42-127](file://lib/composables/useCallKit.ts#L42-L127)
 
 ### useEndCall 组件分析
 
@@ -373,12 +270,12 @@ ChooseReason --> Cancel["取消通话"]
 ChooseReason --> RemoteCancel["远程取消"]
 ChooseReason --> RemoteRefuse["远程拒绝"]
 ChooseReason --> Abnormal["异常结束"]
-Normal --> CallService["调用 CallService.hangup()"]
-Cancel --> CallService
-RemoteCancel --> CallService
-RemoteRefuse --> CallService
-Abnormal --> CallService
-CallService --> Cleanup["清理资源"]
+Normal --> DirectCall["直接调用 CallService.hangup()"]
+Cancel --> DirectCall
+RemoteCancel --> DirectCall
+RemoteRefuse --> DirectCall
+Abnormal --> DirectCall
+DirectCall --> Cleanup["清理资源"]
 Cleanup --> ResetState["重置状态"]
 ResetState --> End([完成])
 Skip --> End
@@ -386,7 +283,6 @@ Skip --> End
 
 **图表来源**
 - [lib/composables/useEndCall.ts:18-131](file://lib/composables/useEndCall.ts#L18-L131)
-- [lib/services/CallService.ts](file://lib/services/CallService.ts)
 
 #### 状态检查机制
 
@@ -407,27 +303,23 @@ sequenceDiagram
 participant Caller as 主叫方
 participant Callee as 被叫方
 participant AC as useAnswerCall
-participant SM as useSignalManager
 participant CSS as callStateStore
 AC->>AC : 接收邀请
 AC->>CSS : 检查状态(ALERTING)
 alt 接受通话
 Callee->>AC : acceptCall()
-AC->>CSS : 构建answerPayload
-AC->>SM : sendAnswerMessage(ACCEPT)
-SM-->>AC : 确认
+AC->>AC : 构建answerPayload
+AC->>AC : sendAnswerMessage(ACCEPT)
 AC->>CSS : setCallStatus(ANSWER_CALL)
 else 拒绝通话
 Callee->>AC : rejectCall()
-AC->>CSS : 构建answerPayload
-AC->>SM : sendAnswerMessage(REFUSE)
-SM-->>AC : 确认
+AC->>AC : 构建answerPayload
+AC->>AC : sendAnswerMessage(REFUSE)
 AC->>CSS : resetCallState()
 else 忙碌拒绝
 Callee->>AC : busyRejectCall()
-AC->>CSS : 构建answerPayload
-AC->>SM : sendAnswerMessage(BUSY)
-SM-->>AC : 确认
+AC->>AC : 构建answerPayload
+AC->>AC : sendAnswerMessage(BUSY)
 AC->>CSS : resetCallState()
 end
 ```
@@ -446,7 +338,7 @@ end
 - 自动处理 payload 构建和发送
 
 **章节来源**
-- [lib/composables/useAnswerCall.ts:27-169](file://lib/composables/useAnswerCall.ts#L27-L169)
+- [lib/composables/useAnswerCall.ts:67-73](file://lib/composables/useAnswerCall.ts#L67-L73)
 
 ### useJoinChannel 组件分析
 
@@ -479,7 +371,7 @@ Success --> End
 ```
 
 **图表来源**
-- [lib/composables/useJoinChannel.ts:75-209](file://lib/composables/useJoinChannel.ts#L75-L209)
+- [lib/composables/useJoinChannel.ts:79-209](file://lib/composables/useJoinChannel.ts#L79-L209)
 
 #### 关键修复
 
@@ -494,82 +386,76 @@ Success --> End
 **章节来源**
 - [lib/composables/useJoinChannel.ts:185-190](file://lib/composables/useJoinChannel.ts#L185-L190)
 
-## GroupCallModule 架构
+## 事件系统
 
-### 架构概述
+### CallKitEventBus - 事件总线
 
-GroupCallModule 是全新的群组通话管理系统，采用单一事实源设计，替代了旧架构中的分散状态管理。
+**新增功能**：提供类型安全的发布/订阅机制，供 CallKit 内部模块和用户代码统一监听通话生命周期事件。
 
-```mermaid
-graph TB
-subgraph "GroupCallModule 核心组件"
-GCS[GroupCallStore]
-GCV[useGroupCallViewModel]
-GCA[GroupCallSignalingAdapter]
-end
-subgraph "参与者状态管理"
-PS[ParticipantState]
-PL[Participant List]
-AP[Active Participants]
-PP[publishing Participants]
-end
-subgraph "UID 映射系统"
-UM[uidToUserIdMap]
-UR[UidResolution]
-LR[L2 推断]
-end
-GCS --> PS
-GCS --> PL
-GCS --> AP
-GCS --> PP
-GCS --> UM
-UM --> UR
-UR --> LR
-GCV --> GCS
-GCV --> GCA
+**核心功能：**
+- 订阅事件 (`on`)
+- 一次性订阅 (`once`)
+- 取消订阅 (`off`)
+- 触发事件 (`emit`)
+- 清空事件 (`clear`)
+- 获取订阅者数量 (`listenerCount`)
+
+**设计特点：**
+- 不依赖外部库，内部使用 Map + Set 实现
+- 类型安全的事件处理
+- 错误隔离：单个 handler 异常不影响其他 handler
+
+**章节来源**
+- [lib/core/events/CallKitEventBus.ts:14-112](file://lib/core/events/CallKitEventBus.ts#L14-L112)
+
+### 事件类型定义
+
+**新增功能**：完整的事件类型定义和 payload 结构。
+
+**支持的事件类型：**
+- `statusChanged` - 通话状态变化
+- `incomingCall` - 收到来电邀请
+- `callStarted` - 通话开始（双方/多方接通）
+- `callEnded` - 通话结束
+- `callCanceled` - 通话被取消
+- `callRefused` - 通话被拒绝
+- `callTimeout` - 通话邀请超时
+- `callBusy` - 对方忙线
+- `participantJoined` - 群通话成员加入
+- `participantLeft` - 群通话成员离开
+
+**章节来源**
+- [lib/core/events/types.ts:6-136](file://lib/core/events/types.ts#L6-L136)
+
+### useCallKitEvents - 事件订阅 API
+
+**新增功能**：优雅的 CallKit 事件订阅 Composable。
+
+**核心功能：**
+- 通用事件订阅 (`on`)
+- 一次性事件订阅 (`once`)
+- 取消事件订阅 (`off`)
+- 语义化便捷方法：`onStatusChanged`、`onIncomingCall`、`onCallStarted`、`onCallEnded`、`onCallCanceled`、`onCallRefused`、`onCallTimeout`、`onCallBusy`、`onParticipantJoined`、`onParticipantLeft`
+
+**使用示例：**
+```typescript
+const { onCallStarted, onCallEnded, onIncomingCall } = useCallKitEvents()
+
+onCallStarted((e) => {
+  console.log('通话开始', e.callId, e.channel)
+})
+
+onCallEnded((e) => {
+  console.log('通话结束', e.reason, '时长:', e.duration, 'ms')
+})
+
+onIncomingCall((e) => {
+  console.log('收到来电', e.callerUserId)
+})
 ```
 
-**图表来源**
-- [lib/modules/groupCall/viewModel/GroupCallStore.ts:1-223](file://lib/modules/groupCall/viewModel/GroupCallStore.ts#L1-L223)
-- [lib/modules/groupCall/viewModel/useGroupCallViewModel.ts:1-295](file://lib/modules/groupCall/viewModel/useGroupCallViewModel.ts#L1-L295)
-- [lib/modules/groupCall/types.ts](file://lib/modules/groupCall/types.ts)
-
-### 核心特性
-
-#### 单一事实源
-- `useGroupCallStore` 提供单一的参与者和状态管理
-- 替代旧架构中的 `useParticipants` + `rtcChannelStore` 分散逻辑
-- 确保状态一致性，避免竞态条件
-
-#### 智能状态管理
-- 支持五种参与者生命周期状态：`invited`、`accepted`、`joinedRtc`、`publishing`、`left`
-- 自动状态转换和时间戳管理
-- 计算属性提供派生状态的高效访问
-
-#### UID 解析系统
-- `resolveUid()` 方法提供三级解析：确定映射、强推断、未知
-- L2 推断机制：通过 accepted 但未建立映射的用户进行推断
-- 支持弱响应式更新，确保 UI 实时同步
-
-#### 会话管理
-- `initSession()` 和 `destroySession()` 生命周期管理
-- 支持视频和音频两种通话类型
-- 记录会话开始时间和活跃状态
-
 **章节来源**
-- [lib/modules/groupCall/viewModel/GroupCallStore.ts:1-223](file://lib/modules/groupCall/viewModel/GroupCallStore.ts#L1-L223)
-- [lib/modules/groupCall/types.ts](file://lib/modules/groupCall/types.ts)
-
-### 功能开关
-
-**USE_NEW_GROUP_CALL** 功能开关控制新架构的启用：
-
-- 默认值：`true` - 启用新架构
-- 作用范围：影响 `useAnswerCall`、`useJoinChannel`、`useListenerManager` 等组件
-- 渐进式迁移：允许新旧架构共存，逐步切换
-
-**章节来源**
-- [lib/config/featureFlags.ts:1-10](file://lib/config/featureFlags.ts#L1-L10)
+- [lib/composables/useCallKitEvents.ts:8-142](file://lib/composables/useCallKitEvents.ts#L8-L142)
 
 ## 错误处理改进
 
@@ -583,25 +469,17 @@ GCV --> GCA
    - 在 `acceptCall()`、`rejectCall()`、`busyRejectCall()` 方法中添加了 `resetCallState()` 调用
    - 即使信令发送失败，也会重置通话状态，确保 UI 正常恢复
 
-2. **CallService 的健壮性增强**
-   - 在 `hangup()` 方法中增加了更完善的错误处理
-   - 即使在清理过程中发生错误，也会尝试重置基本状态
+2. **useCallKit 组件的事件发射**
+   - 群组通话发起时触发 `callStarted` 事件，包含完整的通话信息
+   - 提供主叫方标识和群组信息，便于事件处理
 
-3. **状态重置的双重保障**
-   - `resetState()` 方法中调用了两次 `resetCallState()` 确保状态完全重置
+3. **CallKitEventBus 的错误隔离**
+   - 事件处理中的错误被吞掉，避免一个 handler 异常影响其他 handler
+   - 提供详细的错误日志记录
+
+4. **状态重置的双重保障**
+   - `resetCallState()` 方法中调用了多次重置确保状态完全重置
    - 防止状态残留导致的 UI 问题
-
-4. **useJoinChannel 的关键修复**
-   - 新增被叫方场景下的用户 ID 管理，确保正确的 UID 映射
-   - 避免 user-joined 事件无法正确映射的问题
-
-#### GroupCallModule 错误处理
-
-**更新**：新架构下的错误处理增强
-
-- `useGroupCallStore` 提供了更细粒度的状态管理
-- 参与者状态的自动清理和重置
-- UID 映射的错误恢复机制
 
 #### 错误处理流程图
 
@@ -609,23 +487,19 @@ GCV --> GCA
 flowchart TD
 Start([通话操作开始]) --> TryOperation["尝试执行操作"]
 TryOperation --> Success{"操作成功?"}
-Success --> |是| Complete["完成操作"]
-Success --> |否| CheckFeature["检查新架构"]
-CheckFeature --> NewArch{"USE_NEW_GROUP_CALL?"}
-NewArch --> |是| HandleGroupCall["处理GroupCall错误"]
-NewArch --> |否| HandleLegacy["处理传统错误"]
-HandleGroupCall --> ResetGroupCall["重置GroupCall状态"]
-ResetGroupCall --> ResetState["调用 resetCallState()"]
-HandleLegacy --> ResetState
+Success --> |是| EmitEvent["触发相关事件"]
+Success --> |否| HandleError["处理错误"]
+HandleError --> ResetState["调用 resetCallState()"]
 ResetState --> LogError["记录错误日志"]
 LogError --> ThrowError["抛出错误"]
-Complete --> End([结束])
+EmitEvent --> End([完成])
 ThrowError --> End
 ```
 
 **章节来源**
-- [lib/composables/useAnswerCall.ts:69-72](file://lib/composables/useAnswerCall.ts#L69-L72)
-- [lib/composables/useJoinChannel.ts:185-190](file://lib/composables/useJoinChannel.ts#L185-L190)
+- [lib/composables/useAnswerCall.ts:67-73](file://lib/composables/useAnswerCall.ts#L67-L73)
+- [lib/composables/useCallKit.ts:72-82](file://lib/composables/useCallKit.ts#L72-L82)
+- [lib/core/events/CallKitEventBus.ts:77-83](file://lib/core/events/CallKitEventBus.ts#L77-L83)
 
 ### UI 卡住问题的解决方案
 
@@ -637,24 +511,20 @@ ThrowError --> End
    - 在所有关键操作中添加了 `resetCallState()` 调用
    - 确保即使出现异常也能恢复到 IDLE 状态
 
-2. **错误日志记录**
+2. **事件驱动的状态同步**
+   - 通过 CallKitEventBus 实现状态变化的事件通知
+   - 提供统一的事件订阅接口
+
+3. **错误日志记录**
    - 所有错误都会被记录到日志中
    - 方便开发者进行问题诊断和调试
 
-3. **异常传播**
-   - 错误会被正确抛出，让上层组件能够处理
-   - 避免静默失败导致的问题
-
-4. **新架构下的状态管理**
-   - `useGroupCallStore` 提供了更可靠的状态恢复
-   - 参与者状态的自动清理机制
-
-5. **被叫方场景修复**
+4. **被叫方场景修复**
    - `useJoinChannel` 中的用户 ID 管理修复
    - 确保正确的 UID 映射和状态同步
 
 **章节来源**
-- [lib/composables/useAnswerCall.ts:69-72](file://lib/composables/useAnswerCall.ts#L69-L72)
+- [lib/composables/useAnswerCall.ts:67-73](file://lib/composables/useAnswerCall.ts#L67-L73)
 - [lib/composables/useJoinChannel.ts:185-190](file://lib/composables/useJoinChannel.ts#L185-L190)
 
 ## 依赖关系分析
@@ -665,52 +535,37 @@ ThrowError --> End
 graph LR
 subgraph "低耦合层"
 CSS[callStateStore]
-CCS[chatClientStore]
-RCS[rtcChannelStore]
-GCS[useGroupCallStore]
-UP[useParticipants - 废弃]
+CS[CallService - 直接调用]
 end
 subgraph "中等耦合层"
 SM[useSignalManager]
 JS[useJoinChannel]
-LM[useListenerManager]
 end
 subgraph "高耦合层"
 CK[useCallKit]
 EC[useEndCall]
 AC[useAnswerCall]
-CSVC[CallService]
+CE[useCallKitEvents]
 end
-CK --> SM
 CK --> CSS
-EC --> CSVC
+CK --> CE
+EC --> CS
 EC --> CSS
-AC --> SM
 AC --> CSS
-AC --> GCS
 JS --> CSS
-JS --> RCS
-JS --> GCS
-LM --> CSS
-LM --> CCS
-LM --> GCS
-CSVC --> CSS
-CSVC --> RCS
-CSVC --> CCS
-UP -.-> CSS
-UP -.-> RCS
+CE --> CSS
+CS --> CSS
 ```
 
 **图表来源**
-- [lib/composables/useCallKit.ts:1-157](file://lib/composables/useCallKit.ts#L1-L157)
-- [lib/composables/useEndCall.ts:1-131](file://lib/composables/useEndCall.ts#L1-L131)
-- [lib/composables/useAnswerCall.ts:1-169](file://lib/composables/useAnswerCall.ts#L1-L169)
-- [lib/composables/useListenerManager.ts](file://lib/composables/useListenerManager.ts)
-- [lib/services/CallService.ts](file://lib/services/CallService.ts)
+- [lib/composables/useCallKit.ts:14-16](file://lib/composables/useCallKit.ts#L14-L16)
+- [lib/composables/useEndCall.ts:1-5](file://lib/composables/useEndCall.ts#L1-L5)
+- [lib/composables/useAnswerCall.ts:1-6](file://lib/composables/useAnswerCall.ts#L1-L6)
+- [lib/composables/useCallKitEvents.ts:1-7](file://lib/composables/useCallKitEvents.ts#L1-L7)
 
 ### 状态管理关系
 
-系统采用集中式状态管理模式，支持新旧两种架构：
+系统采用集中式状态管理模式：
 
 ```mermaid
 erDiagram
@@ -721,49 +576,26 @@ string callId
 string channel
 string callerUserId
 string calleeUserId
-string groupId
-array invitedMembers
-array joinedMembers
 number inviteTimeout
 timer inviteTimeoutTimer
 }
-GROUP_CALL_STATE {
-object session
-map participants
-map uidToUserIdMap
-set acceptedMembers
+EVENT_BUS {
+object listeners
 }
-RTC_CHANNEL_STATE {
-map channels
-string activeChannelId
-boolean isConnected
-mediastream localStream
-map remoteStreams
-boolean audioEnabled
-boolean videoEnabled
-object rtcService
-string agoraAppId
-number callDuration
-number callStartTime
+CALL_SERVICE {
+object instance
 }
-CHAT_CLIENT_STATE {
-object client
-}
-CALL_STATE ||--|| RTC_CHANNEL_STATE : "使用"
-CALL_STATE ||--|| CHAT_CLIENT_STATE : "使用"
-RTC_CHANNEL_STATE ||--|| CHAT_CLIENT_STATE : "依赖"
-GROUP_CALL_STATE ||--|| CALL_STATE : "扩展"
-GROUP_CALL_STATE ||--|| RTC_CHANNEL_STATE : "同步"
+CALL_STATE ||--|| EVENT_BUS : "触发事件"
+EVENT_BUS ||--|| CALL_SERVICE : "事件处理"
 ```
 
 **图表来源**
-- [lib/store/types.ts:43-86](file://lib/store/types.ts#L43-L86)
-- [lib/modules/groupCall/types.ts:42-56](file://lib/modules/groupCall/types.ts#L42-L56)
+- [lib/store/callState.ts:13-31](file://lib/store/callState.ts#L13-L31)
+- [lib/core/events/CallKitEventBus.ts:14-18](file://lib/core/events/CallKitEventBus.ts#L14-L18)
 
 **章节来源**
-- [lib/store/callState.ts:7-187](file://lib/store/callState.ts#L7-L187)
-- [lib/store/types.ts:1-86](file://lib/store/types.ts#L1-L86)
-- [lib/modules/groupCall/viewModel/GroupCallStore.ts:10-223](file://lib/modules/groupCall/viewModel/GroupCallStore.ts#L10-L223)
+- [lib/store/callState.ts:9-177](file://lib/store/callState.ts#L9-L177)
+- [lib/core/events/CallKitEventBus.ts:14-112](file://lib/core/events/CallKitEventBus.ts#L14-L112)
 
 ## 性能考虑
 
@@ -785,22 +617,13 @@ GROUP_CALL_STATE ||--|| RTC_CHANNEL_STATE : "同步"
 - 错误重试策略
 - 超时控制和异常处理
 
-### GroupCallModule 性能优化
+### 事件系统性能优化
 
-**更新**：新架构下的性能优化
+**更新**：新增的事件系统具有以下性能特点：
 
-- 计算属性缓存：`participantList`、`localParticipant` 等计算属性提供高效访问
-- 浅响应式更新：通过重新赋值触发响应式更新，避免深层监听
-- 智能状态转换：自动状态转换减少手动管理开销
-- UID 缓存：`uidToUserIdMap` 提供快速映射查询
-
-### 废弃组件的性能影响
-
-**更新**：useParticipants.ts 废弃后的性能提升
-
-- 减少了不必要的计算和状态维护
-- 简化了状态管理逻辑
-- 提高了整体系统的响应速度
+- CallKitEventBus 使用 Map + Set 实现，提供 O(1) 订阅和取消订阅
+- 事件处理中的错误隔离，避免单个 handler 影响整体性能
+- 类型安全的事件处理，减少运行时类型检查开销
 
 ## 故障排除指南
 
@@ -846,17 +669,16 @@ GROUP_CALL_STATE ||--|| RTC_CHANNEL_STATE : "同步"
 
 **更新**：新版本已实现自动状态重置，避免 UI 卡住问题
 
-#### 5. GroupCallModule 相关问题
+#### 5. 事件订阅无效
 
-**症状**：群组通话参与者状态异常或 UID 映射失败
+**症状**：使用 `useCallKitEvents` 订阅事件无效
 
 **解决方案**：
-- 检查 `USE_NEW_GROUP_CALL` 功能开关
-- 验证 `useGroupCallStore` 状态
-- 确认参与者状态转换逻辑
-- 查看 UID 解析日志
+- 确保在组件挂载时订阅事件
+- 检查事件类型是否正确
+- 验证解绑函数的调用时机
 
-**更新**：新架构提供了更详细的错误日志和状态恢复机制
+**更新**：新增的事件系统提供了更好的错误处理和调试支持
 
 #### 6. 被叫方 UID 映射问题
 
@@ -869,80 +691,61 @@ GROUP_CALL_STATE ||--|| RTC_CHANNEL_STATE : "同步"
 
 **更新**：新版本已实现关键修复，确保正确的用户 ID 管理
 
-#### 7. useParticipants 组件问题
+#### 7. 事件总线性能问题
 
-**症状**：使用旧的 useParticipants 组件时出现问题
+**症状**：大量事件订阅导致性能下降
 
 **解决方案**：
-- 升级到新的 GroupCallModule
-- 使用 `useGroupCallViewModel` 和 `useGroupCallStore`
-- 参考新的架构文档进行迁移
+- 及时调用解绑函数释放事件订阅
+- 使用 `once` 方法进行一次性订阅
+- 避免在组件卸载后继续订阅事件
 
-**更新**：useParticipants.ts 已标记为废弃，建议尽快迁移
+**更新**：CallKitEventBus 提供了 `listenerCount` 方法用于监控订阅数量
 
 **章节来源**
-- [lib/composables/useSignalManager.ts:57-64](file://lib/composables/useSignalManager.ts#L57-L64)
-- [lib/services/CallService.ts](file://lib/services/CallService.ts)
-- [lib/composables/useAnswerCall.ts:69-72](file://lib/composables/useAnswerCall.ts#L69-L72)
+- [lib/composables/useCallKit.ts:26-29](file://lib/composables/useCallKit.ts#L26-L29)
+- [lib/composables/useAnswerCall.ts:67-73](file://lib/composables/useAnswerCall.ts#L67-L73)
 - [lib/composables/useJoinChannel.ts:185-190](file://lib/composables/useJoinChannel.ts#L185-L190)
-- [lib/composables/useParticipants.ts:20](file://lib/composables/useParticipants.ts#L20)]
+- [lib/composables/useCallKitEvents.ts:30-35](file://lib/composables/useCallKitEvents.ts#L30-L35)
+- [lib/core/events/CallKitEventBus.ts:102-104](file://lib/core/events/CallKitEventBus.ts#L102-L104)
 
 ## 结论
 
 Easemob Vue3 通话控制 API 提供了完整而灵活的通话管理解决方案。通过组合式 API 设计，开发者可以轻松集成语音和视频通话功能，同时享受类型安全和良好的开发体验。
 
+**重大更新总结**：
+1. **useCallKit.ts 重大增强**：统一了单人和群组通话 API，新增完整的事件发射机制
+2. **新增事件系统**：useCallKitEvents 提供类型安全的事件订阅能力
+3. **改进错误处理**：新增兜底状态重置机制，有效避免 UI 卡住问题
+4. **CallKitEventBus**：提供轻量级的类型安全事件总线系统
+
 ### 主要优势
 
-1. **模块化设计**：清晰的职责分离和低耦合架构
-2. **类型安全**：完整的 TypeScript 类型定义
-3. **易于使用**：简洁的 API 接口和丰富的示例
-4. **可扩展性**：支持自定义配置和扩展点
-5. **稳定性**：完善的错误处理和状态管理
-6. **健壮性**：新增的自动状态重置机制，有效避免 UI 卡住问题
-7. **现代化架构**：GroupCallModule 提供了更先进的群组通话管理
-
-### GroupCallModule 架构优势
-
-**更新**：新架构带来的显著改进
-
-1. **单一事实源**：`useGroupCallStore` 提供统一的状态管理
-2. **智能状态管理**：自动状态转换和时间戳管理
-3. **UID 解析系统**：三级解析机制确保准确的用户映射
-4. **计算属性优化**：高效的派生状态访问
-5. **渐进式迁移**：通过功能开关支持平滑过渡
+1. **统一 API 设计**：单人和群组通话使用相同的调用模式
+2. **完整的事件系统**：支持通话生命周期的完整事件跟踪
+3. **类型安全保障**：完整的 TypeScript 类型定义
+4. **易于使用**：简洁的 API 接口和丰富的示例
+5. **可扩展性**：支持自定义配置和扩展点
+6. **稳定性**：完善的错误处理和状态管理
+7. **现代化架构**：新增的事件系统提供了更好的可维护性
 
 ### 最佳实践建议
 
 1. **状态管理**：合理使用 Pinia 状态管理
 2. **错误处理**：实现完善的错误捕获和处理机制
 3. **资源清理**：确保及时清理媒体资源和连接
-4. **性能优化**：利用防抖和节流技术优化用户体验
-5. **测试覆盖**：编写充分的单元测试和集成测试
-6. **错误监控**：利用自动状态重置机制提供的日志信息进行问题诊断
-7. **架构选择**：根据项目需求选择合适的通话架构
+4. **事件订阅**：使用解绑函数及时清理事件订阅
+5. **性能优化**：利用防抖和节流技术优化用户体验
+6. **测试覆盖**：编写充分的单元测试和集成测试
+7. **事件调试**：利用新增的事件系统进行问题诊断
 
-### 错误处理最佳实践
+### 架构演进
 
-**更新**：基于最新的错误处理改进，建议遵循以下最佳实践：
+**更新**：本次更新标志着通话控制 API 的重要演进：
 
-1. **兜底状态重置**：在所有关键操作中确保有状态重置的兜底逻辑
-2. **错误日志记录**：详细记录错误信息，便于问题诊断
-3. **异常传播**：正确的错误传播机制，让上层组件能够处理异常
-4. **UI 状态同步**：确保状态重置后 UI 能够正确更新
-5. **用户反馈**：提供适当的用户反馈，告知操作结果
-6. **新架构调试**：利用 GroupCallModule 的详细日志进行问题定位
-7. **废弃组件迁移**：及时迁移使用废弃的 useParticipants 组件
+1. **从分散到统一**：useCallKit 统一了单人和群组通话的 API 设计
+2. **从静态到动态**：新增的事件系统提供了动态的事件处理能力
+3. **从简单到复杂**：支持更复杂的群组通话场景和事件处理
+4. **从功能到架构**：新增的事件总线系统为未来的功能扩展奠定了基础
 
-该 API 为构建高质量的实时通信应用提供了坚实的基础，开发者可以根据具体需求进行定制和扩展。最新版本的错误处理改进和 GroupCallModule 架构进一步提升了系统的稳定性和用户体验，为未来的功能扩展奠定了良好的基础。
-
-### 架构迁移指南
-
-**重要提示**：由于 useParticipants.ts 已标记为废弃，建议开发者进行架构迁移：
-
-1. **评估现有代码**：检查项目中使用 useParticipants 的地方
-2. **学习新 API**：熟悉 useGroupCallViewModel 和 useGroupCallStore 的使用方法
-3. **渐进式迁移**：逐步替换旧的参与者管理逻辑
-4. **测试验证**：确保迁移后的功能正常工作
-5. **文档更新**：更新项目文档和注释
-
-**重构总结**：本次重构移除了对旧架构的依赖，简化了组合式函数的调用逻辑，通过功能开关集成了新的 GroupCallModule 架构，为开发者提供了更加现代化和稳定的通话控制解决方案。同时，废弃了不再使用的 useParticipants 组件，进一步优化了系统的整体性能和可维护性。
+该 API 为构建高质量的实时通信应用提供了坚实的基础，新增的事件系统和错误处理机制进一步提升了系统的稳定性和用户体验。开发者可以根据具体需求进行定制和扩展，充分利用新增的功能特性。

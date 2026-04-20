@@ -1,4 +1,5 @@
 import { useChatClientStore } from "../store/chatClient";
+import { useGlobalCallStore } from "../store/globalCall";
 import type { UseCallKitReturn } from "../types";
 import { useCallStateStore } from "../store/callState";
 import { CALL_STATUS, CALL_TYPE, HANGUP_REASON } from "../types/callstate.types";
@@ -82,17 +83,24 @@ export function useCallKit(): UseCallKitReturn {
       });
 
       const groupCallStore = useGroupCallStore();
+      const globalCallStore = useGlobalCallStore();
       const currentUserId = chatClientStore.getChatClient?.user || '';
+
+      // 从 GlobalCallStore 获取本地用户资料
+      const localUserInfo = globalCallStore.getUserInfo(currentUserId);
+
       groupCallStore.initSession({
         sessionId: callStateStore.getCallState.channel || groupId,
         groupId,
+        groupName,
         callType: type,
         isActive: true,
         startTime: Date.now(),
       });
       groupCallStore.addParticipant({
         userId: currentUserId,
-        nickname: currentUserId,
+        nickname: localUserInfo.nickname || currentUserId,
+        avatarUrl: localUserInfo.avatarURL,
         state: 'joinedRtc',
         isLocal: true,
         videoTrack: null,
@@ -103,9 +111,12 @@ export function useCallKit(): UseCallKitReturn {
         isSpeaking: false,
       });
       members.forEach((m) => {
+        // 从 GlobalCallStore 获取成员资料
+        const memberInfo = globalCallStore.getUserInfo(m);
         groupCallStore.addParticipant({
           userId: m,
-          nickname: m,
+          nickname: memberInfo.nickname || m,
+          avatarUrl: memberInfo.avatarURL,
           state: 'invited',
           isLocal: false,
           videoTrack: null,
