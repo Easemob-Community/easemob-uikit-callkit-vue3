@@ -88,8 +88,12 @@ watchEffect(async () => {
     try {
       // 使用占位 appId 初始化 RtcService，实际 appId 在 joinChannel 时动态设置
       const placeholderAppId = props.agoraAppId || 'placeholder'
-      await rtcChannelStore.initializeRtcService(placeholderAppId);
-      logger.info('RTC服务已初始化，appId 将在加入频道时从环信服务器动态获取')
+      await rtcChannelStore.initializeRtcService(placeholderAppId, props.agoraClient);
+      if (props.agoraClient) {
+        logger.info('RTC服务已初始化（使用外部传入的 Agora 客户端实例）')
+      } else {
+        logger.info('RTC服务已初始化，appId 将在加入频道时从环信服务器动态获取')
+      }
     } catch (error) {
       // 错误已在store中记录
     }

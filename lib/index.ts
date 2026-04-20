@@ -1,4 +1,5 @@
 import { type App } from "vue";
+import { createPinia } from "pinia";
 import "./style.css";
 import EasemobChatCallKitProvider from "./components/EasemobChatCallKitProvider.vue";
 import EasemobChatSingleCall from "./components/singleCall/EasemobChatSingleCall.vue";
@@ -80,6 +81,10 @@ export { DEFAULT_BACKGROUND_IMAGE, ICONS, getAssetUrl } from "./config/assets";
 
 export default {
   install(app: App) {
+    // 自动注入 Pinia（用户项目无需额外安装/配置 Pinia）
+    if (!app.config.globalProperties.$pinia) {
+      app.use(createPinia());
+    }
     // 注册组件
     app.component("EasemobChatCallKitProvider", EasemobChatCallKitProvider);
     app.component("EasemobChatSingleCall", EasemobChatSingleCall);

@@ -31,22 +31,24 @@
     "test:tgz": "pnpm run build:pack && cd test && pnpm run switch:tgz && pnpm run dev:tgz"
   },
   "peerDependencies": {
-    "vue": "^3.0.0"
+    "vue": "^3.0.0",
+    "agora-rtc-sdk-ng": "^4.14.0",
+    "easemob-websdk": "^4.12.0"
+  },
+  "dependencies": {
+    "pinia": "^3.0.3"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
     "@vitejs/plugin-vue": "^6.0.1",
     "@vue/tsconfig": "^0.7.0",
+    "agora-rtc-sdk-ng": "^4.24.2",
+    "easemob-websdk": "^4.16.0",
     "typescript": "~5.8.3",
     "vite": "^7.1.2",
     "vite-plugin-dts": "^4.5.4",
     "vue": "^3.5.18",
     "vue-tsc": "^3.0.5"
   },
-  "packageManager": "pnpm@10.10.0",
-  "dependencies": {
-    "agora-rtc-sdk-ng": "^4.24.2",
-    "easemob-websdk": "^4.16.0",
-    "pinia": "^3.0.3"
-  }
+  "packageManager": "pnpm@10.10.0"
 }

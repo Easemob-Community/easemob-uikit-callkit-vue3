@@ -44,11 +44,12 @@ export default defineConfig({
     },
     cssCodeSplit: false,
     rollupOptions: {
-      external: ['vue', 'pinia'],
+      external: ['vue', 'agora-rtc-sdk-ng', 'easemob-websdk'],
       output: {
         globals: {
           vue: 'Vue',
-          pinia: 'Pinia'
+          'agora-rtc-sdk-ng': 'AgoraRTC',
+          'easemob-websdk': 'WebSDK'
         },
         assetFileNames: (assetInfo) => {
           if (assetInfo.name === 'style.css') {

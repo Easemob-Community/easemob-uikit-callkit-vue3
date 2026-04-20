@@ -28,6 +28,7 @@ import { logger } from '../utils/logger'
 
 export interface RtcServiceConfig {
   appId: string
+  client?: IAgoraRTCClient // 外部传入的 Agora 客户端实例
   encoderConfig?: VideoEncoderConfigurationPreset
   onNetworkQualityChange?: (quality: any) => void
   onUserJoined?: (userId: string) => void
@@ -85,6 +86,7 @@ export class RtcService {
 
   constructor(config: RtcServiceConfig) {
     this.appId = config.appId
+    this.client = config.client || null
     this.encoderConfig = config.encoderConfig || '720p'
     this.chatClient = config.chatClient
     this.onNetworkQualityChange = config.onNetworkQualityChange
@@ -108,13 +110,17 @@ export class RtcService {
   async initialize(): Promise<void> {
     try {
       AgoraRTC.setLogLevel(4)
-      this.client = AgoraRTC.createClient({ mode: 'live', codec: 'h264' })
-      this.client.setClientRole('host')
-      
-      // 添加事件监听
-      this.addEventListeners()
-      
-      logger.info('RtcService initialized successfully')
+      if (this.client) {
+        // 使用外部传入的 client 实例，仅添加事件监听
+        this.client.setClientRole('host')
+        this.addEventListeners()
+        logger.info('RtcService initialized with external client')
+      } else {
+        this.client = AgoraRTC.createClient({ mode: 'live', codec: 'h264' })
+        this.client.setClientRole('host')
+        this.addEventListeners()
+        logger.info('RtcService initialized with new client')
+      }
     } catch (error) {
       logger.error('RtcService initialization failed:', error)
       throw error

@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import type { IAgoraRTCClient } from 'agora-rtc-sdk-ng'
 import type { RtcChannelState, RtcChannelInfo } from './types'
 import { RtcService } from '../services/RtcService'
 import { logger } from '../utils/logger'
@@ -64,7 +65,7 @@ export const useRtcChannelStore = defineStore('rtcChannel', {
     /**
      * 初始化RTC服务
      */
-    async initializeRtcService(agoraAppId: string) {
+    async initializeRtcService(agoraAppId: string, agoraClient?: IAgoraRTCClient) {
       if (_rtcServiceInstance) {
         logger.warn('RTC服务已经初始化,无需重复初始化')
         return
@@ -81,6 +82,7 @@ export const useRtcChannelStore = defineStore('rtcChannel', {
         const singleCallRtcStore = useSingleCallRtcStore()
         const service = new RtcService({
           appId: agoraAppId,
+          client: agoraClient, // 支持外部传入 Agora 客户端实例
           chatClient: chatClient, // 传入环信客户端用于获取userId映射
           // 媒体状态同步回调
           onAudioEnabledChange: (enabled) => this.setAudioEnabled(enabled),

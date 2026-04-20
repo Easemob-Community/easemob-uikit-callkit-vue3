@@ -1,4 +1,5 @@
 import type { Chat } from "./core/sdk/imSDK";
+import type { IAgoraRTCClient } from "agora-rtc-sdk-ng";
 import type { HANGUP_REASON } from "./types/callstate.types";
 import type { LogLevel } from "./utils/logger";
 
@@ -37,6 +38,7 @@ export interface CallKitInstance {
 
 export interface ProviderConfig {
   chatClient?: Chat.Connection; // 可选，支持延迟初始化
+  agoraClient?: IAgoraRTCClient; // 可选，外部传入的 Agora RTC 客户端实例
   agoraAppId?: string; // [已废弃] Agora AppId 将从环信服务器动态获取，此参数仅用于向后兼容
   initConfig?: {
     debug?: boolean; // 开启调试模式（等价于 logLevel: LogLevel.VERBOSE）
