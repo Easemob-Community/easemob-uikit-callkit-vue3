@@ -5,20 +5,18 @@
 - [useSignalManager.ts](file://lib/composables/useSignalManager.ts)
 - [useAnswerCall.ts](file://lib/composables/useAnswerCall.ts)
 - [ChatService.ts](file://lib/services/ChatService.ts)
-- [CallService.ts](file://callkit/services/CallService.ts)
 - [callState.ts](file://lib/store/callState.ts)
 - [callstate.types.ts](file://lib/types/callstate.types.ts)
 - [signal.types.ts](file://lib/types/signal.types.ts)
 - [index.ts](file://lib/index.ts)
-- [SIGNALING_IMPLEMENTATION.md](file://lib/SIGNALING_IMPLEMENTATION.md)
 </cite>
 
 ## 更新摘要
 **变更内容**
-- 扩展了信号类型定义，新增 invitedMembers 字段支持群组通话中的参与者跟踪
-- 更新了 ChatService 中的邀请消息格式，增加被邀请成员列表支持
-- 增强了群组通话的信令处理能力，支持动态参与者管理和状态跟踪
-- 完善了群组通话的邀请消息扩展字段，提供更完整的参与者信息
+- useSignalManager 支持新的 userInfo 参数，确保信令消息发送的一致性
+- 新增对发送方用户信息的显式传递和处理机制
+- 增强群组通话中用户资料的一致性保证
+- ChatService 现在支持用户信息的优先级处理和缓存机制
 
 ## 目录
 1. [简介](#简介)
@@ -37,7 +35,7 @@
 
 该 API 架构基于 Vue3 组合式函数设计，采用分层架构模式，将信令管理、状态管理和服务层清晰分离。系统支持一对一和多人音视频通话，提供完整的信令流程处理，包括邀请、响铃、接听、拒绝、忙碌拒绝和挂断等操作。
 
-**更新** 新增对群组通话中参与者跟踪的支持，通过 invitedMembers 字段实现动态参与者管理和状态跟踪。
+**更新** 新增对 userInfo 参数的支持，允许在信令发送时显式传递发送方的用户信息，确保信令消息的一致性和完整性。ChatService 现在支持用户信息的优先级处理和缓存机制，包括 userInfo 参数的最高优先级、全局缓存和用户资料提供者的三级处理策略。
 
 ## 项目结构
 
@@ -46,42 +44,32 @@ graph TB
 subgraph "lib/composables"
 SM[useSignalManager.ts]
 AC[useAnswerCall.ts]
-CS[useCallService.ts]
-JC[useJoinChannel.ts]
-RC[useRtcService.ts]
 end
 subgraph "lib/services"
-CHS[ChatService.ts]
-CLS[CallService.ts]
-RTS[RtcService.ts]
+CS[ChatService.ts]
 end
 subgraph "lib/store"
 CST[callState.ts]
-RCS[rtcChannel.ts]
 end
 subgraph "lib/types"
 CT[callstate.types.ts]
 ST[signal.types.ts]
 end
-SM --> CHS
+SM --> CS
 AC --> SM
-AC --> CST
-CLS --> SM
-CLS --> CST
-CLS --> RCS
-CHS --> CT
-CHS --> ST
+CS --> CT
+CS --> ST
 CST --> CT
 ```
 
 **图表来源**
-- [useSignalManager.ts](file://lib/composables/useSignalManager.ts#L1-L354)
-- [useAnswerCall.ts](file://lib/composables/useAnswerCall.ts#L1-L168)
-- [ChatService.ts](file://lib/services/ChatService.ts#L1-L249)
-- [CallService.ts](file://callkit/services/CallService.ts#L1-L298)
+- [useSignalManager.ts:1-357](file://lib/composables/useSignalManager.ts#L1-L357)
+- [useAnswerCall.ts:1-169](file://lib/composables/useAnswerCall.ts#L1-L169)
+- [ChatService.ts:1-333](file://lib/services/ChatService.ts#L1-L333)
+- [callState.ts:1-215](file://lib/store/callState.ts#L1-L215)
 
 **章节来源**
-- [index.ts](file://lib/index.ts#L1-L58)
+- [index.ts:1-92](file://lib/index.ts#L1-L92)
 
 ## 核心组件
 
@@ -91,7 +79,7 @@ useSignalManager 是信令管理的核心组合式函数，提供统一的信令
 
 #### 主要功能
 
-1. **邀请消息发送** - 支持一对一和群组通话邀请，包含被邀请成员列表
+1. **邀请消息发送** - 支持一对一和群组通话邀请，包含被邀请成员列表和发送方用户信息
 2. **通话状态信令** - 处理 alert、confirmRing、answerCall 等状态信令
 3. **通话控制信令** - 处理 cancelCall、leaveCall 等控制信令
 4. **错误处理和日志记录** - 提供完整的错误处理和调试信息
@@ -100,7 +88,7 @@ useSignalManager 是信令管理的核心组合式函数，提供统一的信令
 
 | 函数名 | 参数 | 返回值 | 描述 |
 |--------|------|--------|------|
-| sendInviteMessage | targetId: string \| string[], chatType: Chat.ChatType, message: string, groupId?: string | Promise<Chat.SendMsgResult> | 发送通话邀请消息，支持群组通话的被邀请成员列表 |
+| sendInviteMessage | targetId: string \| string[], chatType: Chat.ChatType, message: string, groupId?: string, userInfo?: { nickname?: string; avatarURL?: string } | Promise<Chat.SendMsgResult> | 发送通话邀请消息，支持群组通话的被邀请成员列表和发送方用户信息 |
 | sendAnswerMessage | targetId: string, payload: any, result?: CALLKIT_CMD_MSG_RESULT_TYPE | Promise<Chat.SendMsgResult> | 发送通话应答信令 |
 | sendCancelMessage | to: string, chatType: "singleChat" \| "groupChat", receiverList?: string[] | Promise<Chat.SendMsgResult> | 发送取消通话信令 |
 | sendLeaveMessage | to: string, chatType: "singleChat" \| "groupChat", receiverList?: string[] | Promise<Chat.SendMsgResult> | 发送离开通话信令 |
@@ -109,10 +97,10 @@ useSignalManager 是信令管理的核心组合式函数，提供统一的信令
 | sendConfirmRingMessage | targetId: string, payload: any | Promise<Chat.SendMsgResult> | 发送确认响铃信令 |
 | sendConfirmCalleeMessage | targetId: string, payload: any | Promise<Chat.SendMsgResult> | 发送确认被叫方状态信令 |
 
-**更新** 新增对群组通话的支持，sendInviteMessage 函数现在支持发送给多个目标用户，并自动包含被邀请成员列表。
+**更新** sendInviteMessage 函数现在支持 userInfo 参数，允许显式传递发送方的昵称和头像信息，确保信令消息的一致性。userInfo 参数具有最高优先级，会覆盖其他来源的用户信息。
 
 **章节来源**
-- [useSignalManager.ts](file://lib/composables/useSignalManager.ts#L7-L42)
+- [useSignalManager.ts:7-43](file://lib/composables/useSignalManager.ts#L7-L43)
 
 ### useAnswerCall 组合式 API
 
@@ -135,7 +123,7 @@ useAnswerCall 是被叫方应答通话的专用组合式函数，提供接受、
 | busyRejectCall | 无 | Promise<void> | 被叫方忙碌拒绝通话 |
 
 **章节来源**
-- [useAnswerCall.ts](file://lib/composables/useAnswerCall.ts#L7-L14)
+- [useAnswerCall.ts:6-13](file://lib/composables/useAnswerCall.ts#L6-L13)
 
 ## 架构概览
 
@@ -143,38 +131,35 @@ useAnswerCall 是被叫方应答通话的专用组合式函数，提供接受、
 sequenceDiagram
 participant Caller as 主叫方
 participant SM as 信令管理器
-participant Chat as 聊天服务
+participant CS as 聊天服务
 participant Callee as 被叫方
-participant State as 状态管理
-Caller->>SM : 发送邀请消息含被邀请成员列表
-SM->>Chat : 发送文本消息包含invitedMembers
-Chat-->>Caller : 邀请消息ID
-Chat-->>Callee : 收到邀请消息包含被邀请成员列表
+Caller->>SM : 发送邀请消息含被邀请成员列表和用户信息
+SM->>CS : 发送文本消息包含invitedMembers和ease_chat_uikit_user_info
+CS-->>Caller : 邀请消息ID
+CS-->>Callee : 收到邀请消息包含被邀请成员列表和用户信息
 Callee->>SM : 发送alert信令
-SM->>Chat : 发送alert信令
-Chat-->>Caller : alert信令
+SM->>CS : 发送alert信令
+CS-->>Caller : alert信令
 Caller->>SM : 发送confirmRing信令
-SM->>Chat : 发送confirmRing信令
-Chat-->>Callee : confirmRing信令
+SM->>CS : 发送confirmRing信令
+CS-->>Callee : confirmRing信令
 Callee->>SM : 发送answerCall信令
-SM->>Chat : 发送answerCall信令
-Chat-->>Caller : answerCall信令
+SM->>CS : 发送answerCall信令
+CS-->>Caller : answerCall信令
 alt 接受通话
 Caller->>SM : 发送confirmCallee信令
-SM->>Chat : 发送confirmCallee信令
-SM->>State : 更新状态为IN_CALL，移除已接受成员
+SM->>CS : 发送confirmCallee信令
 else 拒绝或忙碌
 Caller->>SM : 发送confirmCallee信令
-SM->>Chat : 发送confirmCallee信令
-SM->>State : 重置通话状态
+SM->>CS : 发送confirmCallee信令
 end
 ```
 
-**更新** 新增对被邀请成员列表的处理流程，包括邀请消息发送时的成员列表传递和通话确认后的成员状态更新。
+**更新** 新增对发送方用户信息的处理流程，包括 userInfo 参数的传递和在信令消息中的存储。用户信息具有最高优先级，会覆盖全局缓存和用户资料提供者的数据。
 
 **图表来源**
-- [useSignalManager.ts](file://lib/composables/useSignalManager.ts#L104-L139)
-- [useAnswerCall.ts](file://lib/composables/useAnswerCall.ts#L28-L76)
+- [useSignalManager.ts:74-105](file://lib/composables/useSignalManager.ts#L74-L105)
+- [ChatService.ts:27-144](file://lib/services/ChatService.ts#L27-L144)
 
 ## 详细组件分析
 
@@ -183,7 +168,7 @@ end
 ```mermaid
 classDiagram
 class UseSignalManagerReturn {
-+sendInviteMessage(targetId, chatType, message, groupId) Promise
++sendInviteMessage(targetId, chatType, message, groupId, userInfo) Promise
 +sendAnswerMessage(targetId, payload, result) Promise
 +sendCancelMessage(to, chatType, receiverList) Promise
 +sendLeaveMessage(to, chatType, receiverList) Promise
@@ -195,38 +180,19 @@ class UseSignalManagerReturn {
 class ChatService {
 -private chatClient : Chat.Connection
 -private callStateStore : CallStateStore
-+sendTextMessage(targetId, chatType, message, groupId) Promise
++sendTextMessage(targetId, chatType, message, groupId, userInfo) Promise
 +sendSignalMessage(targetId, action, chatType, ext, isDirect, result, receiverList) Promise
--buildInviteMessageExt() InviteSignalingExt
+-buildInviteMessageExt(groupId, userInfo) InviteSignalingExt
 -buildSignalingMessageExt(action, ext, result) SignalingExt
 }
-class CallService {
--private callStateStore : CallStateStore
--private chatClientStore : ChatClientStore
--private rtcChannelStore : RtcChannelStore
-+hangup(reason) Promise
-+cancelCall() Promise
-+handleRemoteCancel() Promise
-+handleRemoteRefuse() Promise
-+handleAbnormalEnd() Promise
--executeHangupStrategy(reason) Promise
--handleNormalHangupStrategy(reason) Promise
--handleCancelStrategy() Promise
--cleanupMediaResources() Promise
--cleanupConnection() Promise
--resetState(reason) void
-}
 UseSignalManagerReturn --> ChatService : 使用
-CallService --> UseSignalManagerReturn : 调用
-CallService --> ChatService : 间接使用
 ```
 
-**更新** ChatService 现在包含对 invitedMembers 字段的处理逻辑，支持群组通话中的参与者跟踪。
+**更新** ChatService 现在支持 userInfo 参数的处理，包括用户信息的优先级选择和缓存机制。userInfo 参数具有最高优先级，会覆盖全局缓存和用户资料提供者的数据。
 
 **图表来源**
-- [useSignalManager.ts](file://lib/composables/useSignalManager.ts#L7-L42)
-- [ChatService.ts](file://lib/services/ChatService.ts#L17-L24)
-- [CallService.ts](file://callkit/services/CallService.ts#L9-L298)
+- [useSignalManager.ts:51-356](file://lib/composables/useSignalManager.ts#L51-L356)
+- [ChatService.ts:20-333](file://lib/services/ChatService.ts#L20-L333)
 
 ### 通话状态管理
 
@@ -246,11 +212,11 @@ INVITING --> [*] : 超时
 ALERTING --> [*] : 超时
 ```
 
-**更新** 群组通话场景下，状态转换会涉及被邀请成员列表的动态更新和参与者状态管理。
+**更新** 群组通话场景下，状态转换会涉及被邀请成员列表的动态更新和参与者状态管理。用户信息的传递确保了所有参与者都能看到正确的发送方信息。
 
 **图表来源**
-- [callstate.types.ts](file://lib/types/callstate.types.ts#L13-L22)
-- [callState.ts](file://lib/store/callState.ts#L114-L131)
+- [callstate.types.ts:13-22](file://lib/types/callstate.types.ts#L13-L22)
+- [callState.ts:112-136](file://lib/store/callState.ts#L112-L136)
 
 ### 信令发送流程
 
@@ -261,8 +227,9 @@ ValidateInput --> CheckClient["检查ChatClient初始化"]
 CheckClient --> ClientValid{"客户端有效?"}
 ClientValid --> |否| ThrowError["抛出错误"]
 ClientValid --> |是| CreateService["创建ChatService实例"]
-CreateService --> BuildMessage["构建消息内容<br/>包含被邀请成员列表"]
-BuildMessage --> SendMsg["发送消息"]
+CreateService --> BuildMessage["构建消息内容<br/>包含被邀请成员列表和用户信息"]
+BuildMessage --> ProcessUserInfo["处理用户信息优先级<br/>userInfo > 全局缓存 > 用户资料提供者"]
+ProcessUserInfo --> SendMsg["发送消息"]
 SendMsg --> LogSuccess["记录成功日志"]
 SendMsg --> LogError["记录错误日志"]
 LogSuccess --> ReturnResult["返回结果"]
@@ -271,15 +238,15 @@ ThrowError --> End([结束])
 ReturnResult --> End
 ```
 
-**更新** 新增对被邀请成员列表的处理步骤，在构建消息内容时自动包含 invitedMembers 字段。
+**更新** 新增对 userInfo 参数的处理步骤，在构建消息内容时自动包含 ease_chat_uikit_user_info 字段。用户信息按照 userInfo > 全局缓存 > 用户资料提供者的优先级顺序处理。
 
 **图表来源**
-- [useSignalManager.ts](file://lib/composables/useSignalManager.ts#L57-L102)
-- [ChatService.ts](file://lib/services/ChatService.ts#L144-L187)
+- [useSignalManager.ts:74-105](file://lib/composables/useSignalManager.ts#L74-L105)
+- [ChatService.ts:229-273](file://lib/services/ChatService.ts#L229-L273)
 
 **章节来源**
-- [useSignalManager.ts](file://lib/composables/useSignalManager.ts#L50-L353)
-- [useAnswerCall.ts](file://lib/composables/useAnswerCall.ts#L20-L167)
+- [useSignalManager.ts:51-356](file://lib/composables/useSignalManager.ts#L51-L356)
+- [useAnswerCall.ts:19-168](file://lib/composables/useAnswerCall.ts#L19-L168)
 
 ## 依赖关系分析
 
@@ -294,7 +261,6 @@ subgraph "内部模块"
 SM[useSignalManager]
 AC[useAnswerCall]
 CS[ChatService]
-CLS[CallService]
 CST[callState]
 CT[callstate.types]
 ST[signal.types]
@@ -305,20 +271,18 @@ Vue --> SM
 Vue --> AC
 SM --> CS
 AC --> SM
-CLS --> SM
-CST --> CT
 CS --> CT
 CS --> ST
 ```
 
-**更新** 新增 signal.types 依赖关系，ChatService 现在依赖 signal.types 来处理扩展的信令类型定义。
+**更新** 新增 signal.types 依赖关系，ChatService 现在依赖 signal.types 来处理扩展的信令类型定义，包括 ease_chat_uikit_user_info 字段。signal.types.ts 文件中定义了用户信息扩展字段的完整类型定义。
 
 **图表来源**
-- [useSignalManager.ts](file://lib/composables/useSignalManager.ts#L1-L5)
-- [useAnswerCall.ts](file://lib/composables/useAnswerCall.ts#L1-L5)
-- [ChatService.ts](file://lib/services/ChatService.ts#L1-L16)
-- [callState.ts](file://lib/store/callState.ts#L1-L6)
-- [signal.types.ts](file://lib/types/signal.types.ts#L1-L198)
+- [useSignalManager.ts:1-6](file://lib/composables/useSignalManager.ts#L1-L6)
+- [useAnswerCall.ts:1-6](file://lib/composables/useAnswerCall.ts#L1-L6)
+- [ChatService.ts:1-20](file://lib/services/ChatService.ts#L1-L20)
+- [callState.ts:1-9](file://lib/store/callState.ts#L1-L9)
+- [signal.types.ts:1-216](file://lib/types/signal.types.ts#L1-L216)
 
 ### 核心依赖关系
 
@@ -326,22 +290,22 @@ CS --> ST
    - 依赖 Chat SDK 进行消息发送
    - 依赖 Pinia store 获取通话状态
    - 依赖 callstate.types 定义信令格式
-   - **新增** 依赖 signal.types 处理扩展的信令类型，包括 invitedMembers 字段
+   - **新增** 依赖 signal.types 处理扩展的信令类型，包括 ease_chat_uikit_user_info 字段
 
 2. **useSignalManager 依赖关系**
    - 依赖 ChatService 处理具体消息发送
    - 依赖 Pinia store 管理客户端状态
    - 依赖 logger 进行调试输出
 
-3. **CallService 依赖关系**
-   - 依赖 useSignalManager 发送控制信令
-   - 依赖多个 store 进行状态管理
-   - 依赖 RTC 服务进行媒体处理
+3. **useAnswerCall 依赖关系**
+   - 依赖 useSignalManager 发送应答信令
+   - 依赖 Pinia store 管理通话状态
+   - 依赖 logger 进行调试输出
 
 **章节来源**
-- [ChatService.ts](file://lib/services/ChatService.ts#L17-L249)
-- [callState.ts](file://lib/store/callState.ts#L1-L263)
-- [signal.types.ts](file://lib/types/signal.types.ts#L1-L198)
+- [ChatService.ts:20-333](file://lib/services/ChatService.ts#L20-L333)
+- [callState.ts:9-215](file://lib/store/callState.ts#L9-L215)
+- [signal.types.ts:1-216](file://lib/types/signal.types.ts#L1-L216)
 
 ## 性能考虑
 
@@ -363,7 +327,7 @@ CS --> ST
 2. **重复调用防护** - 防止同一操作的重复调用
 3. **超时机制** - 提供邀请超时机制，避免长时间等待
 
-**更新** 新增对群组通话场景的性能考虑，包括被邀请成员列表的内存管理和动态更新优化。
+**更新** 新增对 userInfo 参数的性能考虑，包括用户信息的缓存机制和优先级处理策略。用户信息按照 userInfo > 全局缓存 > 用户资料提供者的优先级顺序处理，避免重复查询用户资料。
 
 ## 故障排除指南
 
@@ -397,12 +361,14 @@ CS --> ST
 - 验证超时回调函数执行
 - 确认多人通话场景下的特殊处理逻辑
 
-#### 群组通话参与者跟踪问题
-**问题描述**: 被邀请成员列表显示不正确或状态更新异常
+#### 用户信息传递问题
+**问题描述**: 发送方用户信息在信令中显示不正确或缺失
 **解决方案**:
-- 检查 invitedMembers 字段的数据结构
-- 验证成员列表的去重逻辑
-- 确认通话状态转换时的成员状态更新
+- 检查 userInfo 参数的传递和格式
+- 验证用户信息的优先级处理逻辑
+- 确认用户信息缓存和查询机制
+
+**更新** 新增用户信息传递问题的解决方案。如果 userInfo 参数为空或不完整，系统会按优先级顺序获取用户信息：userInfo 参数 > 全局缓存 > 用户资料提供者。如果所有来源都无法获取用户信息，系统会使用用户ID作为默认昵称。
 
 ### 调试建议
 
@@ -410,17 +376,19 @@ CS --> ST
 2. **监控状态变化**: 使用浏览器开发者工具监控 Pinia store 状态
 3. **网络请求追踪**: 检查信令消息的发送和接收情况
 4. **错误堆栈分析**: 查看完整的错误堆栈信息定位问题
-5. **群组通话调试**: 特别关注被邀请成员列表的传递和更新过程
+5. **用户信息调试**: 特别关注 userInfo 参数的传递和处理过程
 
 **章节来源**
-- [useSignalManager.ts](file://lib/composables/useSignalManager.ts#L57-L64)
-- [callState.ts](file://lib/store/callState.ts#L115-L131)
+- [useSignalManager.ts:58-65](file://lib/composables/useSignalManager.ts#L58-L65)
+- [callState.ts:112-136](file://lib/store/callState.ts#L112-L136)
 
 ## 结论
 
 信令管理 API 提供了完整、可靠的音视频通话信令处理能力。通过 useSignalManager 和 useAnswerCall 组合式 API，开发者可以轻松实现复杂的通话场景，包括一对一和多人通话、各种通话状态转换和错误处理。
 
-**更新** 新版本增强了对群组通话的支持，通过 invitedMembers 字段实现了完整的参与者跟踪和管理功能。这一改进使得群组通话的用户体验更加完善，支持动态参与者管理和实时状态同步。
+**更新** 新版本增强了对用户信息传递的支持，通过 userInfo 参数实现了发送方用户信息的一致性保证。这一改进使得信令消息更加完整和准确，特别是在群组通话场景下，能够确保所有参与者都能看到正确的发送方信息。
+
+ChatService 现在支持用户信息的优先级处理机制，包括 userInfo 参数的最高优先级、全局缓存和用户资料提供者的三级处理策略。这种设计确保了用户信息的准确性和一致性，同时提高了系统的性能和可靠性。
 
 该 API 的设计遵循了 Vue3 最佳实践，采用组合式函数模式，具有良好的可维护性和扩展性。同时，完善的错误处理机制和状态管理确保了系统的稳定性和可靠性。
 
@@ -430,6 +398,8 @@ CS --> ST
 3. 合理使用超时和重试机制
 4. 做好性能优化和内存管理
 5. 充分利用调试工具进行问题排查
-6. **新增** 在群组通话场景下特别注意被邀请成员列表的管理和状态同步
+6. **新增** 在需要精确控制发送方信息的场景下，合理使用 userInfo 参数
+7. **新增** 注意用户信息的优先级处理和缓存机制
+8. **新增** 充分利用用户信息的三级优先级处理策略，提高用户体验
 
-通过合理使用这些 API，可以快速构建高质量的音视频通话应用，特别是支持多人参与的复杂通话场景。
+通过合理使用这些 API，可以快速构建高质量的音视频通话应用，特别是支持多人参与和精确用户信息展示的复杂通话场景。
