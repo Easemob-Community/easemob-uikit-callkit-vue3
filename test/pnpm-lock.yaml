@@ -465,7 +465,7 @@ packages:
     engines: {node: '>= 0.4'}
 
   easemob-chat-callkit-vue3@file:../release/easemob-chat-callkit-vue3-1.0.0.tgz:
-    resolution: {integrity: sha512-yRchmNupx385DzQz5PTosNxIrrDvXHYuFB2iEiwkNxE4t4z5iMAQZqw7uO2xsM6ofRXG4vG6BPldVniiOzdq6Q==, tarball: file:../release/easemob-chat-callkit-vue3-1.0.0.tgz}
+    resolution: {integrity: sha512-UH5mjZ2OxmsYzu5e3iIxvNruRBk5PAfQ2wzSRGVg8bT61fJl316J5XvDDRDsdC23Sh26vVonLMqw8ytfBKmiTw==, tarball: file:../release/easemob-chat-callkit-vue3-1.0.0.tgz}
     version: 1.0.0
     peerDependencies:
       agora-rtc-sdk-ng: ^4.14.0

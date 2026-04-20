@@ -1,10 +1,6 @@
 import { type App } from "vue";
-import { createPinia, setActivePinia } from "pinia";
+import { createPinia } from "pinia";
 import "./style.css";
-
-// 模块级：创建全局 Pinia 实例作为兜底，确保不通过 app.use() 注册时 store 也能工作
-const globalPinia = createPinia();
-setActivePinia(globalPinia);
 import EasemobChatCallKitProvider from "./components/EasemobChatCallKitProvider.vue";
 import EasemobChatSingleCall from "./components/singleCall/EasemobChatSingleCall.vue";
 import EasemobChatMultiCall from "./components/multiCall/EasemobChatMultiCall.vue";
@@ -87,7 +83,7 @@ export default {
   install(app: App) {
     // 自动注入 Pinia（用户项目无需额外安装/配置 Pinia）
     if (!app.config.globalProperties.$pinia) {
-      app.use(globalPinia);
+      app.use(createPinia());
     }
     // 注册组件
     app.component("EasemobChatCallKitProvider", EasemobChatCallKitProvider);
