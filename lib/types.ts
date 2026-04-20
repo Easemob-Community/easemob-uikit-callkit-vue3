@@ -62,27 +62,31 @@ export interface ProviderConfig {
   getGroupInfo?: (groupIds: string[]) => Promise<Array<{ groupId: string; groupName?: string; groupAvatar?: string }>>;
 }
 
+export interface CallParams {
+  targetId: string;
+  type: "audio" | "video";
+  msg?: string;
+  userInfo?: { nickname?: string; avatarURL?: string };
+}
+
+export interface GroupCallParams {
+  groupId: string;
+  members: string[];
+  type: "audio" | "video";
+  msg?: string;
+  groupName?: string;
+  groupAvatar?: string;
+  userInfo?: { nickname?: string; avatarURL?: string };
+}
+
 // 导出类型别名，避免导入错误
 export type EasemobChatCallKitInstance = CallKitInstance;
 
 export interface UseCallKitReturn {
   /** 发起单人通话 */
-  call: (
-    targetId: string,
-    type: "audio" | "video",
-    msg?: string,
-    userInfo?: { nickname?: string; avatarURL?: string }
-  ) => Promise<void>;
+  call: (params: CallParams) => Promise<void>;
   /** 发起群组通话 */
-  groupCall: (
-    groupId: string,
-    members: string[],
-    type: "audio" | "video",
-    msg?: string,
-    groupName?: string,
-    groupAvatar?: string,
-    userInfo?: { nickname?: string; avatarURL?: string }
-  ) => Promise<void>;
+  groupCall: (params: GroupCallParams) => Promise<void>;
   /** 挂断/结束通话 */
   hangup: (reason?: HANGUP_REASON) => Promise<void>;
   /** 取消通话邀请 */

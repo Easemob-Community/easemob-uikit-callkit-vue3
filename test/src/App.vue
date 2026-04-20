@@ -257,7 +257,7 @@ const startCall = async (type: 'audio' | 'video') => {
 
   singleCallType.value = type
   currentCallInfo.value = `单人${type === 'audio' ? '语音' : '视频'}通话: ${targetUserId.value}`
-  await call(targetUserId.value, type)
+  await call({ targetId: targetUserId.value, type })
 }
 
 const startMultiCall = async (type: 'audio' | 'video') => {
@@ -278,14 +278,13 @@ const startMultiCall = async (type: 'audio' | 'video') => {
   const members = groupMembers.value.split(',').map((id) => id.trim()).filter((id) => id.length > 0)
 
   try {
-    await groupCall(
-      groupId.value,
+    await groupCall({
+      groupId: groupId.value,
       members,
       type,
-      undefined,
-      groupName.value || undefined,
-      groupAvatar.value || undefined
-    )
+      groupName: groupName.value || undefined,
+      groupAvatar: groupAvatar.value || undefined,
+    })
     currentCallInfo.value = `群组${type === 'audio' ? '语音' : '视频'}通话: ${groupId.value}`
   } catch (error) {
     console.error('发起群组通话失败:', error)

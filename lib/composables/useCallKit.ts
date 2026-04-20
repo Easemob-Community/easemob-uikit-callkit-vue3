@@ -1,6 +1,6 @@
 import { useChatClientStore } from "../store/chatClient";
 import { useGlobalCallStore } from "../store/globalCall";
-import type { UseCallKitReturn } from "../types";
+import type { UseCallKitReturn, CallParams, GroupCallParams } from "../types";
 import { useCallStateStore } from "../store/callState";
 import { CALL_STATUS, CALL_TYPE, HANGUP_REASON } from "../types/callstate.types";
 import { logger } from "../utils/logger";
@@ -18,12 +18,12 @@ export function useCallKit(): UseCallKitReturn {
 
   // ─── 发起 ───
 
-  const call = async (
-    targetId: string,
-    type: "audio" | "video",
-    msg: string = type === 'audio' ? '邀请您进行语音通话' : '邀请您进行视频通话',
-    userInfo?: { nickname?: string; avatarURL?: string }
-  ) => {
+  const call = async ({
+    targetId,
+    type,
+    msg = type === 'audio' ? '邀请您进行语音通话' : '邀请您进行视频通话',
+    userInfo,
+  }: CallParams) => {
     logger.debug(`call: 发起单人${type}通话，目标: ${targetId}`);
     if (!chatClientStore.getChatClient) {
       logger.warn("ChatClient 未初始化");
@@ -41,15 +41,15 @@ export function useCallKit(): UseCallKitReturn {
     }
   };
 
-  const groupCall = async (
-    groupId: string,
-    members: string[],
-    type: "audio" | "video",
-    msg: string = type === 'audio' ? '邀请您加入群组语音通话' : '邀请您加入群组视频通话',
-    groupName?: string,
-    groupAvatar?: string,
-    userInfo?: { nickname?: string; avatarURL?: string }
-  ) => {
+  const groupCall = async ({
+    groupId,
+    members,
+    type,
+    msg = type === 'audio' ? '邀请您加入群组语音通话' : '邀请您加入群组视频通话',
+    groupName,
+    groupAvatar,
+    userInfo,
+  }: GroupCallParams) => {
     logger.debug(`groupCall: 发起群组${type}通话，groupId: ${groupId}`);
     if (!chatClientStore.getChatClient) {
       logger.warn("ChatClient 未初始化");
