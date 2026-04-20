@@ -74,7 +74,8 @@ export function useSignalManager(): UseSignalManagerReturn {
     targetId: string | string[],
     chatType: Chat.ChatType,
     message: string,
-    groupId?: string
+    groupId?: string,
+    userInfo?: { nickname?: string; avatarURL?: string }
   ): Promise<Chat.SendMsgResult> => {
     const isGroupChat = Array.isArray(targetId);
     logger.debug(
@@ -89,7 +90,8 @@ export function useSignalManager(): UseSignalManagerReturn {
         targetId,
         chatType,
         message,
-        groupId
+        groupId,
+        userInfo
       );
       logger.info(
         `useSignalManager: 发送邀请消息成功，消息ID: ${result.serverMsgId}`

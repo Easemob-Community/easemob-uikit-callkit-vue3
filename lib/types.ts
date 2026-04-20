@@ -70,7 +70,8 @@ export interface UseCallKitReturn {
   call: (
     targetId: string,
     type: "audio" | "video",
-    msg?: string
+    msg?: string,
+    userInfo?: { nickname?: string; avatarURL?: string }
   ) => Promise<void>;
   /** 发起群组通话 */
   groupCall: (
@@ -79,7 +80,8 @@ export interface UseCallKitReturn {
     type: "audio" | "video",
     msg?: string,
     groupName?: string,
-    groupAvatar?: string
+    groupAvatar?: string,
+    userInfo?: { nickname?: string; avatarURL?: string }
   ) => Promise<void>;
   /** 挂断/结束通话 */
   hangup: (reason?: HANGUP_REASON) => Promise<void>;

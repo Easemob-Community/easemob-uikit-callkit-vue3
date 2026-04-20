@@ -24,7 +24,7 @@ export class ChatService {
     this.chatClient = chatClient;
   }
   //构建邀请信息的ext
-  private async buildInviteMessageExt(groupId?: string) {
+  private async buildInviteMessageExt(groupId?: string, userInfo?: { nickname?: string; avatarURL?: string }) {
     const callState = this.callStateStore.getCallState;
     const ext: InviteSignalingExt = {
       action: "invite",
@@ -61,15 +61,21 @@ export class ChatService {
       },
     };
 
-    // 获取当前用户资料：优先从 GlobalCallStore 读取，没有则通过 Provider 查询
+    // 获取当前用户资料：传入的 userInfo 优先级最高
     const currentUserId = this.chatClient?.user || '';
     const globalCallStore = useGlobalCallStore();
-    const cachedInfo = globalCallStore.getUserInfo(currentUserId);
 
-    let nickname = cachedInfo.nickname;
-    let avatarURL = cachedInfo.avatarURL;
+    let nickname = userInfo?.nickname;
+    let avatarURL = userInfo?.avatarURL;
 
-    // 如果缓存中没有完整资料，尝试通过 Provider 查询
+    // 如果调用方没有传，优先从 GlobalCallStore 读取
+    if (!nickname || !avatarURL) {
+      const cachedInfo = globalCallStore.getUserInfo(currentUserId);
+      nickname = nickname || cachedInfo.nickname;
+      avatarURL = avatarURL || cachedInfo.avatarURL;
+    }
+
+    // 如果缓存中也没有完整资料，尝试通过 Provider 查询
     if ((!nickname || !avatarURL) && currentUserId) {
       const userInfoProvider = getUserInfoProvider();
       if (userInfoProvider) {
@@ -77,18 +83,21 @@ export class ChatService {
           const profiles = await userInfoProvider([currentUserId]);
           const profile = profiles.find(p => p.userId === currentUserId);
           if (profile) {
-            nickname = profile.nickname || nickname;
-            avatarURL = profile.avatarUrl || avatarURL;
-            // 缓存到 GlobalCallStore
-            globalCallStore.setUserInfo(currentUserId, {
-              nickname: nickname || currentUserId,
-              avatarURL: avatarURL || '',
-            });
+            nickname = nickname || profile.nickname;
+            avatarURL = avatarURL || profile.avatarUrl;
           }
         } catch (error) {
           logger.warn('[ChatService] 获取当前用户资料失败', error);
         }
       }
+    }
+
+    // 有资料就缓存到 GlobalCallStore
+    if (nickname || avatarURL) {
+      globalCallStore.setUserInfo(currentUserId, {
+        nickname: nickname || currentUserId,
+        avatarURL: avatarURL || '',
+      });
     }
 
     // 写入 caller 资料到 ext
@@ -221,7 +230,8 @@ export class ChatService {
     targetId: string | string[],
     chatType: Chat.ChatType,
     message: string,
-    groupId?: string
+    groupId?: string,
+    userInfo?: { nickname?: string; avatarURL?: string }
   ): Promise<Chat.SendMsgResult> {
     if (!this.chatClient) {
       throw new Error("ChatClient未初始化");
@@ -229,7 +239,7 @@ export class ChatService {
     
     // 判断是否为群组通话
     const isGroupChat = Array.isArray(targetId);
-    const inviteExt = await this.buildInviteMessageExt(groupId);
+    const inviteExt = await this.buildInviteMessageExt(groupId, userInfo);
     
     interface ITextInviteMessage extends Chat.CreateTextMsgParameters {
       ext: InviteSignalingExt;

@@ -21,7 +21,8 @@ export function useCallKit(): UseCallKitReturn {
   const call = async (
     targetId: string,
     type: "audio" | "video",
-    msg: string = type === 'audio' ? '邀请您进行语音通话' : '邀请您进行视频通话'
+    msg: string = type === 'audio' ? '邀请您进行语音通话' : '邀请您进行视频通话',
+    userInfo?: { nickname?: string; avatarURL?: string }
   ) => {
     logger.debug(`call: 发起单人${type}通话，目标: ${targetId}`);
     if (!chatClientStore.getChatClient) {
@@ -33,7 +34,7 @@ export function useCallKit(): UseCallKitReturn {
       type: type === "audio" ? CALL_TYPE.AUDIO_1V1 : CALL_TYPE.VIDEO_1V1,
     });
     try {
-      const message = await sendInviteMessage(targetId, "singleChat" as any, msg);
+      const message = await sendInviteMessage(targetId, "singleChat" as any, msg, undefined, userInfo);
       logger.info(`call: 邀请发送成功，msgId: ${message.serverMsgId}`);
     } catch (error) {
       logger.error(`call: 邀请发送失败`, error);
@@ -46,7 +47,8 @@ export function useCallKit(): UseCallKitReturn {
     type: "audio" | "video",
     msg: string = type === 'audio' ? '邀请您加入群组语音通话' : '邀请您加入群组视频通话',
     groupName?: string,
-    groupAvatar?: string
+    groupAvatar?: string,
+    userInfo?: { nickname?: string; avatarURL?: string }
   ) => {
     logger.debug(`groupCall: 发起群组${type}通话，groupId: ${groupId}`);
     if (!chatClientStore.getChatClient) {
@@ -64,7 +66,7 @@ export function useCallKit(): UseCallKitReturn {
         type: type === "audio" ? CALL_TYPE.AUDIO_MULTI : CALL_TYPE.VIDEO_MULTI,
       });
 
-      const message = await sendInviteMessage(members, "groupChat" as any, msg, groupId);
+      const message = await sendInviteMessage(members, "groupChat" as any, msg, groupId, userInfo);
       logger.info(`groupCall: 邀请发送成功，msgId: ${message.serverMsgId}`);
 
       // 主叫方立即进入 IN_CALL 并加入 RTC
