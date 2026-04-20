@@ -5,8 +5,7 @@
 </template>
 
 <script setup lang="ts">
-import { watchEffect, computed, onUnmounted, ref, onMounted, getCurrentInstance } from 'vue'
-import { createPinia } from 'pinia'
+import { watchEffect, computed, onUnmounted, ref, onMounted } from 'vue'
 import type { ProviderConfig } from '../types'
 import { useListenerManager } from '../composables/useListenerManager';
 import { useChatClientStore } from '../store/chatClient';
@@ -14,12 +13,6 @@ import { useCallStateStore } from '../store/callState';
 import { useRtcChannelStore } from '../store/rtcChannel';
 import { logger, LogLevel } from '../utils/logger';
 import { registerUserInfoProvider, registerGroupInfoProvider, clearProfileProviders, type UserInfoProvider } from '../services/UserProfileService';
-
-// 自动注入 Pinia：即使用户未通过 app.use() 注册插件，只要使用 Provider 组件即可正常工作
-const vueInstance = getCurrentInstance()
-if (vueInstance && !vueInstance.appContext.config.globalProperties.$pinia) {
-  vueInstance.appContext.app.use(createPinia())
-}
 
 // 确保组件挂载完成后再渲染插槽
 const mounted = ref(false)
