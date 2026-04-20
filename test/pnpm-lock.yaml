@@ -13,13 +13,10 @@ importers:
         version: 4.24.2
       easemob-chat-callkit-vue3:
         specifier: file:../release/easemob-chat-callkit-vue3-1.0.0.tgz
-        version: file:../release/easemob-chat-callkit-vue3-1.0.0.tgz(typescript@5.8.3)(vue@3.5.27(typescript@5.8.3))
+        version: file:../release/easemob-chat-callkit-vue3-1.0.0.tgz(agora-rtc-sdk-ng@4.24.2)(easemob-websdk@4.17.1)(typescript@5.8.3)(vue@3.5.27(typescript@5.8.3))
       easemob-websdk:
         specifier: ^4.16.0
         version: 4.17.1
-      pinia:
-        specifier: ^3.0.3
-        version: 3.0.4(typescript@5.8.3)(vue@3.5.27(typescript@5.8.3))
       vue:
         specifier: ^3.5.18
         version: 3.5.27(typescript@5.8.3)
@@ -468,9 +465,11 @@ packages:
     engines: {node: '>= 0.4'}
 
   easemob-chat-callkit-vue3@file:../release/easemob-chat-callkit-vue3-1.0.0.tgz:
-    resolution: {integrity: sha512-C/BDhsTze7u3tmoN/QlNuJ0c2P4IjIIkGMQglhCZqDsSqyzNN/+GBxI9hvuhWlSAN+5zKak0CJAqomXqwKIVyg==, tarball: file:../release/easemob-chat-callkit-vue3-1.0.0.tgz}
+    resolution: {integrity: sha512-HvdGQmhDPcqCwBvjtdrMAtohmOsFBsjUKGtUzWakRKY3k1mDpPzqGNJV+xnrcDxxBK6ocEwGbxfmzOyU32J9Ww==, tarball: file:../release/easemob-chat-callkit-vue3-1.0.0.tgz}
     version: 1.0.0
     peerDependencies:
+      agora-rtc-sdk-ng: ^4.14.0
+      easemob-websdk: ^4.12.0
       vue: ^3.0.0
 
   easemob-websdk@4.17.1:
@@ -1093,14 +1092,13 @@ snapshots:
       es-errors: 1.3.0
       gopd: 1.2.0
 
-  easemob-chat-callkit-vue3@file:../release/easemob-chat-callkit-vue3-1.0.0.tgz(typescript@5.8.3)(vue@3.5.27(typescript@5.8.3)):
+  easemob-chat-callkit-vue3@file:../release/easemob-chat-callkit-vue3-1.0.0.tgz(agora-rtc-sdk-ng@4.24.2)(easemob-websdk@4.17.1)(typescript@5.8.3)(vue@3.5.27(typescript@5.8.3)):
     dependencies:
       agora-rtc-sdk-ng: 4.24.2
       easemob-websdk: 4.17.1
       pinia: 3.0.4(typescript@5.8.3)(vue@3.5.27(typescript@5.8.3))
       vue: 3.5.27(typescript@5.8.3)
     transitivePeerDependencies:
-      - debug
       - typescript
 
   easemob-websdk@4.17.1: {}

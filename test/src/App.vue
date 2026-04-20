@@ -10,7 +10,7 @@
     </div>
 
     <!-- 使用Provider包裹应用 - 设置日志级别为 INFO -->
-    <EasemobChatCallKitProvider :chat-client="chatClient" :agora-app-id="'079c29108da649439a6f0b721a4212e4'" :init-config="{ inviteTimeout: 30000, logLevel: LogLevel.INFO }">
+    <EasemobChatCallKitProvider :chat-client="chatClient" :agora-client="agoraClient" :init-config="{ inviteTimeout: 30000, logLevel: LogLevel.INFO }">
       <!-- 通话邀请通知 -->
       <InvitationNotification />
       
@@ -101,6 +101,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed, onUnmounted } from 'vue'
 import SDK from 'easemob-websdk'
+import AgoraRTC from 'agora-rtc-sdk-ng'
 import { 
   CALL_STATUS, 
   CALL_TYPE, 
@@ -212,6 +213,9 @@ onUnmounted(() => {
 // 登录相关状态
 const loginUserId = ref('pfh')
 const loginPassword = ref('1')
+
+// Agora 客户端实例（外部创建传入，推荐方式）
+const agoraClient = AgoraRTC.createClient({ mode: 'live', codec: 'h264' })
 
 // 环信客户端实例
 const chatClient = ref()
