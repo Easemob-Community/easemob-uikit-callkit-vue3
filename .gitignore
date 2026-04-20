@@ -21,7 +21,6 @@ old
 # Build outputs
 release/
 *.tgz
-lib/style.css
 lib/style.css.d.ts
 # Editor directories and files
 .vscode/*
