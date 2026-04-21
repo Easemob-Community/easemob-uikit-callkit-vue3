@@ -153,6 +153,20 @@ watchEffect(() => {
 // 组件挂载完成
 onMounted(() => {
   mounted.value = true
+  // HMR 安全：延迟检查 RtcService 是否被旧实例销毁，需要重新初始化。
+  // webpack/vue-cli HMR 时，旧组件的 async destroyRtcService 可能在新组件 mount 后才完成，
+  // 导致 watchEffect 中的条件判断为 false（RtcService 当时还存在），之后被销毁却不再触发初始化。
+  setTimeout(async () => {
+    if (!rtcChannelStore.getRtcService()) {
+      try {
+        const placeholderAppId = props.agoraAppId || 'placeholder'
+        await rtcChannelStore.initializeRtcService(placeholderAppId, props.agoraClient)
+        logger.info('HMR 后 RtcService 延迟初始化成功')
+      } catch (error) {
+        logger.error('HMR 后 RtcService 延迟初始化失败:', error)
+      }
+    }
+  }, 50)
 })
 
 // 组件卸载时清理RTC服务和Provider
