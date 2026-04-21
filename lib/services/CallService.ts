@@ -3,6 +3,7 @@ import { useCallStateStore } from "../store/callState";
 import { useChatClientStore } from "../store/chatClient";
 import { useRtcChannelStore } from "../store/rtcChannel";
 import { useCallTimerStore } from "../store/callTimer";
+import { useGlobalCallStore } from "../store/globalCall";
 import { HANGUP_REASON, CALL_STATUS, CALL_TYPE } from "../types/callstate.types";
 import { useSignalManager } from "../composables/useSignalManager";
 import { useGroupCallStore } from "../modules/groupCall";
@@ -365,6 +366,13 @@ export class CallService {
 
       logger.info(`[CallService] 重置通话状态，原因: ${reason}, 重置前状态: ${callStateStore.getCallStatus}, 时长: ${duration}ms`);
       
+      // 重置小窗状态，确保下次通话从大窗开始
+      const globalCallStore = useGlobalCallStore();
+      if (globalCallStore.isMinimized) {
+        globalCallStore.isMinimized = false;
+        logger.info('[CallService] 重置小窗状态为 false');
+      }
+
       // 使用 resetCallState 方法重置状态
       callStateStore.resetCallState();
 
