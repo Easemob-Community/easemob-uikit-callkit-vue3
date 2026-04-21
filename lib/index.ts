@@ -4,6 +4,7 @@ import "./style.css";
 import EasemobChatCallKitProvider from "./components/EasemobChatCallKitProvider.vue";
 import EasemobChatSingleCall from "./components/singleCall/EasemobChatSingleCall.vue";
 import EasemobChatMultiCall from "./components/multiCall/EasemobChatMultiCall.vue";
+import EasemobChatGroupMemberList from "./components/multiCall/EasemobChatGroupMemberList.vue";
 import InvitationNotification from "./components/InvitationNotification.vue";
 import EasemobChatMiniWindow from "./components/EasemobChatMiniWindow.vue";
 import { GroupCallShell } from "./modules/groupCall";
@@ -24,6 +25,7 @@ export {
   EasemobChatCallKitProvider,
   EasemobChatSingleCall,
   EasemobChatMultiCall,
+  EasemobChatGroupMemberList,
   InvitationNotification,
   EasemobChatMiniWindow,
   GroupCallShell,
@@ -80,7 +82,7 @@ export { LogLevel } from "./utils/logger";
 export { DEFAULT_BACKGROUND_IMAGE, ICONS, getAssetUrl } from "./config/assets";
 
 // 版本号（构建时会替换）
-const VERSION = "1.0.1";
+const VERSION = "1.0.2";
 
 const EasemobChatCallKit: Plugin = {
   install(app: App, ...options: any[]) {
@@ -93,6 +95,7 @@ const EasemobChatCallKit: Plugin = {
     app.component("EasemobChatCallKitProvider", EasemobChatCallKitProvider);
     app.component("EasemobChatSingleCall", EasemobChatSingleCall);
     app.component("EasemobChatMultiCall", EasemobChatMultiCall);
+    app.component("EasemobChatGroupMemberList", EasemobChatGroupMemberList);
     app.component("InvitationNotification", InvitationNotification);
     app.component("EasemobChatMiniWindow", EasemobChatMiniWindow);
     app.component("GroupCallShell", GroupCallShell);
