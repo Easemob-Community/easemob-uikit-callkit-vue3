@@ -9,6 +9,7 @@ import { useJoinChannel } from "./useJoinChannel";
 import { useGroupCallStore } from "../modules/groupCall";
 import { callService } from "../services/CallService";
 import { callKitEventBus } from "../core/events/CallKitEventBus";
+import { buildBaseEventFields } from "../core/events/helpers";
 import { resolveUserProfiles } from "../services/UserProfileService";
 
 // 组合式API：useCallKit —— 统一的通话控制入口
@@ -92,12 +93,17 @@ export function useCallKit(): UseCallKitReturn {
       // 触发 callStarted（群通话主叫方）
       const currentCallState = callStateStore.getCallState;
       callKitEventBus.emit('callStarted', {
-        callId: currentCallState.callId,
-        channel: currentCallState.channel,
-        type: currentCallState.type,
-        callerUserId: currentCallState.callerUserId,
-        calleeUserId: currentCallState.calleeUserId,
-        groupId: groupId,
+        ...buildBaseEventFields(
+          {
+            callId: currentCallState.callId,
+            channel: currentCallState.channel,
+            type: currentCallState.type,
+            callerUserId: currentCallState.callerUserId,
+            calleeUserId: currentCallState.calleeUserId,
+            groupId: groupId,
+          },
+          true
+        ),
         isCaller: true,
       });
 
@@ -167,14 +173,20 @@ export function useCallKit(): UseCallKitReturn {
     logger.info("useCallKit.cancel");
     const callState = callStateStore.getCallState;
     callKitEventBus.emit('callCanceled', {
-      callId: callState.callId,
-      channel: callState.channel,
-      type: callState.type,
+      ...buildBaseEventFields(
+        {
+          callId: callState.callId,
+          channel: callState.channel,
+          type: callState.type,
+          callerUserId: callState.callerUserId,
+          calleeUserId: callState.calleeUserId,
+          groupId: undefined,
+        },
+        true
+      ),
       isRemote: false,
-      callerUserId: callState.callerUserId,
-      calleeUserId: callState.calleeUserId,
-      groupId: undefined,
     });
+
     await callService.cancelCall();
   };
 

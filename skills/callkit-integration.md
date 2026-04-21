@@ -252,27 +252,216 @@ function onInviteSelected(userIds) {
 
 ## Step 5: 可选 — 监听通话事件
 
+通过 `useCallKitEvents()` 订阅通话生命周期事件。所有事件均携带 `conversationId`、`isLocal`、`localUserRole` 字段，接入方无需自行推断会话 ID 和通话方向。
+
 ```ts
-import { useCallKitEvents, CALL_STATUS, CALL_TYPE } from 'easemob-chat-callkit-vue3'
+import { useCallKitEvents, CALL_STATUS, CALL_TYPE, HANGUP_REASON } from 'easemob-chat-callkit-vue3'
 
 const {
-  onIncomingCall,    // 收到通话邀请
-  onCallStarted,     // 通话接通
-  onCallEnded,       // 通话结束
-  onCallCanceled,    // 通话被取消
-  onCallRefused,     // 通话被拒绝
-  onCallTimeout,     // 邀请超时
-  onCallBusy,        // 对方忙线
-  onStatusChanged,   // 通话状态变化
+  onIncomingCall,      // 收到通话邀请
+  onCallStarted,       // 通话接通
+  onCallEnded,         // 通话结束
+  onCallCanceled,      // 通话被取消
+  onCallRefused,       // 通话被拒绝
+  onCallTimeout,       // 邀请超时
+  onCallBusy,          // 对方忙线
+  onStatusChanged,     // 通话状态变化
+  onParticipantJoined, // 群通话成员加入
+  onParticipantLeft,   // 群通话成员离开
+  getCallRecord,       // 获取最近一次通话记录
 } = useCallKitEvents()
+```
 
+### 事件公共字段
+
+所有事件均包含以下字段：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `callId` | `string` | 通话唯一标识 |
+| `channel` | `string` | RTC 频道名 |
+| `type` | `CALL_TYPE` | 通话类型：0=音频单聊, 1=视频单聊, 2=视频群聊, 3=音频群聊 |
+| `callerUserId` | `string` | 主叫方用户 ID |
+| `calleeUserId` | `string` | 被叫方用户 ID（群聊时为空） |
+| `groupId` | `string` | 群组 ID（群聊时存在） |
+| **`conversationId`** | `string` | **会话 ID**：单聊=对方用户ID，群聊=groupId，直接对应 IM 会话 key |
+| **`isLocal`** | `boolean` | **方向标识**：`true`=本端行为触发，`false`=对端信令/系统触发 |
+| **`localUserRole`** | `string` | **当前用户角色**：`'caller'` 主叫 / `'callee'` 被叫 / `'participant'` 群聊参与者 |
+
+### 各事件详细说明
+
+#### `onIncomingCall` — 收到通话邀请
+
+```ts
 onIncomingCall((e) => {
-  console.log('收到通话邀请:', e.callerUserId, e.type)
+  console.log('收到来电:', e.callerUserId)
+  console.log('会话ID:', e.conversationId)   // 单聊=对方ID，群聊=groupId
+  console.log('我的角色:', e.localUserRole)  // 'caller' | 'callee' | 'participant'
+  console.log('群名称:', e.groupName)        // 群聊时存在
+  console.log('被邀请成员:', e.invitedMembers) // 群聊时存在
+})
+```
+
+#### `onCallStarted` — 通话接通
+
+```ts
+onCallStarted((e) => {
+  console.log('通话接通:', e.callId)
+  console.log('我是主叫?', e.isCaller)       // true/false
+  console.log('会话ID:', e.conversationId)
+})
+```
+
+#### `onCallEnded` — 通话结束
+
+```ts
+onCallEnded((e) => {
+  console.log('通话结束')
+  console.log('原因:', e.reason)             // HANGUP_REASON 枚举值
+  console.log('时长:', e.duration, 'ms')     // 通话时长（毫秒）
+  console.log('挂断方:', e.endedBy)          // 挂断方的 userId（可能为空）
+  console.log('本端触发?', e.isLocal)        // true=本端挂断，false=对端挂断/超时
+  console.log('会话ID:', e.conversationId)
+})
+```
+
+**接入方常用逻辑**：
+
+```ts
+onCallEnded((e) => {
+  const sec = Math.round(e.duration / 1000)
+
+  if (e.isLocal) {
+    showToast(`你已挂断，时长 ${sec} 秒`)
+  } else {
+    // 对端挂断或系统原因
+    if (e.endedBy) {
+      showToast(`对方已挂断，时长 ${sec} 秒`)
+    } else if (e.reason === HANGUP_REASON.NO_RESPONSE) {
+      showToast('对方无响应')
+    }
+  }
+})
+```
+
+#### `onCallRefused` / `onCallBusy` / `onCallCanceled` / `onCallTimeout`
+
+```ts
+onCallRefused((e) => {
+  // isLocal=false 表示对方拒绝；isLocal=true 理论上不会发生（本地拒绝不触发 callRefused）
+  if (!e.isLocal) {
+    showToast('对方已拒绝')
+  }
 })
 
-onCallEnded((e) => {
-  console.log('通话结束，原因:', e.reason, '时长:', e.duration, 'ms')
+onCallBusy((e) => {
+  // busy 始终是对端信令触发
+  showToast('对方忙线中')
 })
+
+onCallCanceled((e) => {
+  // isRemote 与 !isLocal 等价，保留兼容
+  if (!e.isLocal || e.isRemote) {
+    showToast('对方已取消')
+  } else {
+    showToast('你已取消')
+  }
+})
+
+onCallTimeout((e) => {
+  // timeout 由本端定时器触发，isLocal=true
+  showToast('邀请超时')
+})
+```
+
+#### `onParticipantJoined` / `onParticipantLeft` — 群通话成员变化
+
+```ts
+onParticipantJoined((e) => {
+  console.log('成员加入:', e.userId)
+  console.log('会话ID:', e.conversationId)
+})
+
+onParticipantLeft((e) => {
+  console.log('成员离开:', e.userId, '原因:', e.reason)
+})
+```
+
+### 一键获取通话记录
+
+`getCallRecord()` 在 `callEnded` 事件触发后自动生成一条标准化的通话记录，接入方可直接用于插入本地消息或发送 custom 消息。
+
+```ts
+onCallEnded((e) => {
+  const record = getCallRecord()
+  // record 结构：
+  // {
+  //   callId: 'xxx',
+  //   conversationId: 'userB',          // 直接对应 IM 会话 key
+  //   chatType: 'singleChat',           // 'singleChat' | 'groupChat'
+  //   from: 'userA',                    // 主叫方 userId
+  //   to: 'userB',                      // 被叫方 userId 或群 groupId
+  //   status: 'ended',                  // ended | refused | busy | canceled | timeout | noResponse
+  //   duration: 180000,                 // 毫秒
+  //   timestamp: 1713761400000,         // 结束时间戳
+  //   endedBy: 'userA'                  // 挂断方 userId
+  // }
+
+  // 示例：插入本地消息
+  insertLocalMessage(record.conversationId, {
+    type: 'custom',
+    customEvent: 'callRecord',
+    customExts: record,
+  })
+})
+```
+
+**字段映射关系**：
+
+| CallRecord 字段 | 来源说明 |
+|-----------------|----------|
+| `callId` | 通话唯一标识 |
+| `conversationId` | 事件中的 `conversationId` |
+| `chatType` | 根据 `type` 推导：单聊=`singleChat`，群聊=`groupChat` |
+| `from` | `callerUserId` |
+| `to` | 单聊=`calleeUserId`，群聊=`groupId` |
+| `status` | `reason` 映射：`hangup/abnormalEnd`→`ended`，`refuse/remoteRefuse`→`refused`，`busy`→`busy`，`cancel/remoteCancel`→`canceled`，`noResponse/remoteNoResponse`→`noResponse` |
+| `duration` | 通话时长（毫秒） |
+| `timestamp` | `callEnded` 触发时的 `Date.now()` |
+| `endedBy` | 事件中的 `endedBy` |
+
+### 完整示例：在聊天记录中展示通话状态
+
+```ts
+const { onCallEnded, onCallRefused, onCallBusy, onCallTimeout, getCallRecord } = useCallKitEvents()
+
+function insertCallRecordMessage(record: ReturnType<typeof getCallRecord>) {
+  if (!record) return
+
+  // 根据 status 生成展示文本
+  const statusTextMap: Record<string, string> = {
+    ended: `通话时长 ${Math.round(record.duration / 1000)}s`,
+    refused: '对方已拒绝',
+    busy: '对方忙线',
+    canceled: '通话已取消',
+    timeout: '邀请超时',
+    noResponse: '对方无响应',
+  }
+
+  insertLocalMessage(record.conversationId, {
+    type: 'custom',
+    customEvent: 'callRecord',
+    customExts: {
+      ...record,
+      displayText: statusTextMap[record.status] || '通话结束',
+    },
+  })
+}
+
+onCallEnded(() => insertCallRecordMessage(getCallRecord()))
+onCallRefused(() => insertCallRecordMessage(getCallRecord()))
+onCallBusy(() => insertCallRecordMessage(getCallRecord()))
+onCallTimeout(() => insertCallRecordMessage(getCallRecord()))
 ```
 
 ## 关键配置项说明

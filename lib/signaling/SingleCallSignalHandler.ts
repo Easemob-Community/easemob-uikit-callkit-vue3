@@ -7,6 +7,7 @@ import { CallService } from '../services/CallService'
 import { CALL_STATUS, CALL_TYPE, HANGUP_REASON } from '../types/callstate.types'
 import { logger } from '../utils/logger'
 import { callKitEventBus } from '../core/events/CallKitEventBus'
+import { buildBaseEventFields } from '../core/events/helpers'
 import type { CmdMsgBody } from '../composables/useListenerManager'
 import type { SignalHandler } from './SignalRouter'
 
@@ -226,22 +227,32 @@ export class SingleCallSignalHandler implements SignalHandler {
       // 触发语义化事件（在挂断之前）
       if (ext?.result === 'busy') {
         callKitEventBus.emit('callBusy', {
-          callId: callState.callId,
-          channel: callState.channel,
-          type: callState.type,
-          callerUserId: callState.callerUserId,
-          calleeUserId: callState.calleeUserId,
-          groupId: undefined,
+          ...buildBaseEventFields(
+            {
+              callId: callState.callId,
+              channel: callState.channel,
+              type: callState.type,
+              callerUserId: callState.callerUserId,
+              calleeUserId: callState.calleeUserId,
+              groupId: undefined,
+            },
+            false
+          ),
         })
       } else {
         callKitEventBus.emit('callRefused', {
-          callId: callState.callId,
-          channel: callState.channel,
-          type: callState.type,
+          ...buildBaseEventFields(
+            {
+              callId: callState.callId,
+              channel: callState.channel,
+              type: callState.type,
+              callerUserId: callState.callerUserId,
+              calleeUserId: callState.calleeUserId,
+              groupId: undefined,
+            },
+            false
+          ),
           isRemote: true,
-          callerUserId: callState.callerUserId,
-          calleeUserId: callState.calleeUserId,
-          groupId: undefined,
         })
       }
 
@@ -290,12 +301,17 @@ export class SingleCallSignalHandler implements SignalHandler {
         // 触发 callStarted（主叫方）
         const callState = this.callStateStore.getCallState
         callKitEventBus.emit('callStarted', {
-          callId: callState.callId,
-          channel: callState.channel,
-          type: callState.type,
-          callerUserId: callState.callerUserId,
-          calleeUserId: callState.calleeUserId,
-          groupId: undefined,
+          ...buildBaseEventFields(
+            {
+              callId: callState.callId,
+              channel: callState.channel,
+              type: callState.type,
+              callerUserId: callState.callerUserId,
+              calleeUserId: callState.calleeUserId,
+              groupId: undefined,
+            },
+            false
+          ),
           isCaller: true,
         })
 
@@ -342,13 +358,18 @@ export class SingleCallSignalHandler implements SignalHandler {
         logger.info('一对一通话中收到主叫方取消，执行挂断')
         const callState = this.callStateStore.getCallState
         callKitEventBus.emit('callCanceled', {
-          callId: callState.callId,
-          channel: callState.channel,
-          type: callState.type,
+          ...buildBaseEventFields(
+            {
+              callId: callState.callId,
+              channel: callState.channel,
+              type: callState.type,
+              callerUserId: callState.callerUserId,
+              calleeUserId: callState.calleeUserId,
+              groupId: undefined,
+            },
+            false
+          ),
           isRemote: true,
-          callerUserId: callState.callerUserId,
-          calleeUserId: callState.calleeUserId,
-          groupId: undefined,
         })
         const callService = new CallService()
         callService.handleRemoteCancel().catch((err) => {
@@ -371,13 +392,18 @@ export class SingleCallSignalHandler implements SignalHandler {
       })
     } else {
       callKitEventBus.emit('callCanceled', {
-        callId: callState.callId,
-        channel: callState.channel,
-        type: callState.type,
+        ...buildBaseEventFields(
+          {
+            callId: callState.callId,
+            channel: callState.channel,
+            type: callState.type,
+            callerUserId: callState.callerUserId,
+            calleeUserId: callState.calleeUserId,
+            groupId: undefined,
+          },
+          false
+        ),
         isRemote: true,
-        callerUserId: callState.callerUserId,
-        calleeUserId: callState.calleeUserId,
-        groupId: undefined,
       })
       callService.hangup(HANGUP_REASON.CANCEL).catch((err) => {
         logger.error('执行挂断失败:', err)
@@ -495,12 +521,17 @@ export class SingleCallSignalHandler implements SignalHandler {
     // 触发 callStarted（被叫方）
     const callState = this.callStateStore.getCallState
     callKitEventBus.emit('callStarted', {
-      callId: callState.callId,
-      channel: callState.channel,
-      type: callState.type,
-      callerUserId: callState.callerUserId,
-      calleeUserId: callState.calleeUserId,
-      groupId: undefined,
+      ...buildBaseEventFields(
+        {
+          callId: callState.callId,
+          channel: callState.channel,
+          type: callState.type,
+          callerUserId: callState.callerUserId,
+          calleeUserId: callState.calleeUserId,
+          groupId: undefined,
+        },
+        false
+      ),
       isCaller: false,
     })
 

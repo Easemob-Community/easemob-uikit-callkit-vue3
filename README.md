@@ -73,26 +73,40 @@ pnpm add ./easemob-chat-callkit-vue3-1.0.0.tgz
 
 ### 事件订阅
 
-通过 `useCallKitEvents()` 监听通话生命周期事件，在通话结束后发送系统消息、记录通话时长等：
+通过 `useCallKitEvents()` 监听通话生命周期事件。所有事件均携带 `conversationId`、`isLocal`、`localUserRole` 字段，接入方无需自行推断会话 ID 和通话方向：
 
 ```typescript
 import { useCallKitEvents, HANGUP_REASON } from 'easemob-chat-callkit-vue3'
 import { onUnmounted } from 'vue'
 
-const { onCallStarted, onCallEnded, onIncomingCall } = useCallKitEvents()
+const { onCallStarted, onCallEnded, onIncomingCall, onCallRefused, getCallRecord } = useCallKitEvents()
 
 onCallStarted((e) => {
-  console.log('通话接通', e.callId, '主叫:', e.isCaller)
+  // conversationId: 单聊=对方ID，群聊=groupId，直接对应 IM 会话 key
+  console.log('通话接通', e.callId, '会话:', e.conversationId, '主叫:', e.isCaller)
 })
 
 onCallEnded((e) => {
   const sec = Math.round(e.duration / 1000)
-  console.log('通话结束', '原因:', e.reason, '时长:', sec, '秒')
-  // 可在此发送系统消息到聊天会话
+  // isLocal: true=本端挂断，false=对端挂断/系统超时
+  // endedBy: 挂断方的 userId
+  console.log('通话结束', '原因:', e.reason, '时长:', sec, '秒', '挂断方:', e.endedBy)
+
+  // 一键获取标准化通话记录（callEnded 后自动生成）
+  const record = getCallRecord()
+  // record: { callId, conversationId, chatType, from, to, status, duration, timestamp, endedBy }
+  // 可直接用于插入本地消息或发送 custom 消息
+})
+
+onCallRefused((e) => {
+  // 只在 !isLocal 时显示 "对方已拒绝"
+  if (!e.isLocal) {
+    showToast('对方已拒绝')
+  }
 })
 
 onIncomingCall((e) => {
-  console.log('收到来电', e.callerUserId)
+  console.log('收到来电', e.callerUserId, '会话:', e.conversationId)
 })
 
 // 所有订阅返回解绑函数，建议在 onUnmounted 中调用

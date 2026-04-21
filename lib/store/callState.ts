@@ -5,6 +5,7 @@ import type { Chat } from "../core/sdk/imSDK";
 import { generateRandomChannel } from "../utils";
 import { useSingleCallRtcStore } from "./singleCallRtc";
 import { callKitEventBus } from "../core/events/CallKitEventBus";
+import { buildBaseEventFields } from "../core/events/helpers";
 import { logger } from "../utils/logger";
 export const useCallStateStore = defineStore("callState", {
   /**
@@ -88,12 +89,17 @@ export const useCallStateStore = defineStore("callState", {
 
       const callState = this.getCallState;
       callKitEventBus.emit("callTimeout", {
-        callId: callState.callId,
-        channel: callState.channel,
-        type: callState.type,
-        callerUserId: callState.callerUserId,
-        calleeUserId: callState.calleeUserId,
-        groupId: undefined,
+        ...buildBaseEventFields(
+          {
+            callId: callState.callId,
+            channel: callState.channel,
+            type: callState.type,
+            callerUserId: callState.callerUserId,
+            calleeUserId: callState.calleeUserId,
+            groupId: undefined,
+          },
+          true
+        ),
       });
 
       // 单人通话场景下，设置状态为IDLE，自动隐藏界面
@@ -118,14 +124,19 @@ export const useCallStateStore = defineStore("callState", {
       // 触发状态变化事件
       const callState = this.getCallState;
       callKitEventBus.emit("statusChanged", {
+        ...buildBaseEventFields(
+          {
+            callId: callState.callId,
+            channel: callState.channel,
+            type: callState.type,
+            callerUserId: callState.callerUserId,
+            calleeUserId: callState.calleeUserId,
+            groupId: undefined,
+          },
+          true
+        ),
         from: oldStatus,
         to: status,
-        callId: callState.callId,
-        channel: callState.channel,
-        type: callState.type,
-        callerUserId: callState.callerUserId,
-        calleeUserId: callState.calleeUserId,
-        groupId: undefined,
       });
 
       // 🔑 关键逻辑：当从IDLE状态转换为其他状态时，清空leftUsers（新通话开始）

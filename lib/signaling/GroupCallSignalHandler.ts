@@ -7,6 +7,7 @@ import { CallService } from '../services/CallService'
 import { CALL_STATUS, CALL_TYPE, HANGUP_REASON } from '../types/callstate.types'
 import { logger } from '../utils/logger'
 import { callKitEventBus } from '../core/events/CallKitEventBus'
+import { buildBaseEventFields } from '../core/events/helpers'
 import type { CmdMsgBody } from '../composables/useListenerManager'
 import type { Chat } from '../core/sdk/imSDK'
 import type { SignalHandler } from './SignalRouter'
@@ -178,11 +179,25 @@ export class GroupCallSignalHandler implements SignalHandler {
 
       // 触发 participantJoined
       const callState = this.callStateStore.getCallState
+      const baseFields = buildBaseEventFields(
+        {
+          callId: callState.callId,
+          channel: callState.channel,
+          type: callState.type,
+          callerUserId: callState.callerUserId,
+          calleeUserId: callState.calleeUserId,
+          groupId: this.groupCallStore.session?.groupId,
+        },
+        false
+      )
       callKitEventBus.emit('participantJoined', {
         userId: message.from as string,
         callId: callState.callId,
         channel: callState.channel,
         groupId: this.groupCallStore.session?.groupId,
+        conversationId: baseFields.conversationId,
+        isLocal: false,
+        localUserRole: baseFields.localUserRole,
       })
     }
   }
@@ -300,12 +315,26 @@ export class GroupCallSignalHandler implements SignalHandler {
 
     // 触发 participantLeft
     const callState = this.callStateStore.getCallState
+    const baseFields = buildBaseEventFields(
+      {
+        callId: callState.callId,
+        channel: callState.channel,
+        type: callState.type,
+        callerUserId: callState.callerUserId,
+        calleeUserId: callState.calleeUserId,
+        groupId: this.groupCallStore.session?.groupId,
+      },
+      false
+    )
     callKitEventBus.emit('participantLeft', {
       userId: message.from as string,
       callId: callState.callId,
       channel: callState.channel,
       groupId: this.groupCallStore.session?.groupId,
       reason: 'left',
+      conversationId: baseFields.conversationId,
+      isLocal: false,
+      localUserRole: baseFields.localUserRole,
     })
 
     // 标记用户已离开 RTC

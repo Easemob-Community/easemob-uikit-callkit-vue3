@@ -15,6 +15,7 @@ import { SignalRouter } from '../signaling/SignalRouter'
 import { SingleCallSignalHandler } from '../signaling/SingleCallSignalHandler'
 import { GroupCallSignalHandler } from '../signaling/GroupCallSignalHandler'
 import { callKitEventBus } from '../core/events/CallKitEventBus'
+import { buildBaseEventFields, isMessageExpired } from '../core/events/helpers'
 
 // 定义CmdMsgBody接口以替代不存在的Chat.CmdMsgBody
 export interface CmdMsgBody {
@@ -80,10 +81,11 @@ export function useListenerManager(): ListenerManagerReturn {
       chatClientStore.getChatClient?.context?.userId ||
       chatClientStore.getChatClient?.user
 
+    const isGroupCall =
+      ext?.type === CALL_TYPE.VIDEO_MULTI || ext?.type === CALL_TYPE.AUDIO_MULTI
+
     // 校验当前用户是否为该邀请的预期接收者
     if (currentUserId) {
-      const isGroupCall =
-        ext?.type === CALL_TYPE.VIDEO_MULTI || ext?.type === CALL_TYPE.AUDIO_MULTI
       if (!isGroupCall) {
         if (message.to && message.to !== currentUserId) {
           logger.warn(
@@ -100,6 +102,25 @@ export function useListenerManager(): ListenerManagerReturn {
           return
         }
       }
+    }
+
+    // 单聊场景：校验 calleeDevId 是否匹配当前设备（防止 resourceId 固定导致的多设备离线消息重投）
+    if (!isGroupCall && ext?.calleeDevId) {
+      const currentDeviceId = chatClientStore.getClientDeviceId
+      if (currentDeviceId && ext.calleeDevId !== currentDeviceId) {
+        logger.warn(
+          `[邀请处理] calleeDevId 不匹配，忽略该邀请。消息 calleeDevId: ${ext.calleeDevId}, 当前设备: ${currentDeviceId}`
+        )
+        return
+      }
+    }
+
+    // 校验消息是否已过期（防止重新登录后收到过期离线 invite）
+    if (message.time && isMessageExpired(message.time, callStateStore.inviteTimeout + 10000)) {
+      logger.warn(
+        `[邀请处理] 邀请消息已过期，忽略。消息时间: ${message.time}, 当前时间: ${Date.now()}, 差值: ${Date.now() - message.time}ms`
+      )
+      return
     }
 
     // 校验当前用户的通话状态是否为 idle
@@ -155,14 +176,19 @@ export function useListenerManager(): ListenerManagerReturn {
     // 触发 incomingCall 事件
     const currentCallState = callStateStore.getCallState
     callKitEventBus.emit('incomingCall', {
-      callId: currentCallState.callId,
-      channel: currentCallState.channel,
-      type: currentCallState.type,
-      callerUserId: currentCallState.callerUserId,
+      ...buildBaseEventFields(
+        {
+          callId: currentCallState.callId,
+          channel: currentCallState.channel,
+          type: currentCallState.type,
+          callerUserId: currentCallState.callerUserId,
+          calleeUserId: currentCallState.calleeUserId,
+          groupId: ext?.callkitGroupInfo?.groupId,
+        },
+        false
+      ),
       callerDevId: currentCallState.callerDevId,
-      calleeUserId: currentCallState.calleeUserId,
       calleeDevId: currentCallState.calleeDevId,
-      groupId: ext?.callkitGroupInfo?.groupId,
       groupName: ext?.callkitGroupInfo?.groupName,
       groupAvatar: ext?.callkitGroupInfo?.groupAvatar,
       invitedMembers: ext?.invitedMembers,
@@ -252,6 +278,13 @@ export function useListenerManager(): ListenerManagerReturn {
       client.addEventHandler('onSignalMessage', {
         onCmdMessage(message) {
           if (message.action === 'rtcCall') {
+            // 校验 cmd 信令是否已过期（防止重新登录后收到过期离线信令）
+            if (message.time && isMessageExpired(message.time, 60000)) {
+              logger.warn(
+                `[信令处理] cmd 信令已过期，忽略。消息时间: ${message.time}, 当前时间: ${Date.now()}, 差值: ${Date.now() - message.time}ms`
+              )
+              return
+            }
             const messageType =
               message.ext?.action || message.action || '未知'
             logger.debug(`接收到信令消息类型: ${messageType}`)

@@ -9,6 +9,7 @@ import { useSignalManager } from "../composables/useSignalManager";
 import { useGroupCallStore } from "../modules/groupCall";
 import { logger } from "../utils/logger";
 import { callKitEventBus } from "../core/events/CallKitEventBus";
+import { buildBaseEventFields, getCurrentUserId } from "../core/events/helpers";
 
 export class CallService {
   private svcLogger = logger;
@@ -347,21 +348,46 @@ export class CallService {
       }
 
       // 触发 callEnded 事件（在重置状态之前，确保能拿到 callInfo）
-      const isRemote = [
+      const remoteReasons: HANGUP_REASON[] = [
         HANGUP_REASON.REMOTE_CANCEL,
         HANGUP_REASON.REMOTE_REFUSE,
         HANGUP_REASON.REMOTE_NO_RESPONSE,
-      ].includes(reason as any);
+        HANGUP_REASON.BUSY,
+      ];
+      const isLocal = !remoteReasons.includes(reason);
+
+      const currentUserId = getCurrentUserId();
+      let endedBy: string | undefined;
+      if (isLocal) {
+        endedBy = currentUserId;
+      } else if (
+        reason === HANGUP_REASON.REMOTE_CANCEL ||
+        reason === HANGUP_REASON.REMOTE_REFUSE ||
+        reason === HANGUP_REASON.REMOTE_NO_RESPONSE ||
+        reason === HANGUP_REASON.BUSY
+      ) {
+        // 远程原因：挂断/拒绝/忙线方为对方
+        endedBy =
+          callState.callerUserId === currentUserId
+            ? callState.calleeUserId
+            : callState.callerUserId;
+      }
 
       callKitEventBus.emit("callEnded", {
-        callId: callState.callId,
-        channel: callState.channel,
-        type: callState.type,
+        ...buildBaseEventFields(
+          {
+            callId: callState.callId,
+            channel: callState.channel,
+            type: callState.type,
+            callerUserId: callState.callerUserId,
+            calleeUserId: callState.calleeUserId,
+            groupId: undefined,
+          },
+          isLocal
+        ),
         reason,
         duration,
-        callerUserId: callState.callerUserId,
-        calleeUserId: callState.calleeUserId,
-        groupId: undefined,
+        endedBy,
       });
 
       logger.info(`[CallService] 重置通话状态，原因: ${reason}, 重置前状态: ${callStateStore.getCallStatus}, 时长: ${duration}ms`);

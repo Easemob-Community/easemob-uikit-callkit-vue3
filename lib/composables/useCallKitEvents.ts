@@ -3,7 +3,9 @@ import type {
   CallKitEventType,
   CallKitEventPayloads,
   CallKitEventHandler,
+  CallRecord,
 } from "../core/events/types";
+import { CALL_TYPE, HANGUP_REASON } from "../types/callstate.types";
 
 /**
  * useCallKitEvents
@@ -33,7 +35,56 @@ import type {
  * onUnmounted(() => unbind())
  * ```
  */
+/**
+ * 将 HANGUP_REASON 映射为 CallRecord 状态
+ */
+function mapReasonToStatus(
+  reason: HANGUP_REASON
+): CallRecord["status"] {
+  switch (reason) {
+    case HANGUP_REASON.HANGUP:
+    case HANGUP_REASON.ABNORMAL_END:
+    case HANGUP_REASON.HANDLE_ON_OTHER_DEVICE:
+      return "ended";
+    case HANGUP_REASON.REFUSE:
+    case HANGUP_REASON.REMOTE_REFUSE:
+      return "refused";
+    case HANGUP_REASON.BUSY:
+      return "busy";
+    case HANGUP_REASON.CANCEL:
+    case HANGUP_REASON.REMOTE_CANCEL:
+      return "canceled";
+    case HANGUP_REASON.NO_RESPONSE:
+    case HANGUP_REASON.REMOTE_NO_RESPONSE:
+      return "noResponse";
+    default:
+      return "ended";
+  }
+}
+
 export function useCallKitEvents() {
+  // 维护最后一条通话记录
+  let lastCallRecord: CallRecord | null = null;
+
+  // 内部自动订阅 callEnded，缓存通话记录
+  const unsubscribeCallEnded = callKitEventBus.on("callEnded", (event) => {
+    const isGroupCall =
+      event.type === CALL_TYPE.VIDEO_MULTI ||
+      event.type === CALL_TYPE.AUDIO_MULTI;
+
+    lastCallRecord = {
+      callId: event.callId,
+      conversationId: event.conversationId,
+      chatType: isGroupCall ? "groupChat" : "singleChat",
+      from: event.callerUserId,
+      to: event.groupId || event.calleeUserId || "",
+      status: mapReasonToStatus(event.reason),
+      duration: event.duration,
+      timestamp: Date.now(),
+      endedBy: event.endedBy,
+    };
+  });
+
   /**
    * 通用事件订阅
    */
@@ -116,6 +167,21 @@ export function useCallKitEvents() {
     handler: CallKitEventHandler<"participantLeft">
   ): (() => void) => on("participantLeft", handler);
 
+  /**
+   * 获取最近一次通话记录
+   * 在 callEnded 事件触发后自动生成，接入方可直接用于插入本地消息或展示通话记录
+   */
+  const getCallRecord = (): CallRecord | null => {
+    return lastCallRecord;
+  };
+
+  /**
+   * 清除缓存的通话记录
+   */
+  const clearCallRecord = (): void => {
+    lastCallRecord = null;
+  };
+
   return {
     // 通用 API
     on,
@@ -132,6 +198,11 @@ export function useCallKitEvents() {
     onCallBusy,
     onParticipantJoined,
     onParticipantLeft,
+    // 通话记录 API
+    getCallRecord,
+    clearCallRecord,
+    // 内部订阅解绑（测试/清理用）
+    _unsubscribeCallEnded: unsubscribeCallEnded,
   };
 }
 

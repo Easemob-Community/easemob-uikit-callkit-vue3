@@ -58,6 +58,8 @@ export type {
   CallKitEventType,
   CallKitEventPayloads,
   CallKitEventHandler,
+  CallUserRole,
+  CallRecord,
   BaseCallEvent,
   StatusChangedEvent,
   IncomingCallEvent,

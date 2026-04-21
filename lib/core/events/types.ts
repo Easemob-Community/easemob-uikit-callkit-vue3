@@ -16,6 +16,11 @@ export type CallKitEventType =
   | "participantLeft"; // 群通话成员离开
 
 /**
+ * 当前用户在通话中的角色
+ */
+export type CallUserRole = "caller" | "callee" | "participant";
+
+/**
  * 基础通话信息（事件 payload 公共字段）
  */
 export interface BaseCallEvent {
@@ -25,6 +30,12 @@ export interface BaseCallEvent {
   callerUserId: string;
   calleeUserId?: string;
   groupId?: string;
+  /** 会话 ID：单聊=对方用户ID，群聊=groupId，直接对应 IM 会话 key */
+  conversationId: string;
+  /** 是否由本端行为触发（true=本端，false=对端信令/系统） */
+  isLocal: boolean;
+  /** 当前用户在本通通话中的角色 */
+  localUserRole: CallUserRole;
 }
 
 /**
@@ -62,13 +73,15 @@ export interface CallEndedEvent extends BaseCallEvent {
   reason: HANGUP_REASON;
   /** 通话时长（毫秒）。若计时器未启动则为 0 */
   duration: number;
+  /** 挂断方的 userId（谁点的挂断）。部分 reason 如系统超时可能无此字段 */
+  endedBy?: string;
 }
 
 /**
  * 通话取消事件
  */
 export interface CallCanceledEvent extends BaseCallEvent {
-  /** 是否是远程取消 */
+  /** 是否是远程取消（冗余保留，等价于 !isLocal） */
   isRemote: boolean;
 }
 
@@ -76,7 +89,7 @@ export interface CallCanceledEvent extends BaseCallEvent {
  * 通话拒绝事件
  */
 export interface CallRefusedEvent extends BaseCallEvent {
-  /** 是否是远程拒绝 */
+  /** 是否是远程拒绝（冗余保留，等价于 !isLocal） */
   isRemote: boolean;
 }
 
@@ -98,6 +111,12 @@ export interface ParticipantJoinedEvent {
   callId: string;
   channel: string;
   groupId?: string;
+  /** 会话 ID，群聊=groupId */
+  conversationId: string;
+  /** 是否由本端行为触发 */
+  isLocal: boolean;
+  /** 当前用户角色 */
+  localUserRole: CallUserRole;
 }
 
 /**
@@ -109,6 +128,34 @@ export interface ParticipantLeftEvent {
   channel: string;
   groupId?: string;
   reason?: string;
+  /** 会话 ID，群聊=groupId */
+  conversationId: string;
+  /** 是否由本端行为触发 */
+  isLocal: boolean;
+  /** 当前用户角色 */
+  localUserRole: CallUserRole;
+}
+
+/**
+ * 通话记录对象（供 getCallRecord API 使用）
+ */
+export interface CallRecord {
+  callId: string;
+  conversationId: string;
+  chatType: "singleChat" | "groupChat";
+  from: string; // 主叫方 userId
+  to: string; // 被叫方 userId 或群 groupId
+  status:
+    | "ended"
+    | "refused"
+    | "busy"
+    | "canceled"
+    | "timeout"
+    | "noResponse"
+    | "ongoing";
+  duration: number; // 毫秒
+  timestamp: number;
+  endedBy?: string;
 }
 
 /**
