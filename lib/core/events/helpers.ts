@@ -52,7 +52,7 @@ export function isGroupCallType(type: CALL_TYPE): boolean {
 
 /**
  * 判断消息是否已过期
- * @param messageTime 消息发送时间戳（毫秒）
+ * @param messageTime 消息发送时间戳（毫秒或秒）
  * @param thresholdMs 过期阈值（毫秒），默认 60 秒
  * @returns true 表示消息已过期
  */
@@ -61,11 +61,16 @@ export function isMessageExpired(
   thresholdMs: number = 60000
 ): boolean {
   const now = Date.now();
+
+  // 兼容秒级时间戳：小于 10000000000（约 2001年）视为秒，转换为毫秒
+  const messageTimeMs =
+    messageTime < 10000000000 ? messageTime * 1000 : messageTime;
+
   // 消息时间在未来（设备时间被调慢），不判断为过期
-  if (messageTime > now + 60000) {
+  if (messageTimeMs > now + 60000) {
     return false;
   }
-  return now - messageTime > thresholdMs;
+  return now - messageTimeMs > thresholdMs;
 }
 
 /**
