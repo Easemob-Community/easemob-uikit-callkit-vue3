@@ -81,6 +81,15 @@ app.mount('#app')
       :type="multiCallType"
       :current-user-id="chatClient?.user"
     />
+
+    <!-- 群组通话成员选择弹窗（首次发起邀请时使用） -->
+    <EasemobChatGroupMemberList
+      v-if="showInviteModal"
+      :group-id="currentGroupId"
+      :existing-user-ids="[]"
+      @close="showInviteModal = false"
+      @invite="onInviteSelected"
+    />
   </EasemobChatCallKitProvider>
 </template>
 
@@ -95,6 +104,7 @@ import {
   InvitationNotification,
   EasemobChatSingleCall,
   EasemobChatMultiCall,
+  EasemobChatGroupMemberList,
 } from 'easemob-chat-callkit-vue3'
 
 // 1. 创建 Agora 客户端（推荐外部传入，避免版本冲突）
@@ -149,10 +159,98 @@ async function startGroupCall(type: 'audio' | 'video') {
     },
   })
 }
+
+// 群组通话成员选择弹窗（首次发起邀请时）
+const showInviteModal = ref(false)
+const currentGroupId = ref('')
+
+function openGroupMemberSelector(gId: string) {
+  currentGroupId.value = gId
+  showInviteModal.value = true
+}
+
+function onInviteSelected(userIds: string[]) {
+  showInviteModal.value = false
+  groupCall({
+    groupId: currentGroupId.value,
+    members: userIds,
+    type: 'video',
+    msg: '邀请加入视频通话',
+  })
+}
 </script>
 ```
 
-## Step 4: 可选 — 监听通话事件
+## Step 4: 群组通话成员选择弹窗（可选）
+
+`EasemobChatGroupMemberList` 是 callkit 内置的群成员选择组件，可用于**首次发起群组通话时**让用户选择要邀请的成员。该组件与通话中"邀请更多人"的弹窗 UI 完全一致。
+
+### 使用方式
+
+```vue
+<template>
+  <button @click="openGroupMemberSelector('group-id')">发起群视频通话</button>
+
+  <EasemobChatGroupMemberList
+    v-if="showInviteModal"
+    :group-id="currentGroupId"
+    :members="cachedMembers"          <!-- 可选：传入外部成员列表，不传则组件内部拉取 -->
+    :existing-user-ids="[]"           <!-- 首次邀请传空数组 -->
+    @close="showInviteModal = false"
+    @invite="onInviteSelected"
+  />
+</template>
+
+<script setup>
+import { ref } from 'vue'
+import { useCallKit, EasemobChatGroupMemberList } from 'easemob-chat-callkit-vue3'
+
+const { groupCall } = useCallKit()
+const showInviteModal = ref(false)
+const currentGroupId = ref('')
+
+function openGroupMemberSelector(groupId) {
+  currentGroupId.value = groupId
+  showInviteModal.value = true
+}
+
+function onInviteSelected(userIds) {
+  showInviteModal.value = false
+  groupCall({
+    groupId: currentGroupId.value,
+    members: userIds,
+    type: 'video',
+    msg: '邀请加入视频通话',
+  })
+}
+</script>
+```
+
+### Props
+
+| Prop | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `groupId` | `string` | ✅ | 群组 ID，用于拉取群成员列表 |
+| `members` | `Array<{userId, userName, avatar?}>` | ❌ | **外部传入成员列表（双轨制）**。传入则优先使用，不传则组件内部通过 IM SDK 拉取 |
+| `existingUserIds` | `string[]` | ✅ | 已在通话中的用户 ID 列表（用于灰态显示）。首次邀请传 `[]` |
+| `invitingUserIds` | `string[]` | ❌ | 正在邀请中的用户 ID 列表（显示"邀请中"状态） |
+
+### Events
+
+| Event | 参数 | 说明 |
+|-------|------|------|
+| `invite` | `userIds: string[]` | 用户点击确定，返回选中的用户 ID 数组 |
+| `close` | — | 用户点击取消或关闭弹窗 |
+
+### 注意事项
+
+1. **不需要手动处理昵称头像**：组件内部会自动调用 `resolveUserProfiles` 查询成员昵称和头像，通过 Provider 的 `getUserInfo` 走你的用户资料系统
+2. **双轨制获取成员**：如果你已经在业务层缓存了群成员列表，可通过 `members` prop 传入，避免重复请求 IM SDK
+3. **样式已内置**：只要项目已引入 `easemob-chat-callkit-vue3/style.css`，弹窗样式即自动生效
+
+---
+
+## Step 5: 可选 — 监听通话事件
 
 ```ts
 import { useCallKitEvents, CALL_STATUS, CALL_TYPE } from 'easemob-chat-callkit-vue3'
