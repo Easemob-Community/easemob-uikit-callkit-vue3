@@ -194,6 +194,8 @@ export function useDraggable(options: DraggableOptions = {}): DraggableReturn {
     // 只有左键可以拖拽（鼠标事件）
     if ('button' in e && e.button !== 0) return
 
+    // 重置拖拽标记，用于区分本次交互是点击还是拖拽
+    hasDragged.value = false
     isDragging.value = true
 
     const { clientX, clientY } = getEventCoords(e)

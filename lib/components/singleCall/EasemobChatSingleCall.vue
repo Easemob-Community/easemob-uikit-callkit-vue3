@@ -186,6 +186,8 @@ const handleCancelCall = () => {
 // 处理结束通话
 const handleEndCall = () => {
   isCallActive.value = false
+  // 重置小窗状态，确保下次发起通话时从大窗开始
+  globalCallStore.isMinimized = false
   emit('callEnded')
 }
 
