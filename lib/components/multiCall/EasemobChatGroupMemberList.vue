@@ -149,9 +149,16 @@ const fetchGroupMembers = async () => {
         cursor,
       }, isMiniCore)
 
-      const fetched = response.data?.members || []
-      fetched.forEach((m: any) => {
-        const userId = m.userId
+      // 兼容两种 SDK 返回格式：
+      // 1. 新 SDK: response.data.members = [{ role, userId, joinedTime }, ...]
+      // 2. 旧 SDK: response.data = [{ member: 'x' }, { owner: 'x' }, ...]
+      const memberList = Array.isArray(response.data?.members)
+        ? response.data.members
+        : Array.isArray(response.data)
+          ? response.data
+          : []
+      memberList.forEach((m: any) => {
+        const userId = m.userId || m.member || m.owner
         if (userId && userId !== currentUserId) {
           allMembers.push({ userId })
         }
