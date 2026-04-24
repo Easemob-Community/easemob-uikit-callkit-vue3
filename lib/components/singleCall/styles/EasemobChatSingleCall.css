@@ -42,8 +42,7 @@
 }
 
 /* 通话内容区域内需要交互的元素恢复点击 */
-.call-content > *,
-.call-content ::v-deep(*) {
+.call-content > * {
   pointer-events: auto;
 }
 
