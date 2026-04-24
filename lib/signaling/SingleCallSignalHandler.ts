@@ -54,6 +54,12 @@ export class SingleCallSignalHandler implements SignalHandler {
     const ext = message.ext
     if (!ext) return
 
+    logger.signal('recv', 'alert', {
+      from: message.from,
+      callId: ext?.callId,
+      callerDevId: ext?.callerDevId,
+    })
+
     if (this.callStateStore.getInviteTimeoutTimer) {
       this.callStateStore.clearTimeoutTimer()
     }
@@ -166,6 +172,10 @@ export class SingleCallSignalHandler implements SignalHandler {
     }
 
     this.callStateStore.setCallStatus(CALL_STATUS.RECEIVED_CONFIRM_RING)
+    logger.stateChange(CALL_STATUS.CONFIRM_RING, CALL_STATUS.RECEIVED_CONFIRM_RING, {
+      trigger: 'confirmRing',
+      from: message.from,
+    })
   }
 
   /**
@@ -221,6 +231,11 @@ export class SingleCallSignalHandler implements SignalHandler {
 
     if (ext?.result !== 'accept') {
       // 拒绝分支
+      logger.signal('recv', 'answerCall', {
+        from: message.from,
+        result: ext?.result,
+        callId: ext?.callId,
+      })
       const reason = ext?.result === 'busy' ? HANGUP_REASON.BUSY : HANGUP_REASON.REFUSE
       const callState = this.callStateStore.getCallState
 
@@ -280,6 +295,11 @@ export class SingleCallSignalHandler implements SignalHandler {
       }
     } else {
       // 接受分支：发送 confirmCallee（单聊/群聊共用）
+      logger.signal('recv', 'answerCall', {
+        from: message.from,
+        result: 'accept',
+        callId: ext?.callId,
+      })
       const confirmCalleePayload = {
         callId: ext.callId,
         callerDevId: ext.callerDevId,
@@ -297,6 +317,10 @@ export class SingleCallSignalHandler implements SignalHandler {
       ) {
         logger.info('一对一通话，更新状态为 IN_CALL并加入RTC频道')
         this.callStateStore.setCallStatus(CALL_STATUS.IN_CALL)
+        logger.stateChange(CALL_STATUS.ANSWER_CALL, CALL_STATUS.IN_CALL, {
+          trigger: 'answerCall:accept',
+          from: message.from,
+        })
 
         // 触发 callStarted（主叫方）
         const callState = this.callStateStore.getCallState
@@ -379,6 +403,10 @@ export class SingleCallSignalHandler implements SignalHandler {
       return
     }
 
+    logger.signal('recv', 'cancelCall', {
+      from: message.from,
+      callId: ext?.callId,
+    })
     logger.info('收到对方取消，执行挂断操作')
     const callState = this.callStateStore.getCallState
     const isGroupCall =
@@ -459,6 +487,11 @@ export class SingleCallSignalHandler implements SignalHandler {
       return
     }
 
+    logger.signal('recv', 'leaveCall', {
+      from: message.from,
+      callId: ext?.callId,
+    })
+
     if (
       this.callStateStore.type === CALL_TYPE.VIDEO_MULTI ||
       this.callStateStore.type === CALL_TYPE.AUDIO_MULTI
@@ -499,6 +532,11 @@ export class SingleCallSignalHandler implements SignalHandler {
     const ext = message.ext
     if (!ext) return
 
+    logger.signal('recv', 'confirmCallee', {
+      from: message.from,
+      callId: ext?.callId,
+      result: ext?.result,
+    })
     logger.info('收到 confirmCallee 信令，开始处理')
 
     if (ext.callId !== this.callStateStore.getCallState.callId) {

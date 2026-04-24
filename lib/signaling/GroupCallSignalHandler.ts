@@ -130,6 +130,17 @@ export class GroupCallSignalHandler implements SignalHandler {
       }
     })
 
+    logger.event('groupCallInit', {
+      groupId,
+      groupName,
+      channel,
+      callType,
+      participants: this.groupCallStore.participantList.map((p) => ({
+        userId: p.userId,
+        nickname: p.nickname,
+        state: p.state,
+      })),
+    })
     logger.info('[GroupCallSignalHandler] GroupCallStore 已初始化', {
       groupId,
       groupName,
@@ -167,10 +178,22 @@ export class GroupCallSignalHandler implements SignalHandler {
 
     if (ext?.result !== 'accept') {
       // 群聊拒绝：从 GroupCallStore 移除
+      logger.signal('recv', 'answerCall', {
+        from: message.from,
+        result: ext?.result,
+        callId: ext?.callId,
+        type: 'group',
+      })
       logger.info('[GroupCallSignalHandler] 群聊成员拒绝，移除参与者', message.from)
       this.groupCallStore.removeParticipant(message.from as string)
     } else {
       // 群聊接受：标记为 accepted，添加到 pending RTC 列表
+      logger.signal('recv', 'answerCall', {
+        from: message.from,
+        result: 'accept',
+        callId: ext?.callId,
+        type: 'group',
+      })
       logger.info('[GroupCallSignalHandler] 群聊成员接受，标记为 accepted', message.from)
       if (message.from) {
         this.singleCallRtcStore.addPendingUserId(message.from)
@@ -242,6 +265,12 @@ export class GroupCallSignalHandler implements SignalHandler {
     const currentStatus = this.callStateStore.getCallStatus
     const isFromCaller = message.from === this.callStateStore.getCallState.callerUserId
 
+    logger.signal('recv', 'cancelCall', {
+      from: message.from,
+      callId: ext?.callId,
+      type: 'group',
+    })
+
     if (
       isFromCaller &&
       (currentStatus === CALL_STATUS.ALERTING || currentStatus === CALL_STATUS.INVITING)
@@ -309,6 +338,12 @@ export class GroupCallSignalHandler implements SignalHandler {
       })
       return
     }
+
+    logger.signal('recv', 'leaveCall', {
+      from: message.from,
+      callId: ext?.callId,
+      type: 'group',
+    })
 
     // 通话中状态：只移除离开的成员，不挂断整个通话
     logger.info(`[GroupCallSignalHandler] 群聊成员 ${message.from} 离开`)

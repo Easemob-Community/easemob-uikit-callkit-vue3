@@ -26,6 +26,13 @@ export class SignalRouter {
       logger.warn('[SignalRouter] 消息缺少 action，无法分发', message)
       return
     }
+    logger.signal('recv', action, {
+      from: message.from,
+      to: message.to,
+      callId: message.ext?.callId,
+      result: message.ext?.result,
+      deviceId: message.ext?.callerDevId || message.ext?.calleeDevId,
+    })
     const handlers = this.handlers.get(action) || []
     if (handlers.length === 0) {
       logger.warn(`[SignalRouter] 未注册 action "${action}" 的处理器`)

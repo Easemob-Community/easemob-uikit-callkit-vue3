@@ -78,13 +78,13 @@ export type { Participant } from "./composables/useParticipants";
 // 导出常量与类型
 export { HANGUP_REASON, CALL_STATUS, CALL_TYPE } from "./types/callstate.types";
 
-export { LogLevel } from "./utils/logger";
+export { LogLevel, Logger } from "./utils/logger";
 
 // 导出静态资源配置
 export { DEFAULT_BACKGROUND_IMAGE, ICONS, getAssetUrl } from "./config/assets";
 
 // 版本号（构建时会替换）
-const VERSION = "1.0.3";
+const VERSION = "1.0.4";
 
 const EasemobChatCallKit: Plugin = {
   install(app: App, ...options: any[]) {

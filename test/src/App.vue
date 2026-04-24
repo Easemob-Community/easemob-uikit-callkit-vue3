@@ -74,6 +74,25 @@
           />
         </div>
 
+        <!-- IDB 日志调试 -->
+        <div class="event-log-section">
+          <h3>🗃️ IDB 日志调试</h3>
+          <div class="idb-stats" v-if="idbStats.total > 0">
+            <span>总日志: {{ idbStats.total }} 条</span>
+            <span>通话数: {{ idbStats.sessions }} 通</span>
+            <span>当前 callId: {{ callStateStore.getCallState.callId || '无' }}</span>
+          </div>
+          <div class="button-group">
+            <button @click="handleExportRecentSession" class="btn export-log-btn">📥 预览最近通话</button>
+            <button @click="handleExportAllLogs" class="btn export-log-btn">📥 预览全部日志</button>
+            <button @click="handleDownloadLogs" class="btn export-log-btn">⬇️ 下载当前通话(JSON)</button>
+            <button @click="handleDownloadTextLogs" class="btn export-log-btn">⬇️ 下载全部(.log)</button>
+            <button @click="handleRefreshStats" class="btn export-log-btn">🔄 刷新统计</button>
+            <button @click="handleClearIDBLogs" class="btn clear-log-btn">🗑️ 清空 IDB</button>
+          </div>
+          <pre v-if="idbLogContent" class="idb-log-preview">{{ idbLogContent }}</pre>
+        </div>
+
         <!-- 事件日志展示 -->
         <div class="event-log-section" v-if="eventLogs.length > 0">
           <h3>📡 CallKit 事件日志</h3>
@@ -106,6 +125,7 @@ import {
   CALL_STATUS, 
   CALL_TYPE, 
   LogLevel,
+  Logger,
   useCallKit, 
   useCallKitEvents,
   useCallStateStore,
@@ -114,6 +134,9 @@ import {
   EasemobChatSingleCall, 
   EasemobChatMultiCall 
 } from 'easemob-chat-callkit-vue3'
+
+// 启用 IndexedDB 日志持久化
+Logger.getInstance({ enableIDB: true, idbRetentionDays: 3 })
 // 引入模式检测
 // @ts-ignore
 const importMode = (typeof __CALLKIT_TEST_MODE__ !== 'undefined' ? __CALLKIT_TEST_MODE__ : 'unknown') as string
@@ -224,7 +247,7 @@ const chatClient = ref()
 onMounted(() => {
   SDK.logger.disableAll()
   const connection = new SDK.connection({
-    appKey: 'your-app-key#your-app-name', // 替换为你的环信 AppKey
+    appKey: 'easemob-demo#support', // 替换为你的环信 AppKey
     isFixedDeviceId: false
   })
   chatClient.value = connection
@@ -370,6 +393,81 @@ const handleEndCall = () => {
       console.error('结束通话失败:', error)
       alert('结束通话失败')
     })
+}
+
+// IDB 日志调试
+const idbLogContent = ref('')
+const idbStats = ref({ total: 0, sessions: 0, list: [] as string[] })
+
+const handleRefreshStats = async () => {
+  const sessions = await Logger.getInstance().getSessions()
+  let total = 0
+  for (const s of sessions.slice(0, 10)) {
+    const logs = await Logger.getInstance().exportLogsBySession(s)
+    total += logs.length
+  }
+  // 如果超过 10 个 session，额外估算
+  if (sessions.length > 10) {
+    const all = await Logger.getInstance().exportLogsBySession()
+    total = all.length
+  }
+  idbStats.value = { total, sessions: sessions.length, list: sessions }
+  idbLogContent.value = `统计更新完成：共 ${total} 条日志，${sessions.length} 个 session\n${sessions.map((s, i) => `${i + 1}. ${s}`).join('\n')}`
+}
+
+const handleExportRecentSession = async () => {
+  const sessions = await Logger.getInstance().getSessions()
+  if (sessions.length === 0) {
+    idbLogContent.value = '暂无日志记录'
+    return
+  }
+  const logs = await Logger.getInstance().exportLogsBySession(sessions[0])
+  idbLogContent.value = `【最近通话】session: ${sessions[0]}\n共 ${logs.length} 条日志\n\n` + JSON.stringify(logs, null, 2)
+}
+
+const handleExportAllLogs = async () => {
+  const logs = await Logger.getInstance().exportLogsBySession()
+  const sessions = [...new Set(logs.map(l => l.sessionId).filter(Boolean))]
+  idbLogContent.value = `【全部日志】共 ${logs.length} 条，涉及 ${sessions.length} 个 session\nsessions: ${sessions.join(', ') || '无'}\n\n` + JSON.stringify(logs, null, 2)
+}
+
+/** 获取当前优先下载的 callId：正在进行的通话 > 最近一个 session */
+const getTargetCallId = async (): Promise<string | undefined> => {
+  const currentCallId = callStateStore.getCallState.callId || Logger.getInstance().getSessionId()
+  if (currentCallId) return currentCallId
+  const sessions = await Logger.getInstance().getSessions()
+  return sessions[0]
+}
+
+const handleDownloadLogs = async () => {
+  const callId = await getTargetCallId()
+  const json = await Logger.getInstance().exportLogsAsJSON(callId)
+  const blob = new Blob([json], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `callkit-logs-${callId || 'all'}-${Date.now()}.json`
+  a.click()
+  URL.revokeObjectURL(url)
+  alert(`已下载 ${callId ? '当前通话' : '全部'} 日志 (JSON)`)
+}
+
+const handleDownloadTextLogs = async () => {
+  const text = await Logger.getInstance().exportLogsAsText()
+  const blob = new Blob([text], { type: 'text/plain' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `callkit-logs-all-${Date.now()}.log`
+  a.click()
+  URL.revokeObjectURL(url)
+  alert('已下载全部日志 (.log)')
+}
+
+const handleClearIDBLogs = async () => {
+  await Logger.getInstance().clearLogs()
+  idbStats.value = { total: 0, sessions: 0, list: [] }
+  idbLogContent.value = 'IDB 日志已清空'
 }
 </script>
 
@@ -627,5 +725,40 @@ const handleEndCall = () => {
   color: white;
   padding: 6px 14px;
   font-size: 13px;
+}
+
+.export-log-btn {
+  background-color: #17a2b8;
+  color: white;
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+.idb-stats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: #555;
+}
+
+.idb-stats span {
+  background: #e9ecef;
+  padding: 4px 10px;
+  border-radius: 4px;
+}
+
+.idb-log-preview {
+  margin-top: 12px;
+  max-height: 300px;
+  overflow-y: auto;
+  background-color: #1e1e1e;
+  color: #d4d4d4;
+  padding: 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: 'Courier New', monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 </style>

@@ -146,11 +146,11 @@ export function useJoinChannel(): UseJoinChannelReturn {
         agoraUid,
         agoraAppId || undefined  // 传入动态获取的 appId
       )
-      logger.info('成功加入RTC频道', { 
-        channel: callState.channel, 
+      logger.rtc('joinChannelSuccess', {
+        channel: callState.channel,
         uid,
         agoraUid,
-        appId: agoraAppId 
+        appId: agoraAppId,
       })
       
       // 创建并发布音视频轨道
@@ -159,18 +159,18 @@ export function useJoinChannel(): UseJoinChannelReturn {
       // 创建音频轨道
       const audioTrack = await rtcService.createAudioTrack()
       tracks.push(audioTrack)
-      logger.info('创建音频轨道成功')
+      logger.rtc('createAudioTrackSuccess', {})
       
       // 如果是视频通话,创建视频轨道
       if (callState.type === CALL_TYPE.VIDEO_1V1 || callState.type === CALL_TYPE.VIDEO_MULTI) {
         const videoTrack = await rtcService.createVideoTrack()
         tracks.push(videoTrack)
-        logger.info('创建视频轨道成功')
+        logger.rtc('createVideoTrackSuccess', {})
       }
       
       // 发布轨道
       await rtcService.publishTracks(tracks)
-      logger.info('音视频轨道发布成功')
+      logger.rtc('publishTracksSuccess', {})
       
       // 更新store状态
       rtcChannelStore.isConnected = true
@@ -191,7 +191,7 @@ export function useJoinChannel(): UseJoinChannelReturn {
 
       // 启动通话计时
       callTimerStore.startCallTimer()
-      logger.info('RTC频道状态更新完成，通话计时已启动')
+      logger.rtc('callTimerStarted', {})
       
     } catch (error) {
       logger.error('加入RTC频道失败:', error)

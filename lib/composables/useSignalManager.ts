@@ -98,6 +98,11 @@ export function useSignalManager(): UseSignalManagerReturn {
       logger.info(
         `useSignalManager: 发送邀请消息成功，消息ID: ${result.serverMsgId}`
       );
+      logger.signal('send', 'invite', {
+        targetId: isGroupChat ? `[群组: ${groupId}]` : targetId,
+        chatType,
+        serverMsgId: result.serverMsgId,
+      });
       return result;
     } catch (error) {
       logger.error(`useSignalManager: 发送邀请消息失败:`, error);
@@ -136,6 +141,12 @@ export function useSignalManager(): UseSignalManagerReturn {
       logger.info(
         `useSignalManager: 发送answerCall信令成功，消息ID: ${result_sendSignal.serverMsgId}`
       );
+      logger.signal('send', 'answerCall', {
+        targetId,
+        result,
+        callId: payload?.callId,
+        serverMsgId: result_sendSignal.serverMsgId,
+      });
       return result_sendSignal;
     } catch (error) {
       logger.error(`useSignalManager: 发送answerCall信令失败:`, error);
@@ -173,6 +184,11 @@ export function useSignalManager(): UseSignalManagerReturn {
       logger.info(
         `useSignalManager: 发送取消通话邀请信令成功，消息ID: ${result.serverMsgId}`
       );
+      logger.signal('send', 'cancelCall', {
+        to,
+        chatType,
+        serverMsgId: result.serverMsgId,
+      });
       return result;
     } catch (error) {
       logger.error(`useSignalManager: 发送取消通话邀请信令失败:`, error);
@@ -208,6 +224,12 @@ export function useSignalManager(): UseSignalManagerReturn {
       logger.info(
         `useSignalManager: 发送忙碌拒绝通话邀请信令成功，消息ID: ${result.serverMsgId}`
       );
+      logger.signal('send', 'answerCall', {
+        targetId,
+        result: 'busy',
+        callId: payload?.callId,
+        serverMsgId: result.serverMsgId,
+      });
       return result;
     } catch (error) {
       logger.error(`useSignalManager: 发送忙碌拒绝通话邀请信令失败:`, error);
@@ -239,6 +261,10 @@ export function useSignalManager(): UseSignalManagerReturn {
       logger.info(
         `useSignalManager: 发送alerting信令成功，消息ID: ${result.serverMsgId}`
       );
+      logger.signal('send', 'alert', {
+        targetId,
+        serverMsgId: result.serverMsgId,
+      });
       return result;
     } catch (error) {
       logger.error(`useSignalManager: 发送alerting信令失败:`, error);
@@ -271,6 +297,10 @@ export function useSignalManager(): UseSignalManagerReturn {
       logger.info(
         `useSignalManager: 发送确认响铃信令成功，消息ID: ${result.serverMsgId}`
       );
+      logger.signal('send', 'confirmRing', {
+        targetId,
+        serverMsgId: result.serverMsgId,
+      });
       return result;
     } catch (error) {
       logger.error(`useSignalManager: 发送确认响铃信令失败:`, error);
@@ -305,6 +335,12 @@ export function useSignalManager(): UseSignalManagerReturn {
       logger.info(
         `useSignalManager: 发送确认被叫方状态信令成功，消息ID: ${result.serverMsgId}`
       );
+      logger.signal('send', 'confirmCallee', {
+        targetId,
+        result: payload?.result,
+        callId: payload?.callId,
+        serverMsgId: result.serverMsgId,
+      });
       return result;
     } catch (error) {
       logger.error(`useSignalManager: 发送确认被叫方状态信令失败:`, error);
@@ -344,6 +380,11 @@ export function useSignalManager(): UseSignalManagerReturn {
       logger.info(
         `useSignalManager: 发送离开通话信令成功，消息ID: ${result.serverMsgId}`
       );
+      logger.signal('send', 'leaveCall', {
+        to,
+        chatType,
+        serverMsgId: result.serverMsgId,
+      });
       return result;
     } catch (error) {
       logger.error(`useSignalManager: 发送离开通话信令失败:`, error);

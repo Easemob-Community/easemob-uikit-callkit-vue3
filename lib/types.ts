@@ -48,7 +48,8 @@ export interface ProviderConfig {
   isMiniCore?: boolean;
   initConfig?: {
     debug?: boolean; // 开启调试模式（等价于 logLevel: LogLevel.VERBOSE）
-    logLevel?: LogLevel; // 日志输出级别：0=ERROR, 1=WARN, 2=INFO, 3=DEBUG, 4=VERBOSE
+    logLevel?: LogLevel; // 控制台日志输出级别：0=ERROR, 1=WARN, 2=INFO, 3=DEBUG, 4=VERBOSE
+    enableIDBLog?: boolean; // 是否启用 IndexedDB 日志持久化，默认 true
     enableRingtone?: boolean; // 开启铃声
     resizable?: boolean; // 开启可调整大小
     draggable?: boolean; // 开启可拖动

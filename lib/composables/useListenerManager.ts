@@ -70,6 +70,13 @@ export function useListenerManager(): ListenerManagerReturn {
 
     logger.info(`开始处理通话邀请，发送方: ${message.from || '未知'}`)
     logger.verbose(`通话邀请详情:`, message.ext || '无扩展信息')
+    logger.signal('recv', 'invite', {
+      from: message.from,
+      to: message.to,
+      callId: message.ext?.callId,
+      type: message.ext?.type,
+      channel: message.ext?.channelName,
+    })
 
     if (message.from === chatClientStore.getChatClient?.context.jid.name) {
       logger.warn('该条通话邀请文本消息是自己发送的，忽略')
@@ -172,6 +179,9 @@ export function useListenerManager(): ListenerManagerReturn {
     sendAlertMessage(message.from as string).catch(() => {})
     callStateStore.setCallStatus(CALL_STATUS.ALERTING)
     logger.info(`通话状态已更新至ALERTING`)
+
+    // 设置日志 sessionId（使用 callId 作为会话标识），后续日志自动关联当前通话
+    logger.setSessionId(ext?.callId || ext?.channelName || '')
 
     // 触发 incomingCall 事件
     const currentCallState = callStateStore.getCallState

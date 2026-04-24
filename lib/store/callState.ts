@@ -50,6 +50,15 @@ export const useCallStateStore = defineStore("callState", {
       this.channel = generateRandomChannel(8);
       this.status = CALL_STATUS.INVITING;
 
+      // 关联日志 sessionId（使用 callId 作为会话标识）
+      logger.setSessionId(this.callId);
+      logger.stateChange(CALL_STATUS.IDLE, CALL_STATUS.INVITING, {
+        callId: this.callId,
+        channel: this.channel,
+        type: this.type,
+        calleeUserId,
+      });
+
       // 开始超时计时
       this.startTimeoutTimer();
     },
@@ -86,6 +95,11 @@ export const useCallStateStore = defineStore("callState", {
      */
     handleTimeout() {
       logger.warn("通话邀请超时");
+      logger.event('callTimeout', {
+        callId: this.callId,
+        channel: this.channel,
+        type: this.type,
+      });
 
       const callState = this.getCallState;
       callKitEventBus.emit("callTimeout", {
@@ -120,6 +134,11 @@ export const useCallStateStore = defineStore("callState", {
       if (oldStatus === status) return;
 
       this.status = status;
+      logger.stateChange(oldStatus, status, {
+        callId: this.callId,
+        channel: this.channel,
+        type: this.type,
+      });
 
       // 触发状态变化事件
       const callState = this.getCallState;
@@ -153,6 +172,12 @@ export const useCallStateStore = defineStore("callState", {
       // 清除超时计时器
       this.clearTimeoutTimer();
 
+      logger.stateChange(this.status, CALL_STATUS.IDLE, {
+        trigger: 'resetCallState',
+        callId: this.callId,
+        channel: this.channel,
+      });
+
       this.status = CALL_STATUS.IDLE;
       this.callType = null;
       // 重置其他状态字段
@@ -167,6 +192,9 @@ export const useCallStateStore = defineStore("callState", {
       
       // 重置通话类型为默认值
       this.type = CALL_TYPE.AUDIO_1V1;
+
+      // 通话结束，清空日志 sessionId 关联
+      logger.setSessionId(undefined);
     },
 
     /**

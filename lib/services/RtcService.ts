@@ -169,7 +169,7 @@ export class RtcService {
         uid
       )
       
-      logger.info('Joined RTC channel:', { channelName, uid: this.agoraUid, appId: this.appId })
+      logger.rtc('joinChannel', { channelName, uid: this.agoraUid, appId: this.appId })
       return this.agoraUid
     } catch (error) {
       logger.error('Failed to join channel:', error)
@@ -203,7 +203,7 @@ export class RtcService {
         await this.client.leave()
       }
 
-      logger.info('Left RTC channel')
+      logger.rtc('leaveChannel', {})
     } catch (error) {
       logger.error('Failed to leave channel:', error)
       throw error
@@ -226,7 +226,7 @@ export class RtcService {
       this.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack()
       this.onAudioEnabledChange?.(true)
       
-      logger.info('Created local audio track')
+      logger.rtc('createAudioTrack', {})
       return this.localAudioTrack
     } catch (error) {
       logger.error('Failed to create audio track:', error)
@@ -256,7 +256,7 @@ export class RtcService {
       ])
       this.onLocalStreamChange?.(this.localVideoStream)
       
-      logger.info('Created local video track')
+      logger.rtc('createVideoTrack', {})
       return this.localVideoTrack
     } catch (error) {
       logger.error('Failed to create video track:', error)
@@ -274,7 +274,7 @@ export class RtcService {
 
     try {
       await this.client.publish(tracks)
-      logger.info('Published local tracks')
+      logger.rtc('publishTracks', {})
     } catch (error) {
       logger.error('Failed to publish tracks:', error)
       throw error
@@ -302,7 +302,7 @@ export class RtcService {
       this.isAudioEnabled = enabled
       this.onAudioEnabledChange?.(enabled)
       
-      logger.info('Audio toggled:', enabled)
+      logger.rtc('toggleAudio', { enabled })
       return enabled
     } catch (error) {
       logger.error('Failed to toggle audio:', error)
@@ -389,7 +389,7 @@ export class RtcService {
         this.onVideoEnabledChange?.(false)
       }
       
-      logger.info('Video toggled:', enabled)
+      logger.rtc('toggleVideo', { enabled })
       return this.isVideoEnabled
     } catch (error) {
       logger.error('Failed to toggle video:', error)
@@ -602,8 +602,6 @@ export class RtcService {
 
     // 用户加入
     this.client.on('user-joined', async (user: IAgoraRTCRemoteUser) => {
-      logger.info('User joined:', user.uid)
-
       // 获取userId映射
       let userId = this.uidToUserIdMap.get(user.uid.toString())
 
@@ -643,15 +641,15 @@ export class RtcService {
         logger.warn('User-joined: 未能获取userId映射，使用uid作为默认值:', user.uid)
       }
 
+      logger.rtc('userJoined', { uid: user.uid, userId })
       this.onUserJoined?.(userId || user.uid.toString())
     })
 
     // 用户离开
     this.client.on('user-left', (user: IAgoraRTCRemoteUser, reason: string) => {
-      logger.info('User left:', user.uid, reason)
-
       // 获取userId
       const userId = this.uidToUserIdMap.get(user.uid.toString())
+      logger.rtc('userLeft', { uid: user.uid, userId, reason })
 
       // 清理远程轨道
       this.remoteVideoTracks.delete(user.uid.toString())
@@ -667,8 +665,6 @@ export class RtcService {
 
     // 用户发布 - 自动订阅远程用户
     this.client.on('user-published', async (user: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => {
-      logger.info('User published:', user.uid, mediaType)
-
       // 获取userId映射
       let userId = this.uidToUserIdMap.get(user.uid.toString())
       if (!userId && this.chatClient) {
@@ -686,6 +682,8 @@ export class RtcService {
         }
       }
       
+      logger.rtc('userPublished', { uid: user.uid, userId, mediaType })
+
       // 自动订阅远程用户（可被上层关闭，由上层统一处理订阅逻辑）
       if (this.autoSubscribe) {
         try {
@@ -702,7 +700,8 @@ export class RtcService {
 
     // 用户取消发布
     this.client.on('user-unpublished', (user: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => {
-      logger.info('User unpublished:', user.uid, mediaType)
+      const userId = this.uidToUserIdMap.get(user.uid.toString())
+      logger.rtc('userUnpublished', { uid: user.uid, userId, mediaType })
       
       if (mediaType === 'video') {
         this.remoteVideoTracks.delete(user.uid.toString())
@@ -763,7 +762,7 @@ export class RtcService {
       this.agoraUid = 0
       this.currentCameraDeviceId = null
       
-      logger.info('RtcService destroyed')
+      logger.rtc('destroy', {})
     } catch (error) {
       logger.error('Failed to destroy RtcService:', error)
     }

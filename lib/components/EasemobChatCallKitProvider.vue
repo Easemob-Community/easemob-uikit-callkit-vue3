@@ -11,7 +11,8 @@ import { useListenerManager } from '../composables/useListenerManager';
 import { useChatClientStore } from '../store/chatClient';
 import { useCallStateStore } from '../store/callState';
 import { useRtcChannelStore } from '../store/rtcChannel';
-import { logger, LogLevel } from '../utils/logger';
+import { logger, LogLevel, Logger } from '../utils/logger';
+import { RingtoneService } from '../utils/ringtone';
 import { registerUserInfoProvider, registerGroupInfoProvider, clearProfileProviders, type UserInfoProvider } from '../services/UserProfileService';
 import { fetchUserInfoById } from '../utils/imSdkAdapter';
 
@@ -68,14 +69,41 @@ const { mountTextMessageListener, mountSignalListener } = useListenerManager();
 watchEffect(() => {
   const callStateStore = useCallStateStore();
   callStateStore.inviteTimeout = effectiveInitConfig.inviteTimeout;
-  
+
   // 设置日志级别（logLevel 优先级高于 debug）
   if (effectiveInitConfig.logLevel !== undefined) {
     logger.setLevel(effectiveInitConfig.logLevel);
   } else {
     logger.setDebug(effectiveInitConfig.debug);
   }
-  
+
+  // 初始化 IndexedDB 日志存储（默认开启，不受控制台日志级别影响）
+  if (effectiveInitConfig.enableIDBLog !== false) {
+    try {
+      Logger.getInstance({ enableIDB: true, idbLevel: LogLevel.VERBOSE, idbMaxSizeMB: 20 })
+      // 强制打印到控制台，不受 logger level 限制
+      console.info(
+        `%c[EasemobChatCallKit] IndexedDB 日志存储已启用（上限 20MB，callId 维度，VERBOSE 级别）`,
+        'color: #3b82f6; font-weight: bold;'
+      )
+    } catch (err) {
+      console.warn(
+        `%c[EasemobChatCallKit] IndexedDB 日志存储初始化失败`,
+        'color: #f59e0b; font-weight: bold;',
+        err
+      )
+    }
+  } else {
+    console.info(
+      `%c[EasemobChatCallKit] IndexedDB 日志存储已禁用（enableIDBLog=false）`,
+      'color: #6b7280;'
+    )
+  }
+
+  // 初始化铃声服务（当前为桩函数，不实际播放音频）
+  RingtoneService.getInstance().setEnabled(effectiveInitConfig.enableRingtone ?? true)
+  logger.debug(`铃声服务已初始化: enabled=${effectiveInitConfig.enableRingtone ?? true}（桩函数占位）`)
+
   // 实际应用场景日志
   logger.info(`CallKit Provider 初始化完成，配置: debug=${effectiveInitConfig.debug}, logLevel=${effectiveInitConfig.logLevel ?? 'auto'}, enableRingtone=${effectiveInitConfig.enableRingtone}`);
   logger.debug(`CallKit Provider 详细配置: inviteTimeout=${effectiveInitConfig.inviteTimeout}, resizable=${effectiveInitConfig.resizable}, draggable=${effectiveInitConfig.draggable}`);

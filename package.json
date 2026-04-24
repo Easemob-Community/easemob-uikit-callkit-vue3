@@ -1,6 +1,6 @@
 {
   "name": "easemob-chat-callkit-vue3",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "type": "module",
   "description": "Easemob Chat CallKit Vue3 Plugin",
   "main": "./release/dist/index.js",
@@ -31,11 +31,12 @@
     "test:tgz": "pnpm run build:pack && cd test && pnpm run switch:tgz && pnpm run dev:tgz"
   },
   "peerDependencies": {
-    "vue": "^3.0.0",
     "agora-rtc-sdk-ng": "^4.14.0",
-    "easemob-websdk": "^4.12.0"
+    "easemob-websdk": "^4.12.0",
+    "vue": "^3.0.0"
   },
   "dependencies": {
+    "dexie": "^4.4.2",
     "pinia": "^3.0.3"
   },
   "devDependencies": {

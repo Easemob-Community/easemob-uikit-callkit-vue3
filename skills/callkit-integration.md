@@ -483,10 +483,66 @@ onCallTimeout(() => insertCallRecordMessage(getCallRecord()))
 |------|------|--------|------|
 | `debug` | `boolean` | `false` | 开启调试模式（verbose 日志） |
 | `logLevel` | `LogLevel` | — | 日志级别：0=ERROR, 1=WARN, 2=INFO, 3=DEBUG, 4=VERBOSE |
-| `enableRingtone` | `boolean` | `true` | 来电铃声 |
+| `enableRingtone` | `boolean` | `true` | 来电铃声（当前为桩函数，不实际播放音频） |
+| `enableIDBLog` | `boolean` | `true` | 是否启用 IndexedDB 日志持久化（默认开启，上限 20MB） |
 | `resizable` | `boolean` | `true` | 通话窗口可调整大小 |
 | `draggable` | `boolean` | `true` | 通话窗口可拖动 |
 | `inviteTimeout` | `number` | `30000` | 邀请超时时间（毫秒） |
+
+## IndexedDB 日志与问题排查
+
+CallKit 内置了基于 IndexedDB 的结构化日志系统，用于线上问题排查和通话还原。
+
+### 自动记录的内容
+
+无需手动调用，以下事件会自动写入 IndexedDB：
+
+| 类别 | 内容 |
+|------|------|
+| `signal` | 信令收发（invite/alert/answerCall/cancelCall/leaveCall 等） |
+| `state` | 通话状态流转（IDLE → INVITING → ALERTING → IN_CALL → IDLE） |
+| `rtc` | RTC 事件（joinChannel/userJoined/publishTracks 等） |
+| `event` | 业务事件（callTimeout/callEnded 等） |
+
+### 日志特点
+
+- **独立于控制台级别**：即使你把 `logLevel` 设为 `ERROR`，IDB 依然会完整记录所有级别的日志
+- **按 callId 维度关联**：每通通话的日志通过 `callId` 自动关联，便于按通话还原时序
+- **容量上限**：默认 20MB（约 5 万条），超出后自动删除最旧的日志
+- **浏览器隔离**：IndexedDB 遵循同源策略，不同端口（如 5173 vs 5175）的数据互不共享
+
+### 业务方导出日志
+
+```ts
+import { Logger } from 'easemob-chat-callkit-vue3'
+
+// 1. 获取最近有日志的 callId 列表
+const sessions = await Logger.getInstance().getSessions()
+
+// 2. 导出某一通通话的日志（JSON）
+const json = await Logger.getInstance().exportLogsAsJSON(sessions[0])
+
+// 3. 导出全部日志（纯文本 .log 格式，便于直接阅读）
+const text = await Logger.getInstance().exportLogsAsText()
+
+// 4. 下载为文件
+const blob = new Blob([text], { type: 'text/plain' })
+const url = URL.createObjectURL(blob)
+const a = document.createElement('a')
+a.href = url
+a.download = `callkit-logs-${Date.now()}.log`
+a.click()
+```
+
+### 关闭日志持久化
+
+```vue
+<EasemobChatCallKitProvider
+  :init-config="{ enableIDBLog: false }"
+>
+```
+
+---
 
 ## 常见接入错误速查
 

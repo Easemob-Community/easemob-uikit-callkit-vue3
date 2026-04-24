@@ -29,6 +29,7 @@ export class CallService {
 
   async hangup(reason: HANGUP_REASON = HANGUP_REASON.HANGUP) {
     this.svcLogger.info("CallService.hangup:", { reason });
+    this.svcLogger.event('hangup', { reason, callId: this.callStateStore.getCallState.callId });
 
     try {
       // 防止重复调用
@@ -391,6 +392,14 @@ export class CallService {
       });
 
       logger.info(`[CallService] 重置通话状态，原因: ${reason}, 重置前状态: ${callStateStore.getCallStatus}, 时长: ${duration}ms`);
+      logger.event('callEnded', {
+        reason,
+        duration,
+        endedBy,
+        callId: callState.callId,
+        channel: callState.channel,
+        type: callState.type,
+      });
       
       // 重置小窗状态，确保下次通话从大窗开始
       const globalCallStore = useGlobalCallStore();
