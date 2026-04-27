@@ -6,8 +6,15 @@ import { resolve } from 'path'
 export default defineConfig({
   plugins: [vue()],
   resolve: {
-    alias: {
-      'easemob-chat-callkit-vue3': resolve(__dirname, './lib/index.ts')
-    }
+    alias: [
+      {
+        find: /^easemob-chat-callkit-vue3\/style\.css$/,
+        replacement: resolve(__dirname, './lib/style.css')
+      },
+      {
+        find: /^easemob-chat-callkit-vue3$/,
+        replacement: resolve(__dirname, './lib/index.ts')
+      }
+    ]
   }
 })

@@ -9,19 +9,24 @@ import type {
   CALLKIT_SIGNALING_CMD_ACTION,
 } from "../types/signal.types";
 import { useCallStateStore } from "../store/callState";
+import { useGlobalCallStore } from "../store/globalCall";
 import {
   CALL_TYPE,
   type CALLKIT_CMD_MSG_ACTION_TYPE,
   CALLKIT_CMD_MSG_RESULT_TYPE,
 } from "../types/callstate.types";
+import { logger } from "../utils/logger";
+import { getUserInfoProvider, getGroupInfoProvider } from "./UserProfileService";
 export class ChatService {
   private chatClient: Chat.Connection | null = null;
+  private isMiniCore = false;
   private callStateStore = useCallStateStore();
-  constructor(chatClient: Chat.Connection) {
+  constructor(chatClient: Chat.Connection, isMiniCore?: boolean) {
     this.chatClient = chatClient;
+    this.isMiniCore = !!isMiniCore;
   }
   //构建邀请信息的ext
-  private buildInviteMessageExt() {
+  private async buildInviteMessageExt(groupId?: string, userInfo?: { nickname?: string; avatarURL?: string }) {
     const callState = this.callStateStore.getCallState;
     const ext: InviteSignalingExt = {
       action: "invite",
@@ -35,6 +40,8 @@ export class ChatService {
       type: callState.type || CALL_TYPE.AUDIO_1V1,
       ts: Date.now(),
       msgType: "rtcCallWithAgora",
+      // 群组通话时携带被邀请成员列表，方便被叫方维护邀请列表
+      invitedMembers: (callState.invitedMembers?.length ?? 0) > 0 ? callState.invitedMembers : undefined,
       em_push_ext: {
         type: "call",
         custom: {
@@ -55,6 +62,86 @@ export class ChatService {
         em_push_type: "voip",
       },
     };
+
+    // 获取当前用户资料：传入的 userInfo 优先级最高
+    const currentUserId = this.chatClient?.user || '';
+    const globalCallStore = useGlobalCallStore();
+
+    let nickname = userInfo?.nickname;
+    let avatarURL = userInfo?.avatarURL;
+
+    // 如果调用方没有传，优先从 GlobalCallStore 读取
+    if (!nickname || !avatarURL) {
+      const cachedInfo = globalCallStore.getUserInfo(currentUserId);
+      nickname = nickname || cachedInfo.nickname;
+      avatarURL = avatarURL || cachedInfo.avatarURL;
+    }
+
+    // 如果缓存中也没有完整资料，尝试通过 Provider 查询
+    if ((!nickname || !avatarURL) && currentUserId) {
+      const userInfoProvider = getUserInfoProvider();
+      if (userInfoProvider) {
+        try {
+          const profiles = await userInfoProvider([currentUserId]);
+          const profile = profiles.find(p => p.userId === currentUserId);
+          if (profile) {
+            nickname = nickname || profile.nickname;
+            avatarURL = avatarURL || profile.avatarUrl;
+          }
+        } catch (error) {
+          logger.warn('[ChatService] 获取当前用户资料失败', error);
+        }
+      }
+    }
+
+    // 有资料就缓存到 GlobalCallStore
+    if (nickname || avatarURL) {
+      globalCallStore.setUserInfo(currentUserId, {
+        nickname: nickname || currentUserId,
+        avatarURL: avatarURL || '',
+      });
+    }
+
+    // 写入 caller 资料到 ext
+    if (nickname || avatarURL) {
+      ext.ease_chat_uikit_user_info = {
+        nickname: nickname || currentUserId,
+        avatarURL: avatarURL || '',
+      };
+      // 同时更新 push ext 中的 callerNickname
+      ext.em_push_ext.custom.callerNickname = nickname || currentUserId;
+    }
+
+    // 群通话：补充群信息
+    if (groupId || callState.type === CALL_TYPE.VIDEO_MULTI || callState.type === CALL_TYPE.AUDIO_MULTI) {
+      const gid = groupId || callState.groupId || '';
+      if (gid) {
+        const groupInfoProvider = getGroupInfoProvider();
+        let groupName: string | undefined;
+        let groupAvatar: string | undefined;
+
+        // 优先从 Provider 查询
+        if (groupInfoProvider) {
+          try {
+            const groupProfiles = await groupInfoProvider([gid]);
+            const groupProfile = groupProfiles.find(p => p.groupId === gid);
+            if (groupProfile) {
+              groupName = groupProfile.groupName;
+              groupAvatar = groupProfile.groupAvatar;
+            }
+          } catch (error) {
+            logger.warn('[ChatService] 获取群组信息失败', error);
+          }
+        }
+
+        ext.callkitGroupInfo = {
+          groupId: gid,
+          groupName: groupName || gid,
+          groupAvatar,
+        };
+      }
+    }
+
     return ext;
   }
   //构建信令消息扩展字段
@@ -91,7 +178,7 @@ export class ChatService {
         };
       }
       case "answerCall": {
-        console.warn(">>>>>answerCall", callState);
+        logger.warn(">>>>>answerCall", callState);
         return {
           action: "answerCall",
           ts: Date.now(),
@@ -122,35 +209,82 @@ export class ChatService {
           result: result || (ext as { result?: string })?.result || CALLKIT_CMD_MSG_RESULT_TYPE.ACCEPT,
         };
       }
+      case "leaveCall": {
+        return {
+          action: "leaveCall",
+          callId: callState.callId || "未从callState取到callId",
+          ts: Date.now(),
+          msgType: "rtcCallWithAgora",
+        };
+      }
       default:
         throw new Error(`未知的信令消息动作: ${action}`);
     }
   }
   /**
    * 发送文本消息
-   * @param targetId 接收方ID
-   * @param message 消息内容
+   * @param targetId 接收方ID（单聊）或接收方ID数组（群聊）
    * @param chatType 聊天类型
+   * @param message 消息内容
+   * @param groupId 群组ID（群聊时必须）
    */
-  sendTextMessage(
-    targetId: string,
+  /**
+   * 兼容 full 版与 miniCore 版的消息创建
+   * full 版: ChatSDK.message.create(options)
+   * miniCore 版: client.Message.create(options)
+   *
+   * 采用自动探测：先尝试静态 API，fallback 到实例 API，无需用户配置 isMiniCore
+   */
+  private createMessage(options: any): any {
+    // 优先 full 版本静态 API
+    if (ChatSDK.message?.create) {
+      return ChatSDK.message.create(options);
+    }
+    // fallback miniCore 实例 API
+    const client = this.chatClient as any;
+    if (client?.Message?.create) {
+      return client.Message.create(options);
+    }
+    throw new Error(
+      "[ChatService] 无法创建消息：当前环境缺少 message.create API。" +
+        "请确认 easemob-websdk 已安装（full 版），或 miniCore 已注册消息插件。"
+    );
+  }
+
+  async sendTextMessage(
+    targetId: string | string[],
     chatType: Chat.ChatType,
-    message: string
+    message: string,
+    groupId?: string,
+    userInfo?: { nickname?: string; avatarURL?: string }
   ): Promise<Chat.SendMsgResult> {
     if (!this.chatClient) {
       throw new Error("ChatClient未初始化");
     }
+    
+    // 判断是否为群组通话
+    const isGroupChat = Array.isArray(targetId);
+    const inviteExt = await this.buildInviteMessageExt(groupId, userInfo);
+    
     interface ITextInviteMessage extends Chat.CreateTextMsgParameters {
       ext: InviteSignalingExt;
+      receiverList?: string[];
     }
+    
     const options: ITextInviteMessage = {
       type: "txt",
-      to: targetId,
+      to: isGroupChat ? (groupId || "") : targetId as string,
       msg: message,
-      chatType,
-      ext: this.buildInviteMessageExt(),
+      chatType: isGroupChat ? "groupChat" : chatType,
+      ext: inviteExt,
     };
-    const msg = ChatSDK.message.create(options);
+    
+    // 如果是群组通话，添加 receiverList 定向消息
+    if (isGroupChat && Array.isArray(targetId)) {
+      options.receiverList = targetId;
+    }
+    
+    const msg = this.createMessage(options);
     return new Promise((resolve, reject) => {
       this.chatClient
         ?.send(msg)
@@ -208,7 +342,7 @@ export class ChatService {
       },
       receiverList,
     };
-    const msg = ChatSDK.message.create(options);
+    const msg = this.createMessage(options);
     return new Promise((resolve, reject) => {
       this.chatClient
         ?.send(msg)

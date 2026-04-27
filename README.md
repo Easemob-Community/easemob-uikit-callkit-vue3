@@ -1,98 +1,196 @@
-# Easemob Chat CallKit Vue3 插件
+# Easemob Chat CallKit Vue3
 
-这是一个Vue3插件项目，用于集成环信聊天和通话功能。
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## 项目结构
+基于 **Vue 3 + 环信 IM SDK + 声网 RTC SDK** 的音视频通话 UI 组件库。内置 Pinia 状态管理，用户无需感知。
 
-```
-easemob-chat-callkit-vue3/
-├── lib/                          # 插件源码目录
-│   ├── components/               # 插件组件
-│   │   └── EasemobChatCallKit.vue # 主组件
-│   ├── types.ts                # 类型定义
-│   └── index.ts                # 插件入口文件
-├── test/                       # 测试环境
-│   ├── src/
-│   │   ├── App.vue             # 测试页面
-│   │   └── main.ts             # 测试入口
-│   ├── index.html
-│   ├── package.json
-│   └── vite.config.ts
-├── vite.lib.config.ts          # 插件构建配置
-└── package.json
-```
+支持**单人通话（1v1）**和**群组通话（多人）**，内置完整的呼叫、接听、挂断、音视频控制、邀请通知等能力，开箱即用。
 
-## 开发说明
+---
 
-### 1. 安装依赖
+## ✨ 特性
 
-```bash
-# 安装主项目依赖
-pnpm install
+- 📞 **单人通话** — 1v1 音频/视频通话，支持呼叫、接听、挂断
+- 👥 **群组通话** — 多人音视频通话，支持邀请成员、视频网格布局
+- 🔔 **邀请通知** — 被叫方自动弹出接听/拒绝弹窗
+- 🎛️ **媒体控制** — 静音、开关摄像头、切换前后置摄像头
+- 🖼️ **视频布局** — 单聊悬浮窗、群聊九宫格/主视频模式
+- 🎯 **自动显隐** — 组件根据通话状态自动显示/隐藏，无需手动 `v-if`
+- 🔧 **两种引入方式** — npm 包或源码 alias，开发调试灵活
 
-# 安装测试环境依赖
-cd test && pnpm install
-```
+---
 
-### 2. 运行测试
+## 📋 前置条件
+
+- Vue 3 项目
+- 已安装 **环信 IM SDK**（`easemob-websdk`）并完成登录
+- 已安装 **声网 RTC SDK**（`agora-rtc-sdk-ng`）
 
 ```bash
-# 运行测试环境
-pnpm test
-
-# 或手动运行
-# cd test && pnpm dev
+pnpm add vue easemob-websdk agora-rtc-sdk-ng
 ```
 
-### 3. 构建插件
+---
+
+## 📦 安装
 
 ```bash
-# 构建插件库文件
-pnpm build:lib
+# 从 npm 安装（发布后）
+pnpm add easemob-chat-callkit-vue3
+
+# 或从本地 tgz 文件安装
+pnpm add ./easemob-chat-callkit-vue3-1.0.4.tgz
 ```
 
-构建产物将输出到 `dist/` 目录。
+---
 
-## 使用示例
+## 🚀 快速开始
 
-### 安装插件
+参见 **[QUICK_START.md](./QUICK_START.md)** — 5 分钟跑通单聊/群聊通话，包含 Pinia 注册、Provider 放置、发起通话完整示例。
+
+> 完整 API 参考、事件订阅、进阶用法参见 [USAGE.md](./USAGE.md)。
+
+---
+
+## 🏗️ 核心概念
+
+### Provider — 通话上下文
+
+`EasemobChatCallKitProvider` 是所有通话组件的根上下文，负责：
+- 接收环信 `chatClient` 实例
+- 初始化 RTC 服务
+- 挂载 IM 消息监听（信令自动处理）
+- 管理全局配置（debug、铃声、超时等）
+
+**必须在应用顶层包裹一次**，且内部放置通话相关组件。
+
+### 自动显示/隐藏
+
+- `EasemobChatSingleCall`：当主叫方发起呼叫（`INVITING`）或通话中（`IN_CALL`）时自动显示；被叫响铃（`ALERTING`）时不显示，由 `InvitationNotification` 接管
+- `EasemobChatMultiCall`：`autoShow` 默认为 `true`，群组通话状态时自动显示
+
+**不需要写 `v-if`**，直接放在 Provider 内部即可。
+
+### 事件订阅
+
+通过 `useCallKitEvents()` 监听通话生命周期事件。所有事件均携带 `conversationId`、`isLocal`、`localUserRole` 字段，接入方无需自行推断会话 ID 和通话方向：
 
 ```typescript
-import { createApp } from 'vue'
-import EasemobChatCallKit from 'easemob-chat-callkit-vue3'
+import { useCallKitEvents, HANGUP_REASON } from 'easemob-chat-callkit-vue3'
+import { onUnmounted } from 'vue'
 
-const app = createApp(App)
+const { onCallStarted, onCallEnded, onIncomingCall, onCallRefused, getCallRecord } = useCallKitEvents()
 
-app.use(EasemobChatCallKit, {
-  appKey: 'your-app-key',
-  userId: 'user-id',
-  accessToken: 'access-token',
-  debug: false
+onCallStarted((e) => {
+  // conversationId: 单聊=对方ID，群聊=groupId，直接对应 IM 会话 key
+  console.log('通话接通', e.callId, '会话:', e.conversationId, '主叫:', e.isCaller)
 })
 
-app.mount('#app')
+onCallEnded((e) => {
+  const sec = Math.round(e.duration / 1000)
+  // isLocal: true=本端挂断，false=对端挂断/系统超时
+  // endedBy: 挂断方的 userId
+  console.log('通话结束', '原因:', e.reason, '时长:', sec, '秒', '挂断方:', e.endedBy)
+
+  // 一键获取标准化通话记录（callEnded 后自动生成）
+  const record = getCallRecord()
+  // record: { callId, conversationId, chatType, from, to, status, duration, timestamp, endedBy }
+  // 可直接用于插入本地消息或发送 custom 消息
+})
+
+onCallRefused((e) => {
+  // 只在 !isLocal 时显示 "对方已拒绝"
+  if (!e.isLocal) {
+    showToast('对方已拒绝')
+  }
+})
+
+onIncomingCall((e) => {
+  console.log('收到来电', e.callerUserId, '会话:', e.conversationId)
+})
+
+// 所有订阅返回解绑函数，建议在 onUnmounted 中调用
 ```
 
-### 在组件中使用
+> 完整事件列表和用法参见 [USAGE.md](./USAGE.md#usecallkitevents)。
 
-```vue
-<template>
-  <div>
-    <EasemobChatCallKit />
-  </div>
-</template>
+### 日志级别
+
+```typescript
+import { LogLevel } from 'easemob-chat-callkit-vue3'
+
+<EasemobChatCallKitProvider
+  :chat-client="chatClient"
+  :init-config="{ logLevel: LogLevel.INFO }"
+>
 ```
 
-## 开发计划
+| 级别 | 说明 |
+|------|------|
+| `LogLevel.ERROR` | 只输出错误 |
+| `LogLevel.WARN` | 错误 + 警告 |
+| `LogLevel.INFO` | 推荐生产环境 |
+| `LogLevel.DEBUG` | 开发调试 |
+| `LogLevel.VERBOSE` | 完整信令日志 |
 
-- [ ] 完善聊天功能
-- [ ] 集成音视频通话
-- [ ] 添加消息推送
-- [ ] 支持群组聊天
-- [ ] 优化UI界面
+---
 
-## 注意事项
+## 🔧 两种集成方式
 
-1. 当前为插件基础结构，具体业务逻辑需要后续开发
-2. 测试环境用于验证插件集成效果
-3. 构建前请确保所有依赖已安装
+| 方式 | 适用场景 | 配置 |
+|------|---------|------|
+| **npm / tgz 包** | 生产环境 | 正常 `pnpm add` 安装 |
+| **源码 alias** | 开发调试 | Vite `resolve.alias` 映射到 `lib/index.ts` |
+
+### 源码模式配置（Vite）
+
+```typescript
+// vite.config.ts
+import { defineConfig } from 'vite'
+import path from 'path'
+
+export default defineConfig({
+  resolve: {
+    alias: {
+      'easemob-chat-callkit-vue3': path.resolve(
+        __dirname,
+        '../easemob-chat-callkit-vue3/lib/index.ts'
+      ),
+      'easemob-chat-callkit-vue3/style.css': path.resolve(
+        __dirname,
+        '../easemob-chat-callkit-vue3/lib/style.css'
+      ),
+    },
+  },
+})
+```
+
+---
+
+## 🛠️ 开发 & 测试
+
+```bash
+# 安装依赖
+pnpm install
+
+# 源码模式开发（实时热更新）
+pnpm run test:source
+
+# 构建并测试 tgz 包
+pnpm run test:tgz
+
+# 仅构建库
+pnpm run build:lib
+```
+
+---
+
+## 📖 详细文档
+
+- **[USAGE.md](./USAGE.md)** — 完整的 API 参考、组件 Props、事件、Store、进阶用法
+
+---
+
+## 📄 License
+
+[MIT](./LICENSE)

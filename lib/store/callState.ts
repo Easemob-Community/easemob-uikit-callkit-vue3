@@ -3,6 +3,10 @@ import type { CallState, INVITE_INFO } from "./types";
 import { CALL_STATUS, CALL_TYPE } from "../types/callstate.types";
 import type { Chat } from "../core/sdk/imSDK";
 import { generateRandomChannel } from "../utils";
+import { useSingleCallRtcStore } from "./singleCallRtc";
+import { callKitEventBus } from "../core/events/CallKitEventBus";
+import { buildBaseEventFields } from "../core/events/helpers";
+import { logger } from "../utils/logger";
 export const useCallStateStore = defineStore("callState", {
   /**
    * 通话状态数据
@@ -19,18 +23,12 @@ export const useCallStateStore = defineStore("callState", {
     calleeDevId: "",
     callerUserId: "",
     calleeUserId: "",
-    groupId: "",
-    groupName: "",
-    groupAvatar: "",
-    invitedMembers: [], //被邀请成员列表
-    joinedMembers: [], //已加入成员列表
+    // 注：groupId / groupName / invitedMembers 等群聊字段已迁移至 GroupCallStore
     inviteMessageId: "",
     duration: "",
     // 超时设置
     inviteTimeout: 30000, // 默认30秒超时
     inviteTimeoutTimer: null,
-    userInfoMap: new Map(), // 用户ID到用户信息的映射
-    UIdToUserIdMap: new Map(), // UID到用户ID的映射
   }),
 
   /**
@@ -43,41 +41,28 @@ export const useCallStateStore = defineStore("callState", {
       this.callerUserId = chatClient.context.userId;
       this.token = chatClient.token;
     },
-    //初始化邀请信息状态创建
+    // 初始化邀请信息状态创建（单聊专用，群聊字段已迁移至 GroupCallStore）
     initInviteInfo(inviteInfo: INVITE_INFO) {
-      const { type, calleeUserId, groupId, groupName, groupAvatar } =
-        inviteInfo;
+      const { type, calleeUserId } = inviteInfo;
       this.type = type;
       this.calleeUserId = calleeUserId;
-      // 修复逻辑错误：判断是否为群呼
-      if (
-        this.type === CALL_TYPE.AUDIO_MULTI ||
-        this.type === CALL_TYPE.VIDEO_MULTI
-      ) {
-        this.groupId = groupId || "";
-        this.groupName = groupName || "";
-        this.groupAvatar = groupAvatar || "";
-      }
       this.callId = generateRandomChannel(10);
       this.channel = generateRandomChannel(8);
       this.status = CALL_STATUS.INVITING;
 
+      // 关联日志 sessionId（使用 callId 作为会话标识）
+      logger.setSessionId(this.callId);
+      logger.stateChange(CALL_STATUS.IDLE, CALL_STATUS.INVITING, {
+        callId: this.callId,
+        channel: this.channel,
+        type: this.type,
+        calleeUserId,
+      });
+
       // 开始超时计时
       this.startTimeoutTimer();
     },
-    /** 设置用户信息 */
-    setUserInfo(
-      userId: string,
-      userInfo: { nickname?: string; avatarURL?: string }
-    ) {
-      if (this.userInfoMap) {
-        this.userInfoMap.set(userId, userInfo);
-      }
-    },
-    //更新invitedMembers
-    updateInvitedMembers(members: string[]) {
-      this.invitedMembers = members;
-    },
+    // 注：updateInvitedMembers 已废弃，群聊成员管理请使用 GroupCallStore
     /**
      * 开始超时计时
      * 支持传入callback，超时后执行callback
@@ -109,11 +94,30 @@ export const useCallStateStore = defineStore("callState", {
      * 处理超时逻辑
      */
     handleTimeout() {
-      console.warn("通话邀请超时");
-      // 设置状态为超时
+      logger.warn("通话邀请超时");
+      logger.event('callTimeout', {
+        callId: this.callId,
+        channel: this.channel,
+        type: this.type,
+      });
+
+      const callState = this.getCallState;
+      callKitEventBus.emit("callTimeout", {
+        ...buildBaseEventFields(
+          {
+            callId: callState.callId,
+            channel: callState.channel,
+            type: callState.type,
+            callerUserId: callState.callerUserId,
+            calleeUserId: callState.calleeUserId,
+            groupId: undefined,
+          },
+          true
+        ),
+      });
+
+      // 单人通话场景下，设置状态为IDLE，自动隐藏界面
       this.setCallStatus(CALL_STATUS.IDLE);
-      // 可以在这里触发超时事件或回调
-      // 实际项目中可能需要根据不同的状态进行不同的处理
     },
     /**
      * 更新部分通话状态
@@ -126,7 +130,39 @@ export const useCallStateStore = defineStore("callState", {
      * 设置通话状态
      */
     setCallStatus(status: CALL_STATUS) {
+      const oldStatus = this.status;
+      if (oldStatus === status) return;
+
       this.status = status;
+      logger.stateChange(oldStatus, status, {
+        callId: this.callId,
+        channel: this.channel,
+        type: this.type,
+      });
+
+      // 触发状态变化事件
+      const callState = this.getCallState;
+      callKitEventBus.emit("statusChanged", {
+        ...buildBaseEventFields(
+          {
+            callId: callState.callId,
+            channel: callState.channel,
+            type: callState.type,
+            callerUserId: callState.callerUserId,
+            calleeUserId: callState.calleeUserId,
+            groupId: undefined,
+          },
+          true
+        ),
+        from: oldStatus,
+        to: status,
+      });
+
+      // 🔑 关键逻辑：当从IDLE状态转换为其他状态时，清空leftUsers（新通话开始）
+      if (oldStatus === CALL_STATUS.IDLE && status !== CALL_STATUS.IDLE) {
+        const singleCallRtcStore = useSingleCallRtcStore();
+        singleCallRtcStore.clearLeftUsers();
+      }
     },
 
     /**
@@ -136,6 +172,12 @@ export const useCallStateStore = defineStore("callState", {
       // 清除超时计时器
       this.clearTimeoutTimer();
 
+      logger.stateChange(this.status, CALL_STATUS.IDLE, {
+        trigger: 'resetCallState',
+        callId: this.callId,
+        channel: this.channel,
+      });
+
       this.status = CALL_STATUS.IDLE;
       this.callType = null;
       // 重置其他状态字段
@@ -143,8 +185,16 @@ export const useCallStateStore = defineStore("callState", {
       this.channel = "";
       this.calleeUserId = "";
       this.calleeDevId = "";
+      // 保留 callerDevId 和 callerUserId，避免二次通话时身份丢失
+      // 这些字段由 initCallState 从 chatClient 初始化，只要 chatClient 不变就无需重置
       this.inviteMessageId = "";
-      // 保持caller相关信息，因为这些通常不会改变
+      this.duration = "";
+      
+      // 重置通话类型为默认值
+      this.type = CALL_TYPE.AUDIO_1V1;
+
+      // 通话结束，清空日志 sessionId 关联
+      logger.setSessionId(undefined);
     },
 
     /**
@@ -177,18 +227,6 @@ export const useCallStateStore = defineStore("callState", {
     getCallState(): CallState {
       return this as CallState;
     },
-    /** 获取用户信息 */
-    getUserInfo(): (userId: string) => {
-      nickname?: string;
-      avatarURL?: string;
-    } {
-      return (userId: string) => {
-        if (!this.userInfoMap) {
-          return {};
-        }
-        return this.userInfoMap.get(userId) || {};
-      };
-    },
     //获取定时器状态
     getInviteTimeoutTimer(): number | null {
       return this.inviteTimeoutTimer;
@@ -208,8 +246,8 @@ export const useCallStateStore = defineStore("callState", {
       return this.status !== CALL_STATUS.IDLE;
     },
 
-    getInvitedMembers(): string[] {
-      return this.invitedMembers || [];
-    },
+    // 注：getInvitedMembers 已废弃，群聊成员请使用 GroupCallStore.participantList
+    
+    // 注：getIsMinimized 已迁移至 GlobalCallStore
   },
 });

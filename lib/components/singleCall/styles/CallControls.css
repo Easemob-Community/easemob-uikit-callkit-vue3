@@ -1,0 +1,128 @@
+/* ========== 控制按钮区域 ========== */
+.call-controls {
+  position: absolute;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  z-index: 10;
+  padding: 0 16px;
+}
+
+.control-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px;
+  min-width: 52px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(10px);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.control-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+}
+
+.control-btn:active {
+  transform: translateY(0);
+}
+
+.control-btn.active {
+  background: rgba(239, 68, 68, 0.9);
+  border-color: rgba(239, 68, 68, 1);
+}
+
+.control-btn.active:hover {
+  background: rgba(220, 38, 38, 0.9);
+}
+
+.hangup-btn {
+  background: rgba(239, 68, 68, 0.9);
+  border-color: rgba(239, 68, 68, 1);
+  min-width: 56px;
+}
+
+.hangup-btn:hover {
+  background: rgba(220, 38, 38, 1);
+  border-color: rgba(220, 38, 38, 1);
+  transform: translateY(-2px) scale(1.05);
+}
+
+.btn-icon {
+  width: 18px;
+  height: 18px;
+  color: currentColor;
+}
+
+.btn-label {
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* ========== 响应式适配 ========== */
+@media (max-width: 768px) {
+  .call-controls {
+    bottom: 20px;
+    gap: 8px;
+    padding: 0 12px;
+  }
+
+  .control-btn {
+    padding: 6px 8px;
+    min-width: 48px;
+    border-radius: 8px;
+    gap: 3px;
+  }
+
+  .btn-label {
+    font-size: 10px;
+  }
+
+  .btn-icon {
+    width: 16px;
+    height: 16px;
+  }
+
+  .hangup-btn {
+    min-width: 52px;
+  }
+}
+
+@media (max-width: 480px) {
+  .call-controls {
+    gap: 6px;
+    padding: 0 8px;
+  }
+
+  .control-btn {
+    padding: 5px 6px;
+    min-width: 44px;
+    border-radius: 6px;
+  }
+
+  .hangup-btn {
+    min-width: 48px;
+  }
+
+  .btn-label {
+    font-size: 9px;
+  }
+
+  .btn-icon {
+    width: 14px;
+    height: 14px;
+  }
+}

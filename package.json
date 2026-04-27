@@ -1,6 +1,6 @@
 {
   "name": "easemob-chat-callkit-vue3",
-  "version": "0.0.1",
+  "version": "1.0.4",
   "type": "module",
   "description": "Easemob Chat CallKit Vue3 Plugin",
   "main": "./dist/index.js",
@@ -10,7 +10,12 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
-    }
+    },
+    "./style.css": {
+      "import": "./dist/easemob-chat-callkit-vue3.css",
+      "default": "./dist/easemob-chat-callkit-vue3.css"
+    },
+    "./dist/*": "./dist/*"
   },
   "files": [
     "dist"
@@ -19,25 +24,53 @@
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
     "build:lib": "vite build --config vite.lib.config.ts",
+    "build:pack": "pnpm build:lib && pnpm pack",
     "preview": "vite preview",
-    "test": "cd test && pnpm dev"
+    "test": "pnpm run test:source",
+    "test:source": "cd test && pnpm run switch:source && pnpm run dev:source",
+    "test:tgz": "pnpm run build:pack && cd test && pnpm run switch:tgz && pnpm run dev:tgz"
   },
   "peerDependencies": {
+    "agora-rtc-sdk-ng": "^4.14.0",
+    "easemob-websdk": "^4.12.0",
     "vue": "^3.0.0"
+  },
+  "dependencies": {
+    "dexie": "^4.4.2",
+    "pinia": "^3.0.3"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
     "@vitejs/plugin-vue": "^6.0.1",
     "@vue/tsconfig": "^0.7.0",
+    "agora-rtc-sdk-ng": "^4.24.2",
+    "easemob-websdk": "^4.16.0",
     "typescript": "~5.8.3",
     "vite": "^7.1.2",
     "vite-plugin-dts": "^4.5.4",
     "vue": "^3.5.18",
     "vue-tsc": "^3.0.5"
   },
-  "packageManager": "pnpm@10.10.0",
-  "dependencies": {
-    "easemob-websdk": "^4.16.0",
-    "pinia": "^3.0.3"
-  }
+  "license": "MIT",
+  "author": "Easemob",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Easemob-Community/easemob-uikit-callkit-vue3.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Easemob-Community/easemob-uikit-callkit-vue3/issues"
+  },
+  "homepage": "https://github.com/Easemob-Community/easemob-uikit-callkit-vue3#readme",
+  "keywords": [
+    "easemob",
+    "chat",
+    "callkit",
+    "vue3",
+    "webrtc",
+    "agora",
+    "video-call",
+    "audio-call",
+    "group-call"
+  ],
+  "packageManager": "pnpm@10.10.0"
 }

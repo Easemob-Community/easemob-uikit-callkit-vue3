@@ -1,5 +1,5 @@
 import { callService } from "../services/CallService";
-import { HANGUP_REASON } from "../types/callstate.types";
+import { HANGUP_REASON, CALL_STATUS } from "../types/callstate.types";
 import { useCallStateStore } from "../store/callState";
 import { logger } from "../utils/logger";
 
@@ -98,11 +98,11 @@ export function useEndCall() {
   }
 
   /**
-   * 检查当前是否可以挂断
-   * @returns boolean 是否可以执行挂断操作
+   * 检查当前是否可以挣断
+   * @returns boolean 是否可以执行挣断操作
    */
   function canHangup(): boolean {
-    return callStateStore.callStatus !== "IDLE" && callStateStore.isInCall;
+    return callStateStore.status !== CALL_STATUS.IDLE && callStateStore.isInCall;
   }
 
   /**
@@ -111,9 +111,9 @@ export function useEndCall() {
    */
   function canCancel(): boolean {
     // 只有在邀请状态才能取消
-    return callStateStore.callStatus === "INVITING";
+    return callStateStore.status === CALL_STATUS.INVITING;
   }
-
+  
   return {
     // 核心挂断方法
     hangup,

@@ -1,0 +1,174 @@
+/* ========== 主容器 ========== */
+.call-stream-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  /* 背景图由父组件 EasemobChatSingleCall 提供 */
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ========== 语音通话模式 ========== */
+.call-stream-container.is-audio {
+  background: #1a1a2e;
+}
+
+.is-audio .remote-video-container {
+  background: #1a1a2e;
+}
+
+.is-audio .remote-placeholder {
+  color: #fff;
+}
+
+.is-audio .avatar-placeholder {
+  width: 160px;
+  height: 160px;
+  background: #2d2d44;
+  border: 3px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: none;
+}
+
+.is-audio .user-icon {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.is-audio .remote-name {
+  color: #fff;
+  font-size: 28px;
+}
+
+.is-audio .call-status-text {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* ========== 远程视频区域 ========== */
+.remote-video-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  /* 默认暗色背景，有视频时由 video 元素覆盖 */
+  background: #1a1a2e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.remote-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.remote-placeholder {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: #1a1a1a;
+  z-index: 1;
+}
+
+.avatar-placeholder {
+  width: 120px;
+  height: 120px;
+  margin: 0 auto 24px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(10px);
+  border: 3px solid rgba(255, 255, 255, 0.2);
+}
+
+.user-icon {
+  width: 60px;
+  height: 60px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.remote-name {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0 0 8px;
+  color: #fff;
+}
+
+.connecting-text {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.call-status-text {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ========== 本地视频小窗 ========== */
+.local-video-container {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  width: 160px;
+  height: 120px;
+  background: transparent;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  z-index: 10;
+}
+
+.local-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.local-video-disabled {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.camera-off-icon {
+  width: 40px;
+  height: 40px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* ========== 响应式适配 ========== */
+@media (max-width: 768px) {
+  .local-video-container {
+    width: 120px;
+    height: 90px;
+    top: 16px;
+    right: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .local-video-container {
+    width: 100px;
+    height: 75px;
+  }
+}

@@ -41,6 +41,13 @@ export interface SignalMessageInviteExt {
     nickname: string;
     avatarURL: string;
   };
+
+  // 群组通话信息，可选字段
+  callkitGroupInfo?: {
+    groupId: string;
+    groupName?: string;
+    groupAvatar?: string;
+  };
 }
 // CMD 类型信令消息的通用类型定义
 
@@ -99,6 +106,19 @@ export interface InviteSignalingExt extends BaseSignalingExt {
   };
   /** 自定义扩展字段 */
   ext?: Record<string, any>;
+  /** 被邀请成员列表（群组通话时使用） */
+  invitedMembers?: string[];
+  /** 用户信息（发送方 caller 资料） */
+  ease_chat_uikit_user_info?: {
+    nickname: string;
+    avatarURL: string;
+  };
+  /** 群组通话信息 */
+  callkitGroupInfo?: {
+    groupId: string;
+    groupName?: string;
+    groupAvatar?: string;
+  };
 }
 
 /**
