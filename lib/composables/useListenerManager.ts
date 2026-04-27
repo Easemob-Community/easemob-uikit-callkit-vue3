@@ -30,6 +30,7 @@ export interface CmdMsgBody {
 export interface ListenerManagerReturn {
   mountTextMessageListener: () => void
   mountSignalListener: () => void
+  unmountListeners: () => void
 }
 
 /**
@@ -309,8 +310,30 @@ export function useListenerManager(): ListenerManagerReturn {
     }
   }
 
+  /**
+   * 卸载所有监听器
+   */
+  const unmountListeners = () => {
+    logger.info('正在卸载消息监听器')
+
+    const client = chatClientStore.getChatClient
+    if (!client) {
+      logger.warn('ChatClient未初始化，无需卸载监听器')
+      return
+    }
+
+    try {
+      client.removeEventHandler('onTextMessage')
+      client.removeEventHandler('onSignalMessage')
+      logger.debug('消息监听器卸载成功')
+    } catch (error) {
+      logger.error('卸载消息监听器失败:', error)
+    }
+  }
+
   return {
     mountTextMessageListener,
     mountSignalListener,
+    unmountListeners,
   }
 }

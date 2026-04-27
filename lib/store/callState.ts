@@ -185,8 +185,8 @@ export const useCallStateStore = defineStore("callState", {
       this.channel = "";
       this.calleeUserId = "";
       this.calleeDevId = "";
-      this.callerDevId = "";  // 🔑 修复：重置callerDevId，避免多端场景下id不匹配
-      this.callerUserId = ""; // 🔑 修复：重置callerUserId
+      // 保留 callerDevId 和 callerUserId，避免二次通话时身份丢失
+      // 这些字段由 initCallState 从 chatClient 初始化，只要 chatClient 不变就无需重置
       this.inviteMessageId = "";
       this.duration = "";
       

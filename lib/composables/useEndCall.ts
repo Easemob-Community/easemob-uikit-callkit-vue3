@@ -1,5 +1,5 @@
 import { callService } from "../services/CallService";
-import { HANGUP_REASON } from "../types/callstate.types";
+import { HANGUP_REASON, CALL_STATUS } from "../types/callstate.types";
 import { useCallStateStore } from "../store/callState";
 import { logger } from "../utils/logger";
 
@@ -102,16 +102,16 @@ export function useEndCall() {
    * @returns boolean 是否可以执行挣断操作
    */
   function canHangup(): boolean {
-    return callStateStore.status as any !== "IDLE" && callStateStore.isInCall;
+    return callStateStore.status !== CALL_STATUS.IDLE && callStateStore.isInCall;
   }
-  
+
   /**
    * 检查当前是否可以取消通话
    * @returns boolean 是否可以执行取消操作
    */
   function canCancel(): boolean {
-    // 只有在邨请状态才能取消
-    return callStateStore.status as any === "INVITING";
+    // 只有在邀请状态才能取消
+    return callStateStore.status === CALL_STATUS.INVITING;
   }
   
   return {

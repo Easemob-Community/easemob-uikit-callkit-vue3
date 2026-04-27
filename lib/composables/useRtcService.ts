@@ -51,7 +51,7 @@ import { logger } from '../utils/logger'
 
 export function useRtcService() {
   const rtcChannelStore = useRtcChannelStore()
-  
+
   // 从 store 获取响应式状态
   const localStream = computed(() => rtcChannelStore.localStream)
   const remoteStreams = computed(() => rtcChannelStore.remoteStreams)
@@ -61,15 +61,34 @@ export function useRtcService() {
   const activeChannel = computed(() => rtcChannelStore.activeChannel)
 
   /**
+   * 获取 RtcService 实例
+   */
+  const getRtcServiceInstance = () => {
+    const rtcService = rtcChannelStore.getRtcService()
+    if (!rtcService) {
+      logger.warn('RtcService 未初始化，无法执行媒体控制')
+    }
+    return rtcService
+  }
+
+  /**
    * 切换视频状态
    */
   const toggleVideo = async (enabled?: boolean): Promise<boolean> => {
     try {
+      const rtcService = getRtcServiceInstance()
+      if (!rtcService) {
+        // 降级：仅更新 store 状态
+        const newState = enabled !== undefined ? enabled : !isVideoEnabled.value
+        rtcChannelStore.setVideoEnabled(newState)
+        return newState
+      }
+
       const newState = enabled !== undefined ? enabled : !isVideoEnabled.value
-      rtcChannelStore.setVideoEnabled(newState)
-      
-      logger.info('Video toggled:', newState)
-      return newState
+      const result = await rtcService.toggleVideo(newState)
+      // RtcService 内部已通过回调同步 store 状态，无需手动更新
+      logger.info('Video toggled via RtcService:', result)
+      return result
     } catch (error) {
       logger.error('Failed to toggle video:', error)
       return isVideoEnabled.value
@@ -81,11 +100,19 @@ export function useRtcService() {
    */
   const toggleAudio = async (enabled?: boolean): Promise<boolean> => {
     try {
+      const rtcService = getRtcServiceInstance()
+      if (!rtcService) {
+        // 降级：仅更新 store 状态
+        const newState = enabled !== undefined ? enabled : !isAudioEnabled.value
+        rtcChannelStore.setAudioEnabled(newState)
+        return newState
+      }
+
       const newState = enabled !== undefined ? enabled : !isAudioEnabled.value
-      rtcChannelStore.setAudioEnabled(newState)
-      
-      logger.info('Audio toggled:', newState)
-      return newState
+      const result = await rtcService.toggleAudio(newState)
+      // RtcService 内部已通过回调同步 store 状态，无需手动更新
+      logger.info('Audio toggled via RtcService:', result)
+      return result
     } catch (error) {
       logger.error('Failed to toggle audio:', error)
       return isAudioEnabled.value

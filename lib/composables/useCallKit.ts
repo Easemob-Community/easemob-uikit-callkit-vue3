@@ -158,6 +158,15 @@ export function useCallKit(): UseCallKitReturn {
       logger.info('groupCall: 主叫方已加入 RTC 频道');
     } catch (error) {
       logger.error(`groupCall: 发起失败`, error);
+      // 回滚：清理已设置的状态和 session，避免 UI 显示不一致
+      try {
+        const groupCallStore = useGroupCallStore();
+        groupCallStore.destroySession();
+        callStateStore.resetCallState();
+        logger.info('groupCall: 已回滚通话状态和群聊 session');
+      } catch (rollbackError) {
+        logger.error('groupCall: 回滚失败', rollbackError);
+      }
       throw error;
     }
   };

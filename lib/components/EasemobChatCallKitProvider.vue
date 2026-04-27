@@ -63,7 +63,7 @@ const globalConfig = computed(() => ({
 const rtcChannelStore = useRtcChannelStore();
 
 // 在 setup 顶层创建 listenerManager
-const { mountTextMessageListener, mountSignalListener } = useListenerManager();
+const { mountTextMessageListener, mountSignalListener, unmountListeners } = useListenerManager();
 
 // 先设置日志级别（必须在RTC初始化之前）
 watchEffect(() => {
@@ -199,6 +199,7 @@ onMounted(() => {
 
 // 组件卸载时清理RTC服务和Provider
 onUnmounted(async () => {
+  unmountListeners();
   await rtcChannelStore.destroyRtcService();
   clearProfileProviders();
 });

@@ -35,6 +35,8 @@ export function useJoinChannel(): UseJoinChannelReturn {
   let accessToken: string | null = null
   let agoraAppId: string | null = null
   let agoraUid: number = 0
+  let tokenExpireTime: number = 0 // Token 过期时间戳
+  const TOKEN_REFRESH_BUFFER = 5 * 60 * 1000 // Token 过期前 5 分钟刷新
   
   /**
    * 获取 RTC AccessToken
@@ -60,12 +62,17 @@ export function useJoinChannel(): UseJoinChannelReturn {
       agoraAppId = res.data.appId
       agoraUid = res.data.RTCUId
       const token = res.data.RTCToken
-      
-      logger.info('成功获取RTC Token', { 
-        appId: agoraAppId, 
-        uid: agoraUid 
+
+      // 计算 Token 过期时间（默认 24 小时，取服务端返回或兜底）
+      const expireInSeconds = res.data.expireIn || res.data.expire_in || 86400
+      tokenExpireTime = Date.now() + expireInSeconds * 1000
+
+      logger.info('成功获取RTC Token', {
+        appId: agoraAppId,
+        uid: agoraUid,
+        expireIn: expireInSeconds,
       })
-      
+
       return token
     } catch (error: any) {
       logger.error('获取RTC Token失败:', error)
@@ -113,9 +120,15 @@ export function useJoinChannel(): UseJoinChannelReturn {
       return
     }
     
-    // 如果没有token,重新获取
-    if (!accessToken) {
-      logger.info('Token不存在,开始获取RTC Token...')
+    // 检查 Token 是否有效或即将过期
+    const now = Date.now()
+    const isTokenExpired = tokenExpireTime > 0 && now >= (tokenExpireTime - TOKEN_REFRESH_BUFFER)
+    if (!accessToken || isTokenExpired) {
+      if (isTokenExpired) {
+        logger.info('Token 即将过期或已过期，重新获取 RTC Token...')
+      } else {
+        logger.info('Token不存在,开始获取RTC Token...')
+      }
       accessToken = await getAccessToken()
       if (!accessToken) {
         logger.error('加入频道失败: 无法获取有效的RTC Token')
