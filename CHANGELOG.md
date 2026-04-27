@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.4 (2026-04-27)
+
+### 修复
+- **主叫身份重置**：`resetCallState` 不再清空 `callerDevId`/`callerUserId`，避免二次通话时身份丢失导致信令匹配失败
+- **媒体控制假切换**：`useRtcService.toggleVideo/toggleAudio` 现在调用真实 `RtcService` 方法，未初始化时降级到仅更新 Store 状态
+- **Token 过期刷新**：`useJoinChannel` 增加 Token 过期检测（默认 24h，提前 5 分钟刷新），避免长期缓存导致加入频道失败
+- **群呼失败回滚**：`groupCall` 在 `joinChannel` 失败时自动销毁 `GroupCallStore` session 并重置 `callStateStore`，防止 UI 状态不一致
+- **枚举比较错误**：`useEndCall.canCancel/canHangup` 修复字符串比较为 `CALL_STATUS` 枚举比较
+- **监听器生命周期**：`useListenerManager` 新增 `unmountListeners`，Provider 卸载时正确移除 IM 事件监听
+
+### 优化
+- **npm 包结构**：构建产物从 `release/dist` 迁移到标准 `dist/` 目录，入口路径更符合 npm 包惯例
+
 ## 1.0.1 (2026-04-20)
 
 ### 修复

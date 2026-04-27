@@ -9,13 +9,13 @@ const cleanReleaseDist = () => {
   return {
     name: 'clean-release-dist',
     buildStart() {
-      const releaseDistPath = path.resolve(__dirname, 'release/dist')
-      if (fs.existsSync(releaseDistPath)) {
-        fs.rmSync(releaseDistPath, { recursive: true, force: true })
-        console.log('✓ Cleaned release/dist directory')
+      const distPath = path.resolve(__dirname, 'dist')
+      if (fs.existsSync(distPath)) {
+        fs.rmSync(distPath, { recursive: true, force: true })
+        console.log('✓ Cleaned dist directory')
       }
       // 重新创建目录
-      fs.mkdirSync(releaseDistPath, { recursive: true })
+      fs.mkdirSync(distPath, { recursive: true })
     }
   }
 }
@@ -27,7 +27,7 @@ export default defineConfig({
     dts({
       include: ['lib/**/*'],
       exclude: ['lib/**/*.test.ts', 'lib/**/*.spec.ts'],
-      outDir: 'release/dist',
+      outDir: 'dist',
       tsconfigPath: './tsconfig.app.json',
       rollupTypes: true,
       insertTypesEntry: true,
@@ -35,7 +35,7 @@ export default defineConfig({
     })
   ],
   build: {
-    outDir: 'release/dist',
+    outDir: 'dist',
     lib: {
       entry: path.resolve(__dirname, 'lib/index.ts'),
       name: 'EasemobChatCallKit',
