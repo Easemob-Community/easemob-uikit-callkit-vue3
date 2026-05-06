@@ -1,0 +1,38 @@
+{
+  "name": "@easemob/callkit-core",
+  "version": "0.1.0",
+  "description": "Framework-agnostic call signaling core for Easemob IM",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "~5.8.3",
+    "vite": "^7.1.2",
+    "vite-plugin-dts": "^4.5.4"
+  },
+  "peerDependencies": {
+    "easemob-websdk": "^4.12.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Easemob-Community/easemob-uikit-callkit-vue3.git",
+    "directory": "packages/callkit-core"
+  }
+}
