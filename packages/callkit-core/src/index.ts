@@ -19,7 +19,7 @@ export type {
 
 // ─── 状态机 ───
 export { SingleCallStateMachine } from './state/SingleCallStateMachine'
-export type { SingleCallState } from './state/SingleCallStateMachine'
+export type { SingleCallState, DomainEvent, TransitionResult } from './state/SingleCallStateMachine'
 export { GroupCallSession } from './state/GroupCallSession'
 export type { GroupParticipant, GroupSessionState } from './state/GroupCallSession'
 

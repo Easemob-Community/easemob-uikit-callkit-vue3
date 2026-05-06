@@ -1,10 +1,11 @@
-import { CALL_STATUS, CALL_TYPE } from '../types/callstate.types'
+import { CALL_STATUS, CALL_TYPE, HANGUP_REASON } from '../types/callstate.types'
 import type { Logger } from '../utils/logger'
 import { getLogger } from '../utils/logger'
 
-/**
- * 单聊通话状态
- */
+// ────────────────────────────────────────────────
+// 状态与事件类型
+// ────────────────────────────────────────────────
+
 export interface SingleCallState {
   status: CALL_STATUS
   callId: string
@@ -20,74 +21,139 @@ export interface SingleCallState {
   startTime: number | null
 }
 
-/**
- * 单聊状态机
- *
- * 职责：
- * 1. 管理 IDLE → INVITING → ALERTING → RECEIVED_CONFIRM_RING → IN_CALL 的状态流转
- * 2. 校验 callId、deviceId、多端冲突
- * 3. 管理邀请超时定时器
- *
- * 不执行任何副作用（不发消息、不 join RTC），只返回状态变更事件。
- */
-export class SingleCallStateMachine {
-  private state: SingleCallState = {
+export type DomainEvent =
+  | { type: 'STATUS_CHANGED'; from: CALL_STATUS; to: CALL_STATUS; callId: string }
+  | { type: 'CALL_STARTED'; callId: string; isCaller: boolean; channel: string; callType: CALL_TYPE }
+  | { type: 'CALL_ENDED'; callId: string; reason: string; duration: number }
+  | { type: 'CALL_TIMEOUT'; callId: string }
+  | { type: 'CALL_REFUSED'; callId: string; isRemote: boolean }
+  | { type: 'CALL_BUSY'; callId: string }
+  | { type: 'CALL_CANCELED'; callId: string; isRemote: boolean }
+  | {
+      type: 'SHOULD_JOIN_RTC'
+      callId: string
+      channel: string
+      token: string
+      role: 'caller' | 'callee'
+      callType: CALL_TYPE
+    }
+
+export interface TransitionResult {
+  ok: boolean
+  events: DomainEvent[]
+}
+
+// ────────────────────────────────────────────────
+
+const DEFAULT_TIMEOUT = 30000
+
+function createIdleState(preserve?: { callerDevId: string; callerUserId: string }): SingleCallState {
+  return {
     status: CALL_STATUS.IDLE,
     callId: '',
     channel: '',
     token: '',
     type: CALL_TYPE.AUDIO_1V1,
-    callerDevId: '',
+    callerDevId: preserve?.callerDevId ?? '',
     calleeDevId: '',
-    callerUserId: '',
+    callerUserId: preserve?.callerUserId ?? '',
     calleeUserId: '',
-    inviteTimeout: 30000,
+    inviteTimeout: DEFAULT_TIMEOUT,
     inviteTimeoutTimer: null,
     startTime: null,
   }
+}
 
+/**
+ * 单聊通话状态机
+ *
+ * 职责：
+ * 1. 管理 IDLE → INVITING → ALERTING → RECEIVED_CONFIRM_RING → IN_CALL 的状态流转
+ * 2. 校验 callId、deviceId、多端冲突（由 Handler 调用前预校验，状态机二次兜底）
+ * 3. 管理邀请超时定时器
+ * 4. 计算通话时长
+ *
+ * 不执行任何副作用（不发消息、不 join RTC），只返回领域事件。
+ *
+ * 状态流转规则从现有 lib/store/callState.ts + lib/signaling/SingleCallSignalHandler.ts 提取。
+ */
+export class SingleCallStateMachine {
+  private state: SingleCallState = createIdleState()
   private logger: Logger
 
   constructor(logger?: Logger) {
     this.logger = logger || getLogger()
   }
 
-  /**
-   * 获取当前状态快照
-   */
+  // ─── 查询 ───
+
   getState(): Readonly<SingleCallState> {
     return Object.freeze({ ...this.state })
   }
 
+  isIdle(): boolean {
+    return this.state.status === CALL_STATUS.IDLE
+  }
+
+  isInCall(): boolean {
+    return this.state.status === CALL_STATUS.IN_CALL
+  }
+
+  isCallIdMatch(incomingCallId: string): boolean {
+    return this.state.callId === incomingCallId
+  }
+
+  getDuration(): number {
+    if (!this.state.startTime) return 0
+    return Date.now() - this.state.startTime
+  }
+
+  // ─── 初始化 ───
+
   /**
-   * 初始化主叫方邀请状态
+   * 主叫方发起邀请
    */
   initInvite(params: {
     calleeUserId: string
-    type: CALL_TYPE
+    callType: CALL_TYPE
     callerDevId: string
     callerUserId: string
     callId: string
     channel: string
     token: string
     timeout?: number
-  }): void {
+  }): TransitionResult {
     this.clearTimeout()
+    const oldStatus = this.state.status
+
     this.state = {
-      ...this.state,
+      ...createIdleState({
+        callerDevId: params.callerDevId,
+        callerUserId: params.callerUserId,
+      }),
       status: CALL_STATUS.INVITING,
       calleeUserId: params.calleeUserId,
-      type: params.type,
-      callerDevId: params.callerDevId,
-      callerUserId: params.callerUserId,
+      type: params.callType,
       callId: params.callId,
       channel: params.channel,
       token: params.token,
-      inviteTimeout: params.timeout ?? 30000,
-      startTime: null,
+      inviteTimeout: params.timeout ?? DEFAULT_TIMEOUT,
     }
-    this.logger.stateChange?.('IDLE', 'INVITING', { callId: params.callId, channel: params.channel })
+
     this.startTimeout()
+    this.logger.stateChange?.(oldStatus, CALL_STATUS.INVITING, { callId: params.callId })
+
+    return {
+      ok: true,
+      events: [
+        {
+          type: 'STATUS_CHANGED',
+          from: oldStatus,
+          to: CALL_STATUS.INVITING,
+          callId: params.callId,
+        },
+      ],
+    }
   }
 
   /**
@@ -97,85 +163,339 @@ export class SingleCallStateMachine {
     callId: string
     channel: string
     token: string
-    type: CALL_TYPE
+    callType: CALL_TYPE
     callerDevId: string
     callerUserId: string
     calleeDevId: string
     calleeUserId: string
-  }): void {
+  }): TransitionResult {
     this.clearTimeout()
-    this.state = {
-      ...this.state,
-      status: CALL_STATUS.ALERTING,
-      ...params,
-      inviteTimeout: 30000,
-      inviteTimeoutTimer: null,
-      startTime: null,
-    }
-    this.logger.stateChange?.('IDLE', 'ALERTING', { callId: params.callId, caller: params.callerUserId })
-    this.startTimeout()
-  }
-
-  /**
-   * 状态流转
-   * 返回是否允许流转
-   */
-  transitionTo(status: CALL_STATUS): boolean {
     const oldStatus = this.state.status
-    if (oldStatus === status) return false
 
-    // TODO: Phase 1 - 补充完整的合法流转校验表
-    this.state.status = status
-    this.logger.stateChange?.(oldStatus, status, { callId: this.state.callId })
-    return true
+    this.state = {
+      ...createIdleState(),
+      status: CALL_STATUS.ALERTING,
+      callId: params.callId,
+      channel: params.channel,
+      token: params.token,
+      type: params.callType,
+      callerDevId: params.callerDevId,
+      callerUserId: params.callerUserId,
+      calleeDevId: params.calleeDevId,
+      calleeUserId: params.calleeUserId,
+    }
+
+    this.startTimeout()
+    this.logger.stateChange?.(oldStatus, CALL_STATUS.ALERTING, { callId: params.callId })
+
+    return {
+      ok: true,
+      events: [
+        {
+          type: 'STATUS_CHANGED',
+          from: oldStatus,
+          to: CALL_STATUS.ALERTING,
+          callId: params.callId,
+        },
+      ],
+    }
   }
 
+  // ─── 信令响应 ───
+
   /**
-   * 设置 calleeDevId（被叫方响铃后收到 alert 时）
+   * 主叫方收到 alert（被叫已响铃）
    */
-  setCalleeDevId(devId: string): void {
-    this.state.calleeDevId = devId
+  receiveAlert(calleeDevId: string): TransitionResult {
+    if (this.state.status !== CALL_STATUS.INVITING) {
+      this.logger.warn('[SingleCallStateMachine] receiveAlert: 当前状态不是 INVITING，忽略', {
+        status: this.state.status,
+      })
+      return { ok: false, events: [] }
+    }
+
+    this.clearTimeout()
+    const oldStatus = this.state.status
+    this.state.status = CALL_STATUS.ALERTING
+    this.state.calleeDevId = calleeDevId
+    this.startTimeout()
+    this.logger.stateChange?.(oldStatus, CALL_STATUS.ALERTING, { callId: this.state.callId })
+
+    return {
+      ok: true,
+      events: [
+        {
+          type: 'STATUS_CHANGED',
+          from: oldStatus,
+          to: CALL_STATUS.ALERTING,
+          callId: this.state.callId,
+        },
+      ],
+    }
   }
 
   /**
-   * 重置状态机为 IDLE
+   * 被叫方收到 confirmRing
+   */
+  receiveConfirmRing(status: boolean): TransitionResult {
+    if (this.state.status < CALL_STATUS.ALERTING) {
+      this.logger.warn('[SingleCallStateMachine] receiveConfirmRing: 当前状态 < ALERTING，忽略')
+      return { ok: false, events: [] }
+    }
+    if (this.state.status === CALL_STATUS.RECEIVED_CONFIRM_RING) {
+      this.logger.info('[SingleCallStateMachine] receiveConfirmRing: 已是 RECEIVED_CONFIRM_RING，忽略')
+      return { ok: false, events: [] }
+    }
+    if (!status) {
+      this.logger.warn('[SingleCallStateMachine] receiveConfirmRing: status=false，忽略')
+      return { ok: false, events: [] }
+    }
+
+    this.clearTimeout()
+    const oldStatus = this.state.status
+    this.state.status = CALL_STATUS.RECEIVED_CONFIRM_RING
+    this.logger.stateChange?.(oldStatus, CALL_STATUS.RECEIVED_CONFIRM_RING, { callId: this.state.callId })
+
+    return {
+      ok: true,
+      events: [
+        {
+          type: 'STATUS_CHANGED',
+          from: oldStatus,
+          to: CALL_STATUS.RECEIVED_CONFIRM_RING,
+          callId: this.state.callId,
+        },
+      ],
+    }
+  }
+
+  /**
+   * 收到 answerCall 信令
+   */
+  receiveAnswer(result: 'accept' | 'refuse' | 'busy', fromCaller?: boolean): TransitionResult {
+    this.clearTimeout()
+
+    // 已在通话中，忽略（防止重复 accept）
+    if (this.state.status === CALL_STATUS.IN_CALL) {
+      this.logger.info('[SingleCallStateMachine] receiveAnswer: 已在 IN_CALL，忽略')
+      return { ok: false, events: [] }
+    }
+
+    if (result === 'accept') {
+      const oldStatus = this.state.status
+      this.state.status = CALL_STATUS.IN_CALL
+      this.state.startTime = Date.now()
+      this.logger.stateChange?.(oldStatus, CALL_STATUS.IN_CALL, { callId: this.state.callId })
+
+      const events: DomainEvent[] = [
+        {
+          type: 'STATUS_CHANGED',
+          from: oldStatus,
+          to: CALL_STATUS.IN_CALL,
+          callId: this.state.callId,
+        },
+        {
+          type: 'CALL_STARTED',
+          callId: this.state.callId,
+          isCaller: !fromCaller, // 如果是主叫收到 accept，则 isCaller=true
+          channel: this.state.channel,
+          callType: this.state.type,
+        },
+        {
+          type: 'SHOULD_JOIN_RTC',
+          callId: this.state.callId,
+          channel: this.state.channel,
+          token: this.state.token,
+          role: fromCaller ? 'callee' : 'caller',
+          callType: this.state.type,
+        },
+      ]
+      return { ok: true, events }
+    }
+
+    // refuse / busy
+    const oldStatus = this.state.status
+    const duration = 0
+    const reason = result === 'busy' ? HANGUP_REASON.BUSY : HANGUP_REASON.REMOTE_REFUSE
+    const callId = this.state.callId
+    this.resetCore()
+    this.logger.stateChange?.(oldStatus, CALL_STATUS.IDLE, { callId, trigger: `answer:${result}` })
+
+    const events: DomainEvent[] = [
+      {
+        type: 'CALL_ENDED',
+        callId,
+        reason,
+        duration,
+      },
+    ]
+    if (result === 'busy') {
+      events.unshift({ type: 'CALL_BUSY', callId })
+    } else {
+      events.unshift({ type: 'CALL_REFUSED', callId, isRemote: true })
+    }
+    return { ok: true, events }
+  }
+
+  /**
+   * 收到 cancelCall 信令
+   * 
+   * 注：callId 校验和多端容错由 Handler 负责，状态机只处理匹配后的状态流转。
+   */
+  receiveCancel(): TransitionResult {
+    const currentStatus = this.state.status
+    const callId = this.state.callId
+
+    if (currentStatus === CALL_STATUS.IDLE) {
+      this.logger.warn('[SingleCallStateMachine] receiveCancel: 当前状态 IDLE，忽略')
+      return { ok: false, events: [] }
+    }
+
+    this.clearTimeout()
+    this.resetCore()
+    this.logger.stateChange?.(currentStatus, CALL_STATUS.IDLE, { callId, trigger: 'cancel' })
+
+    return {
+      ok: true,
+      events: [
+        { type: 'CALL_CANCELED', callId, isRemote: true },
+        { type: 'CALL_ENDED', callId, reason: HANGUP_REASON.REMOTE_CANCEL, duration: 0 },
+      ],
+    }
+  }
+
+  /**
+   * 收到 leaveCall 信令
+   * 
+   * 注：callId 校验和多端容错由 Handler 负责，状态机只处理匹配后的状态流转。
+   */
+  receiveLeave(): TransitionResult {
+    const currentStatus = this.state.status
+    const callId = this.state.callId
+
+    if (currentStatus === CALL_STATUS.IDLE) {
+      return { ok: false, events: [] }
+    }
+    if (currentStatus === CALL_STATUS.IN_CALL) {
+      const duration = this.getDuration()
+      this.resetCore()
+      this.logger.stateChange?.(currentStatus, CALL_STATUS.IDLE, { callId, trigger: 'leave' })
+      return {
+        ok: true,
+        events: [{ type: 'CALL_ENDED', callId, reason: HANGUP_REASON.HANGUP, duration }],
+      }
+    }
+    // ALERTING/INVITING 状态下收到 leave → 也挂断（兼容 caller 在响铃阶段离开）
+    this.resetCore()
+    this.logger.stateChange?.(currentStatus, CALL_STATUS.IDLE, { callId, trigger: 'leave:alerting' })
+    return {
+      ok: true,
+      events: [{ type: 'CALL_ENDED', callId, reason: HANGUP_REASON.HANGUP, duration: 0 }],
+    }
+  }
+
+  /**
+   * 收到 confirmCallee 信令（被叫方）
+   */
+  receiveConfirmCallee(): TransitionResult {
+    if (this.state.status === CALL_STATUS.IN_CALL) {
+      this.logger.info('[SingleCallStateMachine] receiveConfirmCallee: 已是 IN_CALL')
+    } else {
+      const oldStatus = this.state.status
+      this.state.status = CALL_STATUS.IN_CALL
+      this.state.startTime = Date.now()
+      this.logger.stateChange?.(oldStatus, CALL_STATUS.IN_CALL, { callId: this.state.callId })
+    }
+
+    const events: DomainEvent[] = [
+      {
+        type: 'STATUS_CHANGED',
+        from: this.state.status === CALL_STATUS.IN_CALL ? CALL_STATUS.IN_CALL : CALL_STATUS.CONFIRM_CALLEE,
+        to: CALL_STATUS.IN_CALL,
+        callId: this.state.callId,
+      },
+      {
+        type: 'CALL_STARTED',
+        callId: this.state.callId,
+        isCaller: false,
+        channel: this.state.channel,
+        callType: this.state.type,
+      },
+      {
+        type: 'SHOULD_JOIN_RTC',
+        callId: this.state.callId,
+        channel: this.state.channel,
+        token: this.state.token,
+        role: 'callee',
+        callType: this.state.type,
+      },
+    ]
+    return { ok: true, events }
+  }
+
+  // ─── 本地动作 ───
+
+  /**
+   * 本地挂断/取消
+   */
+  hangup(reason: string = HANGUP_REASON.HANGUP): TransitionResult {
+    const currentStatus = this.state.status
+    if (currentStatus === CALL_STATUS.IDLE) {
+      this.logger.warn('[SingleCallStateMachine] hangup: 当前状态 IDLE，忽略')
+      return { ok: false, events: [] }
+    }
+
+    const duration = currentStatus === CALL_STATUS.IN_CALL ? this.getDuration() : 0
+    const callId = this.state.callId
+    this.clearTimeout()
+    this.resetCore()
+    this.logger.stateChange?.(currentStatus, CALL_STATUS.IDLE, { callId, trigger: 'hangup' })
+
+    return {
+      ok: true,
+      events: [{ type: 'CALL_ENDED', callId, reason, duration }],
+    }
+  }
+
+  /**
+   * 邀请超时
+   */
+  timeout(): TransitionResult {
+    const currentStatus = this.state.status
+    if (currentStatus === CALL_STATUS.IDLE || currentStatus === CALL_STATUS.IN_CALL) {
+      return { ok: false, events: [] }
+    }
+
+    const callId = this.state.callId
+    this.resetCore()
+    this.logger.stateChange?.(currentStatus, CALL_STATUS.IDLE, { callId, trigger: 'timeout' })
+
+    return {
+      ok: true,
+      events: [
+        { type: 'CALL_TIMEOUT', callId },
+        { type: 'CALL_ENDED', callId, reason: HANGUP_REASON.NO_RESPONSE, duration: 0 },
+      ],
+    }
+  }
+
+  /**
+   * 强制重置状态机
    */
   reset(): void {
     this.clearTimeout()
     const oldStatus = this.state.status
-    this.state.status = CALL_STATUS.IDLE
-    this.state.callId = ''
-    this.state.channel = ''
-    this.state.calleeUserId = ''
-    this.state.calleeDevId = ''
-    this.state.startTime = null
-    this.logger.stateChange?.(oldStatus, 'IDLE', { trigger: 'reset' })
+    const preserved = { callerDevId: this.state.callerDevId, callerUserId: this.state.callerUserId }
+    this.state = createIdleState(preserved)
+    this.logger.stateChange?.(oldStatus, CALL_STATUS.IDLE, { trigger: 'forceReset' })
   }
 
-  /**
-   * 设置通话开始时间（进入 IN_CALL 时）
-   */
-  setStartTime(): void {
-    this.state.startTime = Date.now()
-  }
-
-  /**
-   * 计算通话时长（秒）
-   */
-  getDuration(): number {
-    if (!this.state.startTime) return 0
-    return Math.floor((Date.now() - this.state.startTime) / 1000)
-  }
-
-  // ─── 私有方法 ───
+  // ─── 内部方法 ───
 
   private startTimeout(): void {
     this.clearTimeout()
     this.state.inviteTimeoutTimer = setTimeout(() => {
-      this.logger.warn('[SingleCallStateMachine] 邀请超时', { callId: this.state.callId })
-      if (this.state.status !== CALL_STATUS.IDLE && this.state.status !== CALL_STATUS.IN_CALL) {
-        this.reset()
-      }
+      this.timeout()
     }, this.state.inviteTimeout)
   }
 
@@ -184,5 +504,14 @@ export class SingleCallStateMachine {
       clearTimeout(this.state.inviteTimeoutTimer)
       this.state.inviteTimeoutTimer = null
     }
+  }
+
+  /**
+   * 核心重置：保留 callerDevId / callerUserId，其余清空
+   * 与现有 callStateStore.resetCallState() 行为一致
+   */
+  private resetCore(): void {
+    const preserved = { callerDevId: this.state.callerDevId, callerUserId: this.state.callerUserId }
+    this.state = createIdleState(preserved)
   }
 }
