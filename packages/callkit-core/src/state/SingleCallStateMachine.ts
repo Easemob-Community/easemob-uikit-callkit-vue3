@@ -22,6 +22,7 @@ export interface SingleCallState {
 }
 
 export type DomainEvent =
+  // ─── 单聊状态事件 ───
   | { type: 'STATUS_CHANGED'; from: CALL_STATUS; to: CALL_STATUS; callId: string }
   | { type: 'CALL_STARTED'; callId: string; isCaller: boolean; channel: string; callType: CALL_TYPE }
   | { type: 'CALL_ENDED'; callId: string; reason: string; duration: number }
@@ -36,6 +37,41 @@ export type DomainEvent =
       token: string
       role: 'caller' | 'callee'
       callType: CALL_TYPE
+    }
+  // ─── 群聊事件 ───
+  | {
+      type: 'GROUP_CALL_INIT'
+      callId: string
+      groupId: string
+      groupName: string
+      channel: string
+      callType: 'audio' | 'video'
+      callerUserId: string
+      invitedMembers: string[]
+    }
+  | {
+      type: 'PARTICIPANT_STATE_CHANGED'
+      callId: string
+      userId: string
+      state: 'invited' | 'accepted' | 'joinedRtc' | 'left'
+      groupId?: string
+    }
+  | {
+      type: 'PARTICIPANT_JOINED'
+      callId: string
+      userId: string
+      channel: string
+      callType: CALL_TYPE
+      groupId?: string
+    }
+  | {
+      type: 'PARTICIPANT_LEFT'
+      callId: string
+      userId: string
+      channel: string
+      callType: CALL_TYPE
+      reason: string
+      groupId?: string
     }
 
 export interface TransitionResult {

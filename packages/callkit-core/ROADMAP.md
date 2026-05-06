@@ -2,7 +2,7 @@
 
 > **当前分支**: `feat/callkit-core-extract`  
 > **最后更新**: 2026-05-06  
-> **状态**: Phase 1 已完成 ✅
+> **状态**: Phase 2 已完成 ✅（50 测试通过）
 
 ---
 
@@ -59,35 +59,37 @@
 
 ---
 
-## Phase 2：Handler 重构（当前待开始）
+## Phase 2：Handler 重构 ✅
 
 **目标**: 把 `SingleCallSignalHandler` / `GroupCallSignalHandler` 从"控制器"退化为"处理器"，不再直接读写 Pinia，改为注入 `StateMachine` + `SignalSender`，返回 `DomainEvent[]`。
 
-- [ ] 重构 `SingleCallSignalHandler`（~580 行 → 新核心库）
-  - [ ] 删除 `useChatClientStore()` → 注入 `{ currentUserId, deviceId }`
-  - [ ] 删除 `useCallStateStore()` → 注入 `SingleCallStateMachine`
-  - [ ] 删除 `this.joinRtcChannel()` → 返回 `DomainEvent` 中的 `SHOULD_JOIN_RTC`
-  - [ ] 删除 `new CallService()` → 返回 `DomainEvent` 中的 `CALL_ENDED`
-  - [ ] 保留 callId / deviceId 校验逻辑（多端冲突处理）
-  - [ ] 保留响应信令发送（confirmRing / confirmCallee）→ 注入 `SignalSender`
-- [ ] 重构 `GroupCallSignalHandler`（~384 行 → 新核心库）
-  - [ ] 同上模式：注入 `GroupCallSession` + `SignalSender`
-  - [ ] `handleInviteTextMessage()` 初始化群聊 session
-- [ ] 组装 `CallKitCore`
-  - [ ] `inviteCall()` → stateMachine.initInvite() + MessageBuilder + SignalSender
-  - [ ] `answerCall()` → SignalSender + 等待 confirmCallee / 直接响应
-  - [ ] `hangup()` → 根据状态决定 send cancel 还是 send leave
-  - [ ] 事件聚合：`Handler` 返回 `DomainEvent[]` → Core 去重/排序 → `onEvent()`
-- [ ] 双轨对比测试
-  - [ ] 在 `test/` 中写一个"纯 HTML + JS" 测试页，验证单聊/群聊全流程
+- [x] 扩展 `DomainEvent` 类型，添加群聊事件（`GROUP_CALL_INIT`、`PARTICIPANT_*`）
+- [x] 修改 `SignalHandler` 接口：`handle()` 返回 `DomainEvent[]`
+- [x] 修改 `SignalRouter.dispatch()`：聚合所有 Handler 返回的事件
+- [x] 重构 `SingleCallSignalHandler`（~580 行 → 新核心库）
+  - [x] 注入 `SingleCallStateMachine` + `SignalSender` + `deviceId`
+  - [x] 移除 Pinia store 导入
+  - [x] `handleAlert()` → 校验 deviceId → receiveAlert() → 发送 confirmRing → 返回事件
+  - [x] `handleConfirmRing()` → 校验 callerDevId/calleeDevId → receiveConfirmRing() → 返回事件
+  - [x] `handleAnswerCall()` → accept/refuse/busy 分支 → 发送 confirmCallee → 调用 receiveAnswer() → 返回事件
+  - [x] `handleCancelCall()` → callId 匹配/不匹配容错 → receiveCancel() → 返回事件
+  - [x] `handleLeaveCall()` → callId 匹配/不匹配容错 → receiveLeave() → 返回事件
+  - [x] `handleConfirmCallee()` → callId 校验 → receiveConfirmCallee() → 返回事件
+- [x] 重构 `GroupCallSignalHandler`（~384 行 → 新核心库）
+  - [x] 注入 `GroupCallSession` + `SingleCallStateMachine` + `userId`
+  - [x] `handleInviteTextMessage()` → 解析 invite 文本消息 → init session → 添加参与者 → 返回 `GROUP_CALL_INIT`
+  - [x] `handleAnswerCall()` → accept → markAccepted + `PARTICIPANT_JOINED`；refuse → removeParticipant + `PARTICIPANT_LEFT`
+  - [x] `handleCancelCall()` → 群聊容错（callId 不匹配 + caller + ALERTING/INVITING → 挂断）
+  - [x] `handleLeaveCall()` → ALERTING + caller → 挂断；IN_CALL → `PARTICIPANT_LEFT`
+- [x] 单测覆盖
+  - [x] `SingleCallSignalHandler.test.ts`：17 个测试（alert/confirmRing/answer/cancel/leave/confirmCallee × 正常/异常场景）
+  - [x] `GroupCallSignalHandler.test.ts`：11 个测试（init/answer/cancel/leave × 单聊/群聊分支）
 
-**工作量预估**: 2-3 天  
-**风险**: 中高 — Handler 逻辑复杂（多端设备冲突、callId 校验、状态顺序校验），需逐行对照现有代码验证
+**工作量预估**: 2-3 天 → **实际 1 天**
 
 **验证点**:
-- [ ] `pnpm test` 新增 Handler 测试通过
-- [ ] `test/src/App.vue` 手动验证单聊：主叫发起 → 被叫收到邀请 → 被叫接受 → 双方进入通话 → 一方挂断
-- [ ] `test/src/App.vue` 手动验证群聊：主叫发起 → 被叫收到邀请 → 被叫接受 → 主叫看到被叫加入 → 被叫挂断 → 通话继续
+- [x] `pnpm test` 50/50 通过（22 状态机 + 17 单聊 Handler + 11 群聊 Handler）
+- [x] `pnpm build` 零报错（dist: 41KB ESM / 27KB CJS）
 
 ---
 

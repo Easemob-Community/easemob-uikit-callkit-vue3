@@ -1,6 +1,7 @@
 import type { Logger } from '../utils/logger'
 import { getLogger } from '../utils/logger'
 import type { SignalingExt } from '../types/signal.types'
+import type { DomainEvent } from '../state/SingleCallStateMachine'
 
 /**
  * 信令消息体（从 useListenerManager 提取，去框架依赖）
@@ -10,12 +11,12 @@ export interface CmdMsgBody {
   to?: string
   id?: string
   action?: string
-  ext?: SignalingExt & { [key: string]: any }
+  ext?: Partial<SignalingExt> & { [key: string]: any }
   [key: string]: any
 }
 
 export interface SignalHandler {
-  handle(message: CmdMsgBody): void | Promise<void>
+  handle(message: CmdMsgBody): DomainEvent[] | Promise<DomainEvent[]>
 }
 
 /**
@@ -38,11 +39,11 @@ export class SignalRouter {
     this.handlers.get(action)!.push(handler)
   }
 
-  dispatch(message: CmdMsgBody) {
+  dispatch(message: CmdMsgBody): DomainEvent[] {
     const action = message.ext?.action
     if (!action) {
       this.logger.warn('[SignalRouter] 消息缺少 action，无法分发', message)
-      return
+      return []
     }
     this.logger.signal?.('recv', action, {
       from: message.from,
@@ -54,8 +55,19 @@ export class SignalRouter {
     const handlers = this.handlers.get(action) || []
     if (handlers.length === 0) {
       this.logger.warn(`[SignalRouter] 未注册 action "${action}" 的处理器`)
-      return
+      return []
     }
-    handlers.forEach((h) => h.handle(message))
+    const allEvents: DomainEvent[] = []
+    handlers.forEach((h) => {
+      try {
+        const result = h.handle(message)
+        if (result && Array.isArray(result)) {
+          allEvents.push(...result)
+        }
+      } catch (err) {
+        this.logger.error('[SignalRouter] Handler 执行失败:', err)
+      }
+    })
+    return allEvents
   }
 }
