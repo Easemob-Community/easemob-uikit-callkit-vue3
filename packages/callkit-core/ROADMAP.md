@@ -2,7 +2,7 @@
 
 > **当前分支**: `feat/callkit-core-extract`  
 > **最后更新**: 2026-05-06  
-> **状态**: Phase 2 已完成 ✅（50 测试通过）
+> **状态**: Phase 3 已完成 ✅（64 测试通过）
 
 ---
 
@@ -93,7 +93,42 @@
 
 ---
 
-## Phase 3：Vue3 适配层
+## Phase 3：Core Assembly ✅
+
+**目标**: 把 `CallKitCore` 从骨架变成可运行的端到端核心。
+
+- [x] 重构 `IMListener` — 改为回调模式，Core 控制完整消息流
+- [x] 实现 `CallKitCore.inviteCall()`
+  - [x] 生成 callId/channel，获取 RTC token
+  - [x] `stateMachine.initInvite()` + `MessageBuilder.buildInviteExt()` + `SignalSender.sendInviteMessage()`
+  - [x] 触发 `statusChanged` 事件
+- [x] 实现 `CallKitCore.answerCall()`
+  - [x] accept：发送 `answerCall('accept')`，等待 `confirmCallee`
+  - [x] refuse：发送 `answerCall('refuse')` + `stateMachine.hangup()` → `callEnded`
+- [x] 实现 `CallKitCore.hangup()`
+  - [x] INVITING/ALERTING → 发送 `cancelCall`
+  - [x] IN_CALL → 发送 `leaveCall`
+  - [x] 触发 `callEnded`（含 duration）
+- [x] 实现 `CallKitCore.inviteGroupCall()`
+  - [x] 初始化 `GroupCallSession` + `SingleCallStateMachine`
+  - [x] 发送 invite 文本消息（groupChat + receiverList）
+- [x] 实现 `handleTextMessage()` — 单聊/群聊 invite 分支
+  - [x] 单聊：`initIncoming()` → `incomingCall` 事件
+  - [x] 群聊：`groupHandler.handleInviteTextMessage()` → `groupCallInit` 事件
+- [x] 实现 `handleCmdMessage()` — Router dispatch → 事件映射
+- [x] 实现 `DomainEvent → CallKitEvent` 完整映射（12 种事件）
+- [x] 集成测试 `CallKitCore.test.ts`：14 个测试覆盖
+  - [x] 主叫发起 → alert → accept → hangup
+  - [x] 被叫收到 invite → accept/refuse → confirmCallee
+  - [x] 群聊 invite → groupCallInit
+
+**验证点**:
+- [x] `pnpm test` 64/64 通过（22 状态机 + 17 单聊 Handler + 11 群聊 Handler + 14 Core 集成）
+- [x] `pnpm build` 零报错（52KB ESM / 34KB CJS）
+
+---
+
+## Phase 4：Vue3 适配层
 
 **目标**: 修改现有 `lib/composables/useCallKit.ts`，内部实例化 `CallKitCore`，订阅事件同步到 Pinia Store，保持现有 UI 组件无感知。
 
@@ -110,7 +145,7 @@
 
 ---
 
-## Phase 4：UniApp Demo（可选，后续迭代）
+## Phase 5：UniApp Demo（可选，后续迭代）
 
 **目标**: 验证核心库在 UniApp 场景下的可用性。
 

@@ -1,6 +1,7 @@
 import type { CALL_TYPE } from '../types/callstate.types'
 import type { CallKitEvent } from '../events/CallKitEvents'
 import type { RtcAdapter } from '../rtc/RtcAdapter'
+import type { Logger } from '../utils/logger'
 
 // ────────────────────────────────────────────────
 // 环信 IM SDK 类型（核心库内部使用，不暴露具体 SDK）
@@ -39,6 +40,8 @@ export interface CallKitCoreConfig {
   onEvent: (event: CallKitEvent) => void
   /** 邀请超时时间（毫秒），默认 30000 */
   inviteTimeout?: number
+  /** 自定义日志器（可选） */
+  logger?: Logger
 }
 
 // ────────────────────────────────────────────────
