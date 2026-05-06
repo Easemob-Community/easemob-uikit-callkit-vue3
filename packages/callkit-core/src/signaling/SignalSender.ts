@@ -12,10 +12,12 @@ import { getLogger } from '../utils/logger'
 export class SignalSender {
   private imClient: EasemobConnection
   private logger: Logger
+  private createMessageFn?: (options: any) => any
 
-  constructor(imClient: EasemobConnection, logger?: Logger) {
+  constructor(imClient: EasemobConnection, logger?: Logger, createMessageFn?: (options: any) => any) {
     this.imClient = imClient
     this.logger = logger || getLogger()
+    this.createMessageFn = createMessageFn
   }
 
   /**
@@ -83,6 +85,11 @@ export class SignalSender {
    * miniCore 版: client.Message.create(options)
    */
   private createMessage(options: any): any {
+    // 优先使用外部传入的工厂函数
+    if (this.createMessageFn) {
+      return this.createMessageFn(options)
+    }
+
     const client = this.imClient as any
     // 优先 full 版本静态 API
     if (typeof client !== 'undefined' && client.message?.create) {

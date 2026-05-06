@@ -42,6 +42,8 @@ export interface CallKitCoreConfig {
   inviteTimeout?: number
   /** 自定义日志器（可选） */
   logger?: Logger
+  /** 消息创建工厂（可选）。用于兼容不同版本的 easemob-websdk 消息创建方式 */
+  createMessage?: (options: any) => any
 }
 
 // ────────────────────────────────────────────────
@@ -56,7 +58,9 @@ export interface InviteCallParams {
 
 export interface AnswerCallParams {
   callId: string
-  accept: boolean
+  /** @deprecated 使用 result 替代 */
+  accept?: boolean
+  result?: 'accept' | 'refuse' | 'busy'
 }
 
 export interface HangupParams {

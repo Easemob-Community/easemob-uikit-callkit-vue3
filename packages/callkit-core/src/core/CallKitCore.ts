@@ -63,7 +63,7 @@ export class CallKitCore {
 
     // 初始化信令层
     this.signalRouter = new SignalRouter(this.logger)
-    this.signalSender = new SignalSender(config.imClient, this.logger)
+    this.signalSender = new SignalSender(config.imClient, this.logger, config.createMessage)
 
     // 初始化 Handler
     this.singleCallHandler = new SingleCallSignalHandler(
@@ -169,7 +169,10 @@ export class CallKitCore {
 
     const state = this.singleCallState.getState()
 
-    if (params.accept) {
+    // 兼容旧版 accept: boolean 参数
+    const result = params.result ?? (params.accept ? 'accept' : 'refuse')
+
+    if (result === 'accept') {
       // ── 接受分支 ──
       // 发送 answerCall 信令
       const ext = MessageBuilder.buildCmdExt({
@@ -190,13 +193,13 @@ export class CallKitCore {
       // 被叫方状态保持 ALERTING，等待 confirmCallee 后再进入 IN_CALL
       // （由 SingleCallSignalHandler.handleConfirmCallee 处理）
     } else {
-      // ── 拒绝分支 ──
+      // ── 拒绝/忙线分支 ──
       const ext = MessageBuilder.buildCmdExt({
         action: 'answerCall',
         callId: state.callId,
         callerDevId: state.callerDevId,
         calleeDevId: this.deviceId,
-        result: 'refuse',
+        result,
       })
 
       await this.signalSender.sendCmdMessage(
@@ -207,7 +210,8 @@ export class CallKitCore {
       )
 
       // 清理本地状态
-      const hangupResult = this.singleCallState.hangup(HANGUP_REASON.REFUSE)
+      const hangupReason = result === 'busy' ? HANGUP_REASON.BUSY : HANGUP_REASON.REFUSE
+      const hangupResult = this.singleCallState.hangup(hangupReason)
       this.processEvents(hangupResult.events, state)
     }
   }
@@ -372,7 +376,16 @@ export class CallKitCore {
   // 内部：消息处理
   // ───────────────────────────────────────────────
 
+  private isSelfMessage(msg: any): boolean {
+    return msg.from === this.userId
+  }
+
   private handleTextMessage(msg: any): void {
+    if (this.isSelfMessage(msg)) {
+      this.logger.debug('[CallKitCore] 忽略自己发送的文本消息')
+      return
+    }
+
     const ext = msg.ext as any
     if (!ext || ext.action !== 'invite') {
       this.logger.debug('[CallKitCore] 忽略非 invite 文本消息')
@@ -446,6 +459,11 @@ export class CallKitCore {
   }
 
   private handleCmdMessage(msg: any): void {
+    if (this.isSelfMessage(msg)) {
+      this.logger.debug('[CallKitCore] 忽略自己发送的 CMD 消息')
+      return
+    }
+
     const events = this.signalRouter.dispatch(msg)
     if (events.length > 0) {
       this.processEvents(events, this.singleCallState.getState())

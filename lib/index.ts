@@ -14,6 +14,7 @@ import { useSingleCallRtcStore } from "./store/singleCallRtc";
 import { useCallTimerStore } from "./store/callTimer";
 import { useGlobalCallStore } from "./store/globalCall";
 import { useCallKit } from "./composables/useCallKit";
+import { useCallKitCore } from "./composables/useCallKitCore";
 import { useCallKitEvents } from "./composables/useCallKitEvents";
 import { useRtcService } from "./composables/useRtcService";
 import { useJoinChannel } from "./composables/useJoinChannel";
@@ -34,7 +35,7 @@ export {
 // 导出store
 export { useCallStateStore, useRtcChannelStore, useGlobalCallStore, useSingleCallRtcStore, useCallTimerStore };
 // 导出部分hook
-export { useCallKit, useCallKitEvents, useRtcService, useJoinChannel, useParticipants };
+export { useCallKit, useCallKitCore, useCallKitEvents, useRtcService, useJoinChannel, useParticipants };
 // 导出拖拽hook
 export { useDraggable, useCenteredDraggable, useCornerDraggable };
 // 导出RTC服务

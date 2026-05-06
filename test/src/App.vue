@@ -2,10 +2,17 @@
   <div id="app">
     <div class="header">
       <h1>Easemob Chat CallKit Vue3 演示</h1>
-      <div class="mode-indicator" :class="importMode">
-        <span class="mode-label">测试环境</span>
-        <span class="mode-value">{{ importModeText }}</span>
-        <span class="mode-desc">{{ importModeDesc }}</span>
+      <div class="mode-indicators">
+        <div class="mode-indicator" :class="importMode">
+          <span class="mode-label">测试环境</span>
+          <span class="mode-value">{{ importModeText }}</span>
+          <span class="mode-desc">{{ importModeDesc }}</span>
+        </div>
+        <div class="mode-indicator" :class="useCore ? 'core' : 'legacy'">
+          <span class="mode-label">信令链路</span>
+          <span class="mode-value">{{ useCore ? '🔥 Core 新链路' : '📻 Legacy 旧链路' }}</span>
+          <span class="mode-desc">{{ useCore ? '通过 ?core=1 启用' : '默认模式，?core=1 切换' }}</span>
+        </div>
       </div>
     </div>
 
@@ -127,6 +134,7 @@ import {
   LogLevel,
   Logger,
   useCallKit, 
+  useCallKitCore,
   useCallKitEvents,
   useCallStateStore,
   EasemobChatCallKitProvider,
@@ -183,6 +191,9 @@ function pushEventLog(type: string, detail: string) {
     eventLogs.value.pop()
   }
 }
+
+// 检测核心模式（通过 URL query param ?core=1 切换）
+const useCore = new URLSearchParams(window.location.search).get('core') === '1'
 
 // 使用 useCallKitEvents 订阅通话生命周期事件
 const { onCallStarted, onCallEnded, onIncomingCall, onCallCanceled, onCallRefused, onCallTimeout, onCallBusy, onStatusChanged } = useCallKitEvents()
@@ -269,8 +280,8 @@ watch(
   }
 )
 
-// 方法
-const { call, groupCall, hangup } = useCallKit()
+// 方法（根据 useCore 切换新旧链路）
+const { call, groupCall, hangup, cancel, accept, reject, rejectBusy } = useCore ? useCallKitCore() : useCallKit()
 
 const startCall = async (type: 'audio' | 'video') => {
   if (!targetUserId.value) {
@@ -505,6 +516,12 @@ const handleClearIDBLogs = async () => {
   transition: all 0.3s ease;
 }
 
+.mode-indicators {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .mode-indicator.source {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
@@ -517,6 +534,16 @@ const handleClearIDBLogs = async () => {
 
 .mode-indicator.unknown {
   background: linear-gradient(135deg, #ccc 0%, #999 100%);
+  color: #333;
+}
+
+.mode-indicator.core {
+  background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+  color: #333;
+}
+
+.mode-indicator.legacy {
+  background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
   color: #333;
 }
 

@@ -40,6 +40,7 @@
     "pinia": "^3.0.3"
   },
   "devDependencies": {
+    "@easemob/callkit-core": "workspace:*",
     "@types/node": "^24.3.0",
     "@vitejs/plugin-vue": "^6.0.1",
     "@vue/tsconfig": "^0.7.0",
