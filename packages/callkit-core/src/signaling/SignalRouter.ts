@@ -30,6 +30,7 @@ export class SignalRouter {
 
   constructor(logger?: Logger) {
     this.logger = logger || getLogger()
+    this.logger.warn('📡 [SignalRouter] 信令路由器已初始化')
   }
 
   register(action: string, handler: SignalHandler) {

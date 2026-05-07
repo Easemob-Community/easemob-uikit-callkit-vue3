@@ -76,9 +76,6 @@ importers:
       agora-rtc-sdk-ng:
         specifier: ^4.24.2
         version: 4.24.2
-      easemob-chat-callkit-vue3:
-        specifier: file:../release/easemob-chat-callkit-vue3-1.0.4.tgz
-        version: file:release/easemob-chat-callkit-vue3-1.0.4.tgz(agora-rtc-sdk-ng@4.24.2)(easemob-websdk@4.16.0)(typescript@5.8.3)(vue@3.5.20(typescript@5.8.3))
       easemob-websdk:
         specifier: ^4.16.0
         version: 4.16.0
@@ -725,14 +722,6 @@ packages:
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
     engines: {node: '>= 0.4'}
-
-  easemob-chat-callkit-vue3@file:release/easemob-chat-callkit-vue3-1.0.4.tgz:
-    resolution: {integrity: sha512-cqX10M+FUZmG8zG/aFgGqnq4v+/2guW4x9KGu/dCsZPbzPgPxo+dtC+V6ug+tuSBE4Qxw/UugXQZtxkoI6J4mg==, tarball: file:release/easemob-chat-callkit-vue3-1.0.4.tgz}
-    version: 1.0.4
-    peerDependencies:
-      agora-rtc-sdk-ng: ^4.14.0
-      easemob-websdk: ^4.12.0
-      vue: ^3.0.0
 
   easemob-websdk@4.16.0:
     resolution: {integrity: sha512-biMpoAnNc3/8WOFysWgAKp+j9K/i1yZjGLamiJvUrTYbBqIJr9+tz0b4knDZ979OjhF2fstiHnDllQHxCMlfLw==}
@@ -1865,16 +1854,6 @@ snapshots:
       call-bind-apply-helpers: 1.0.2
       es-errors: 1.3.0
       gopd: 1.2.0
-
-  easemob-chat-callkit-vue3@file:release/easemob-chat-callkit-vue3-1.0.4.tgz(agora-rtc-sdk-ng@4.24.2)(easemob-websdk@4.16.0)(typescript@5.8.3)(vue@3.5.20(typescript@5.8.3)):
-    dependencies:
-      agora-rtc-sdk-ng: 4.24.2
-      dexie: 4.4.2
-      easemob-websdk: 4.16.0
-      pinia: 3.0.3(typescript@5.8.3)(vue@3.5.20(typescript@5.8.3))
-      vue: 3.5.20(typescript@5.8.3)
-    transitivePeerDependencies:
-      - typescript
 
   easemob-websdk@4.16.0: {}
 

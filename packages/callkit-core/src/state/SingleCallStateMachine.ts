@@ -19,6 +19,8 @@ export interface SingleCallState {
   inviteTimeout: number
   inviteTimeoutTimer: ReturnType<typeof setTimeout> | null
   startTime: number | null
+  audioEnabled: boolean
+  videoEnabled: boolean
 }
 
 export type DomainEvent =
@@ -73,6 +75,9 @@ export type DomainEvent =
       reason: string
       groupId?: string
     }
+  // ─── 媒体状态事件 ───
+  | { type: 'LOCAL_AUDIO_CHANGED'; callId: string; enabled: boolean }
+  | { type: 'LOCAL_VIDEO_CHANGED'; callId: string; enabled: boolean }
 
 export interface TransitionResult {
   ok: boolean
@@ -97,6 +102,8 @@ function createIdleState(preserve?: { callerDevId: string; callerUserId: string 
     inviteTimeout: DEFAULT_TIMEOUT,
     inviteTimeoutTimer: null,
     startTime: null,
+    audioEnabled: true,
+    videoEnabled: true,
   }
 }
 
@@ -434,6 +441,12 @@ export class SingleCallStateMachine {
    * 收到 confirmCallee 信令（被叫方）
    */
   receiveConfirmCallee(): TransitionResult {
+    // IDLE 状态下收到 confirmCallee → 忽略（可能已主动拒绝/挂断）
+    if (this.state.status === CALL_STATUS.IDLE) {
+      this.logger.warn('[SingleCallStateMachine] receiveConfirmCallee: 当前 IDLE，忽略')
+      return { ok: false, events: [] }
+    }
+
     if (this.state.status === CALL_STATUS.IN_CALL) {
       this.logger.info('[SingleCallStateMachine] receiveConfirmCallee: 已是 IN_CALL')
     } else {
@@ -549,5 +562,41 @@ export class SingleCallStateMachine {
   private resetCore(): void {
     const preserved = { callerDevId: this.state.callerDevId, callerUserId: this.state.callerUserId }
     this.state = createIdleState(preserved)
+  }
+
+  // ─── 媒体状态 ───
+
+  /**
+   * 切换本地音频状态
+   */
+  toggleAudio(): TransitionResult {
+    this.state.audioEnabled = !this.state.audioEnabled
+    return {
+      ok: true,
+      events: [
+        {
+          type: 'LOCAL_AUDIO_CHANGED',
+          callId: this.state.callId,
+          enabled: this.state.audioEnabled,
+        },
+      ],
+    }
+  }
+
+  /**
+   * 切换本地视频状态
+   */
+  toggleVideo(): TransitionResult {
+    this.state.videoEnabled = !this.state.videoEnabled
+    return {
+      ok: true,
+      events: [
+        {
+          type: 'LOCAL_VIDEO_CHANGED',
+          callId: this.state.callId,
+          enabled: this.state.videoEnabled,
+        },
+      ],
+    }
   }
 }

@@ -2,6 +2,7 @@ import type { CmdMsgBody, SignalHandler } from './SignalRouter'
 import type { GroupCallSession } from '../state/GroupCallSession'
 import type { SingleCallStateMachine } from '../state/SingleCallStateMachine'
 import type { DomainEvent } from '../state/SingleCallStateMachine'
+import type { SignalSender } from './SignalSender'
 import type { Logger } from '../utils/logger'
 import { getLogger } from '../utils/logger'
 import { CALL_STATUS, CALL_TYPE } from '../types/callstate.types'
@@ -19,19 +20,23 @@ import { CALL_STATUS, CALL_TYPE } from '../types/callstate.types'
 export class GroupCallSignalHandler implements SignalHandler {
   private session: GroupCallSession
   private stateMachine: SingleCallStateMachine
+  private sender: SignalSender
   private userId: string
   private logger: Logger
 
   constructor(
     session: GroupCallSession,
     stateMachine: SingleCallStateMachine,
+    sender: SignalSender,
     userId: string,
     logger?: Logger
   ) {
     this.session = session
     this.stateMachine = stateMachine
+    this.sender = sender
     this.userId = userId
     this.logger = logger || getLogger()
+    this.logger.warn('👥 [GroupCallSignalHandler] 群聊信令处理器已初始化')
   }
 
   /**
@@ -213,6 +218,14 @@ export class GroupCallSignalHandler implements SignalHandler {
 
     this.session.markAccepted(fromUserId)
 
+    // 与旧版对齐：群聊成员接受后，主叫方也发送 confirmCallee 给被叫方
+    this.sendConfirmCallee(fromUserId, {
+      callId,
+      callerDevId: currentState.callerDevId || '',
+      calleeDevId: ext.calleeDevId as string,
+      result: 'accept',
+    })
+
     return [
       {
         type: 'PARTICIPANT_STATE_CHANGED',
@@ -230,6 +243,35 @@ export class GroupCallSignalHandler implements SignalHandler {
         groupId,
       },
     ]
+  }
+
+  // ─── 私有辅助 ───
+
+  private sendConfirmCallee(
+    to: string,
+    payload: {
+      callId: string
+      callerDevId: string
+      calleeDevId: string
+      result: string
+    }
+  ): void {
+    // 与旧版对齐：confirmCallee 不设置 deliverOnlineOnly（默认 false）
+    this.sender
+      .sendCmdMessage(
+        to,
+        'singleChat',
+        {
+          action: 'confirmCallee',
+          callId: payload.callId,
+          callerDevId: payload.callerDevId,
+          calleeDevId: payload.calleeDevId,
+          result: payload.result,
+          ts: Date.now(),
+          msgType: 'rtcCallWithAgora',
+        } as any
+      )
+      .catch(() => {})
   }
 
   // ───────────────────────────────────────────────

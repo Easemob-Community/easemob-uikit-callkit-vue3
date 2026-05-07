@@ -28,6 +28,7 @@
 - 增强 useJoinChannel 与 GroupCallStore 的集成
 - **新增** 重要订阅状态泄漏防护：leaveChannel() 方法包含 finally 块重置 autoSubscribe 属性回 true
 - **新增** 改进的用户发布事件处理：向 subscribeRemoteUser 传递原始 UID 而非整个用户对象，避免 INVALID_REMOTE_USER 错误
+- **新增** v1.0.4 版本重大改进：useRtcService 增加了智能降级机制和错误处理，新增 getRtcServiceInstance() 辅助函数，提供 RTC 服务不可用时的优雅降级路径
 
 ## 目录
 1. [简介](#简介)
@@ -44,7 +45,7 @@
 ## 简介
 本文件系统性梳理并说明 RTC 服务相关的组合式 API，重点覆盖 useRtcService、useJoinChannel、useCallService、useParticipants 等能力，并结合 RtcService、CallService、rtcChannel store 等模块，解释如何通过这些函数管理 Agora RTC SDK 的连接、加入/离开频道、设备开关、音视频轨道发布与订阅、网络质量监控、参与者列表生成等关键能力。
 
-**更新** 本次更新重点关注 GroupCallModule 架构的引入，包括手动订阅控制、改进的轨道处理机制、RtcMediaBridge 媒体桥接层和 GroupCallStore 单一事实源的设计。**特别关注** 新增的关键订阅状态泄漏防护机制，确保 leaveChannel() 方法能够正确重置 autoSubscribe 属性，防止订阅状态泄漏影响后续单聊等旧流程。
+**更新** 本次更新重点关注 GroupCallModule 架构的引入，包括手动订阅控制、改进的轨道处理机制、RtcMediaBridge 媒体桥接层和 GroupCallStore 单一事实源的设计。**特别关注** 新增的关键订阅状态泄漏防护机制，确保 leaveChannel() 方法能够正确重置 autoSubscribe 属性，防止订阅状态泄漏影响后续单聊等旧流程。**v1.0.4 版本重大改进** 新增了 useRtcService 的智能降级机制，当 RTC 服务不可用时提供优雅降级路径，确保应用在异常情况下仍能保持基本功能。
 
 ## 项目结构
 围绕 RTC 服务 API 的关键目录与文件如下：
@@ -98,20 +99,20 @@ IDX --> RS
 
 **图表来源**
 - [lib/index.ts:1-64](file://lib/index.ts#L1-L64)
-- [lib/composables/useRtcService.ts:1-192](file://lib/composables/useRtcService.ts#L1-L192)
-- [lib/composables/useJoinChannel.ts:1-217](file://lib/composables/useJoinChannel.ts#L1-L217)
-- [lib/composables/useCallService.ts:1-359](file://lib/composables/useCallService.ts#L1-L359)
+- [lib/composables/useRtcService.ts:1-219](file://lib/composables/useRtcService.ts#L1-L219)
+- [lib/composables/useJoinChannel.ts:1-222](file://lib/composables/useJoinChannel.ts#L1-L222)
+- [lib/composables/useCallService.ts:1-440](file://lib/composables/useCallService.ts#L1-L440)
 - [lib/composables/useParticipants.ts:1-120](file://lib/composables/useParticipants.ts#L1-L120)
 - [lib/services/RtcService.ts:1-741](file://lib/services/RtcService.ts#L1-L741)
-- [lib/services/CallService.ts:1-359](file://lib/services/CallService.ts#L1-L359)
-- [lib/store/rtcChannel.ts:1-410](file://lib/store/rtcChannel.ts#L1-L410)
+- [lib/services/CallService.ts:1-440](file://lib/services/CallService.ts#L1-L440)
+- [lib/store/rtcChannel.ts:1-264](file://lib/store/rtcChannel.ts#L1-L264)
 - [lib/store/types.ts:1-86](file://lib/store/types.ts#L1-L86)
 - [lib/modules/groupCall/viewModel/GroupCallStore.ts:1-223](file://lib/modules/groupCall/viewModel/GroupCallStore.ts#L1-L223)
 - [lib/modules/groupCall/viewModel/useGroupCallViewModel.ts:1-141](file://lib/modules/groupCall/viewModel/useGroupCallViewModel.ts#L1-L141)
 - [lib/modules/groupCall/media/RtcMediaBridge.ts:1-282](file://lib/modules/groupCall/media/RtcMediaBridge.ts#L1-L282)
 
 ## 核心组件
-- useRtcService：封装 RTC 服务的组合式 API，提供本地/远端流、音视频开关、设备切换、状态查询与重置等能力
+- useRtcService：封装 RTC 服务的组合式 API，提供本地/远端流、音视频开关、设备切换、状态查询与重置等能力。**v1.0.4 版本重大改进** 新增智能降级机制，当 RTC 服务不可用时自动降级到 store 状态操作，确保应用稳定性
 - useJoinChannel：负责在信令确认后获取 RTC Token、初始化/复用 RtcService、创建并发布本地音视频轨道、加入频道并启动通话计时。**增强** 支持与 GroupCallStore 的集成
 - RtcService：封装 Agora RTC SDK 的客户端、轨道管理、发布/订阅、设备切换、事件监听与销毁。**增强** 支持手动订阅控制和改进的轨道处理机制，**新增** 关键的订阅状态泄漏防护
 - CallService：统一挂断流程，清理媒体资源与连接，重置通话状态
@@ -122,18 +123,18 @@ IDX --> RS
 - **新增** GroupCallStore：群组通话参与者与状态的单一事实源，替代旧架构中的 useParticipants + rtcChannelStore 分散逻辑
 
 **章节来源**
-- [lib/composables/useRtcService.ts:1-192](file://lib/composables/useRtcService.ts#L1-L192)
-- [lib/composables/useJoinChannel.ts:1-217](file://lib/composables/useJoinChannel.ts#L1-L217)
+- [lib/composables/useRtcService.ts:1-219](file://lib/composables/useRtcService.ts#L1-L219)
+- [lib/composables/useJoinChannel.ts:1-222](file://lib/composables/useJoinChannel.ts#L1-L222)
 - [lib/services/RtcService.ts:1-741](file://lib/services/RtcService.ts#L1-L741)
-- [lib/services/CallService.ts:1-359](file://lib/services/CallService.ts#L1-L359)
-- [lib/store/rtcChannel.ts:1-410](file://lib/store/rtcChannel.ts#L1-L410)
-- [lib/composables/useCallService.ts:1-359](file://lib/composables/useCallService.ts#L1-L359)
+- [lib/services/CallService.ts:1-440](file://lib/services/CallService.ts#L1-L440)
+- [lib/store/rtcChannel.ts:1-264](file://lib/store/rtcChannel.ts#L1-L264)
+- [lib/composables/useCallService.ts:1-440](file://lib/composables/useCallService.ts#L1-L440)
 - [lib/composables/useParticipants.ts:1-120](file://lib/composables/useParticipants.ts#L1-L120)
 - [lib/modules/groupCall/media/RtcMediaBridge.ts:1-282](file://lib/modules/groupCall/media/RtcMediaBridge.ts#L1-L282)
 - [lib/modules/groupCall/viewModel/GroupCallStore.ts:1-223](file://lib/modules/groupCall/viewModel/GroupCallStore.ts#L1-L223)
 
 ## 架构总览
-下图展示 RTC 服务 API 的整体交互：UI 层通过组合式 API 调用服务层与状态层；服务层与 SDK 交互并回写状态；状态层驱动 UI 响应式更新。**新增** GroupCallModule 通过 RtcMediaBridge 实现对 RtcService 的精细控制。**特别关注** 订阅状态泄漏防护机制确保 leaveChannel() 方法能够正确重置 autoSubscribe 属性。
+下图展示 RTC 服务 API 的整体交互：UI 层通过组合式 API 调用服务层与状态层；服务层与 SDK 交互并回写状态；状态层驱动 UI 响应式更新。**新增** GroupCallModule 通过 RtcMediaBridge 实现对 RtcService 的精细控制。**特别关注** 订阅状态泄漏防护机制确保 leaveChannel() 方法能够正确重置 autoSubscribe 属性。**v1.0.4 版本重大改进** 新增智能降级机制，当 RTC 服务不可用时提供优雅降级路径。
 
 ```mermaid
 sequenceDiagram
@@ -167,7 +168,7 @@ CS->>RC : 重置通话状态
 ```
 
 **图表来源**
-- [lib/composables/useJoinChannel.ts:78-210](file://lib/composables/useJoinChannel.ts#L78-L210)
+- [lib/composables/useJoinChannel.ts:86-222](file://lib/composables/useJoinChannel.ts#L86-L222)
 - [lib/services/RtcService.ts:118-147](file://lib/services/RtcService.ts#L118-L147)
 - [lib/services/RtcService.ts:189-234](file://lib/services/RtcService.ts#L189-L234)
 - [lib/services/RtcService.ts:239-251](file://lib/services/RtcService.ts#L239-L251)
@@ -185,6 +186,7 @@ CS->>RC : 重置通话状态
 - 提供本地/远端流、音视频开关、连接状态、活跃频道等响应式状态
 - 提供切换视频/音频、切换摄像头/麦克风、获取/设置流、重置状态等方法
 - 通过 rtcChannel store 管理状态，保证与 RtcService 的一致性
+- **v1.0.4 版本重大改进** 新增智能降级机制：当 RTC 服务不可用时，自动降级到 store 状态操作，确保应用稳定性
 
 **更新** 新增手动订阅控制能力，可通过 setAutoSubscribe 方法控制自动订阅行为。
 
@@ -197,6 +199,7 @@ class useRtcService {
 +isAudioEnabled
 +isConnected
 +activeChannel
++getRtcServiceInstance()
 +toggleVideo(enabled?)
 +toggleAudio(enabled?)
 +switchCamera(deviceId?)
@@ -234,7 +237,7 @@ RtcService --> RtcService : "setAutoSubscribe()"
 ```
 
 **图表来源**
-- [lib/composables/useRtcService.ts:52-192](file://lib/composables/useRtcService.ts#L52-L192)
+- [lib/composables/useRtcService.ts:52-219](file://lib/composables/useRtcService.ts#L52-L219)
 - [lib/services/RtcService.ts:56-78](file://lib/services/RtcService.ts#L56-L78)
 - [lib/services/RtcService.ts:110-113](file://lib/services/RtcService.ts#L110-L113)
 - [lib/services/RtcService.ts:416-443](file://lib/services/RtcService.ts#L416-L443)
@@ -246,9 +249,10 @@ RtcService --> RtcService : "setAutoSubscribe()"
 - 流管理方法用于将本地/远端 MediaStream 写入 store，便于 UI 绑定
 - **新增** 通过 setAutoSubscribe 控制自动订阅行为，支持手动订阅控制
 - **新增** 订阅状态泄漏防护：leaveChannel() 方法包含 finally 块确保 autoSubscribe 属性重置为 true
+- **v1.0.4 版本重大改进** 智能降级机制：getRtcServiceInstance() 方法提供 RTC 服务实例获取，当服务不可用时自动降级到 store 状态操作，确保应用稳定性
 
 **章节来源**
-- [lib/composables/useRtcService.ts:1-192](file://lib/composables/useRtcService.ts#L1-L192)
+- [lib/composables/useRtcService.ts:1-219](file://lib/composables/useRtcService.ts#L1-L219)
 - [lib/services/RtcService.ts:110-113](file://lib/services/RtcService.ts#L110-L113)
 - [lib/store/rtcChannel.ts:373-408](file://lib/store/rtcChannel.ts#L373-L408)
 
@@ -278,7 +282,7 @@ SyncGroup --> End(["完成"])
 ```
 
 **图表来源**
-- [lib/composables/useJoinChannel.ts:78-210](file://lib/composables/useJoinChannel.ts#L78-L210)
+- [lib/composables/useJoinChannel.ts:86-222](file://lib/composables/useJoinChannel.ts#L86-L222)
 - [lib/services/RtcService.ts:118-147](file://lib/services/RtcService.ts#L118-L147)
 - [lib/services/RtcService.ts:189-234](file://lib/services/RtcService.ts#L189-L234)
 - [lib/services/RtcService.ts:239-251](file://lib/services/RtcService.ts#L239-L251)
@@ -291,7 +295,7 @@ SyncGroup --> End(["完成"])
 - **新增** 改进的用户发布事件处理：向 subscribeRemoteUser 传递原始 UID 而非整个用户对象，避免 INVALID_REMOTE_USER 错误
 
 **章节来源**
-- [lib/composables/useJoinChannel.ts:1-217](file://lib/composables/useJoinChannel.ts#L1-L217)
+- [lib/composables/useJoinChannel.ts:1-222](file://lib/composables/useJoinChannel.ts#L1-L222)
 - [lib/services/RtcService.ts:1-741](file://lib/services/RtcService.ts#L1-L741)
 - [lib/store/rtcChannel.ts:242-272](file://lib/store/rtcChannel.ts#L242-L272)
 
@@ -361,7 +365,7 @@ RtcService --> rtcChannel_store : "读写状态/映射"
 
 **章节来源**
 - [lib/services/RtcService.ts:1-741](file://lib/services/RtcService.ts#L1-L741)
-- [lib/store/rtcChannel.ts:1-410](file://lib/store/rtcChannel.ts#L1-L410)
+- [lib/store/rtcChannel.ts:1-264](file://lib/store/rtcChannel.ts#L1-L264)
 
 ### RtcMediaBridge 组件分析
 职责与能力：
@@ -475,12 +479,12 @@ Expose --> Events["onCallStarted/Connected/Ended/Failed/... -> 占位"]
 ```
 
 **图表来源**
-- [lib/composables/useCallService.ts:91-359](file://lib/composables/useCallService.ts#L91-L359)
+- [lib/composables/useCallService.ts:91-440](file://lib/composables/useCallService.ts#L91-L440)
 
 注意：当前实现主要通过 store 更新状态，具体服务层方法需按实际实现补齐。
 
 **章节来源**
-- [lib/composables/useCallService.ts:1-359](file://lib/composables/useCallService.ts#L1-L359)
+- [lib/composables/useCallService.ts:1-440](file://lib/composables/useCallService.ts#L1-L440)
 - [lib/store/types.ts:43-55](file://lib/store/types.ts#L43-L55)
 
 ### useParticipants 组件分析
@@ -536,10 +540,10 @@ CS-->>UI : 完成
 - [lib/services/CallService.ts:316-337](file://lib/services/CallService.ts#L316-L337)
 
 **章节来源**
-- [lib/services/CallService.ts:1-359](file://lib/services/CallService.ts#L1-L359)
+- [lib/services/CallService.ts:1-440](file://lib/services/CallService.ts#L1-L440)
 
 ## 依赖关系分析
-- useRtcService 依赖 rtcChannel store 提供的状态与方法
+- useRtcService 依赖 rtcChannel store 提供的状态与方法，**v1.0.4 版本重大改进** 新增 getRtcServiceInstance() 辅助函数提供智能降级机制
 - useJoinChannel 依赖 rtcChannel store 与 RtcService，负责加入/发布/计时。**增强** 支持与 GroupCallStore 的集成
 - RtcService 依赖 Agora SDK 与 rtcChannel store，负责轨道与事件。**改进** 支持手动订阅控制和改进的轨道处理，**新增** 订阅状态泄漏防护
 - **新增** RtcMediaBridge 依赖 RtcService 和 GroupCallStore，负责媒体事件监听和订阅控制
@@ -584,6 +588,7 @@ UP["useParticipants"] --> RCS
 - **新增** 手动订阅控制：通过 setAutoSubscribe(false) 关闭自动订阅，由上层统一处理订阅逻辑，避免重复订阅
 - **新增** 精确订阅机制：subscribeRemoteUser 支持传入 uid 而非 user 对象，避免 SDK 内部引用不一致导致的错误
 - **新增** 订阅状态泄漏防护：leaveChannel() 方法的 finally 块确保 autoSubscribe 属性始终重置为 true，防止影响后续流程
+- **v1.0.4 版本重大改进** 智能降级机制：当 RTC 服务不可用时自动降级到 store 状态操作，减少异常处理开销
 - 资源及时释放：离开频道与挂断时取消发布、停止轨道、清理 store，防止内存泄漏
 - 计时器管理：通话结束后停止计时器，避免后台持续运行
 - 事件监听：销毁时移除监听，避免内存泄漏与重复触发
@@ -618,6 +623,10 @@ UP["useParticipants"] --> RCS
   - 检查 UID 解析机制是否正常工作
   - 确认参与者状态转换是否符合预期
   - 验证临时占位机制是否正确迁移
+- **v1.0.4 版本重大改进** 智能降级问题
+  - 检查 getRtcServiceInstance() 方法是否正确返回 null
+  - 确认降级路径是否正确更新 store 状态
+  - 验证降级操作是否产生预期的日志输出
 - 日志与调试
   - 使用 logger 输出关键路径日志，便于定位问题
   - 在开发环境开启调试模式，观察状态变化与事件触发
@@ -633,7 +642,7 @@ UP["useParticipants"] --> RCS
 ## 结论
 本套 RTC 服务 API 通过组合式 API、服务层与状态层的清晰分层，提供了从频道加入、设备控制、网络质量监控到参与者管理的完整能力。useRtcService 与 useJoinChannel 分别承担"状态与设备控制"和"加入与发布"的职责，RtcService 与 rtcChannel store 协同实现底层 SDK 与 UI 状态的一致性，CallService 则统一了挂断流程与资源清理。
 
-**更新** 本次更新显著增强了 GroupCallModule 架构的支持，包括手动订阅控制、改进的轨道处理机制、RtcMediaBridge 媒体桥接层和 GroupCallStore 单一事实源。**特别关注** 新增的关键订阅状态泄漏防护机制，确保 leaveChannel() 方法能够正确重置 autoSubscribe 属性，防止订阅状态泄漏影响后续单聊等旧流程。这些增强使得 RTC 服务在群组通话场景下更加稳定可靠，支持更复杂的订阅控制和状态管理需求。
+**更新** 本次更新显著增强了 GroupCallModule 架构的支持，包括手动订阅控制、改进的轨道处理机制、RtcMediaBridge 媒体桥接层和 GroupCallStore 单一事实源。**特别关注** 新增的关键订阅状态泄漏防护机制，确保 leaveChannel() 方法能够正确重置 autoSubscribe 属性，防止订阅状态泄漏影响后续单聊等旧流程。**v1.0.4 版本重大改进** 新增了 useRtcService 的智能降级机制，当 RTC 服务不可用时提供优雅降级路径，确保应用在异常情况下仍能保持基本功能。这些增强使得 RTC 服务在群组通话场景下更加稳定可靠，支持更复杂的订阅控制和状态管理需求。
 
 建议在实际集成中遵循"先状态、后服务"的顺序，配合完善的日志与错误处理，确保稳定可靠的通话体验。
 
@@ -660,3 +669,7 @@ UP["useParticipants"] --> RCS
   - 通过 RtcMediaBridge 统一处理订阅逻辑，传入 uid 而非 user 对象
   - 支持精确的轨道处理和状态同步
   - **新增** 订阅状态泄漏防护：destroy() 方法中恢复 RtcService 自动订阅
+- **v1.0.4 版本重大改进** 智能降级场景
+  - 当 RTC 服务不可用时，useRtcService 的 toggleVideo/toggleAudio 方法会自动降级到 store 状态操作
+  - getRtcServiceInstance() 辅助函数提供 RTC 服务实例获取，当服务不可用时返回 null 并记录警告日志
+  - 应用层可以通过检查返回值来决定是否执行降级逻辑，确保用户体验的一致性

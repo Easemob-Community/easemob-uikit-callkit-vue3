@@ -9,8 +9,12 @@ const CURRENT_USER_ID = 'user_local'
 function createHandler() {
   const session = new GroupCallSession()
   const stateMachine = new SingleCallStateMachine()
-  const handler = new GroupCallSignalHandler(session, stateMachine, CURRENT_USER_ID)
-  return { session, stateMachine, handler }
+  const mockSender = {
+    sendCmdMessage: vi.fn().mockResolvedValue(undefined),
+    sendInviteMessage: vi.fn().mockResolvedValue(undefined),
+  } as any
+  const handler = new GroupCallSignalHandler(session, stateMachine, mockSender, CURRENT_USER_ID)
+  return { session, stateMachine, handler, mockSender }
 }
 
 const MOCK_GROUP_CALL = {

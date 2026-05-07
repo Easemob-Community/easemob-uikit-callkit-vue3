@@ -6,18 +6,18 @@
 - [lib/store/types.ts](file://lib/store/types.ts)
 - [lib/types/callstate.types.ts](file://lib/types/callstate.types.ts)
 - [lib/composables/useCallKit.ts](file://lib/composables/useCallKit.ts)
-- [callkit/services/CallService.ts](file://callkit/services/CallService.ts)
+- [lib/services/CallService.ts](file://lib/services/CallService.ts)
 - [lib/store/globalCall.ts](file://lib/store/globalCall.ts)
 - [.trae/documents/修复CallService中CallState store初始化检查问题.md](file://.trae/documents/修复CallService中CallState store初始化检查问题.md)
+- [最新代码评审-CallKitVue3-v1.0.4.md](file://最新代码评审-CallKitVue3-v1.0.4.md)
 </cite>
 
 ## 更新摘要
 **所做更改**
-- 移除了群组通话相关属性（groupId、groupName、groupAvatar、invitedMembers、joinedMembers）
-- 移除了用户信息映射（userInfoMap、UIdToUserIdMap）
-- 移除了窗口最小化状态（isMinimized）
-- 更新了状态结构定义以反映单人通话专注设计
-- 更新了架构图和状态管理流程以体现重构后的简化设计
+- 修正了 caller 身份持久化问题，确保多设备场景下 caller 设备 ID 和用户 ID 的正确保存
+- 更新了状态重置逻辑，避免在重置时清空 callerDevId 和 callerUserId 字段
+- 强化了多设备场景下的身份保持机制
+- 修复了二次通话时身份丢失的问题
 
 ## 目录
 1. [简介](#简介)
@@ -34,9 +34,9 @@
 
 CallState Store 是 EasyMob Vue3 CallKit 组件库中的核心状态管理模块，经过重大重构后专注于单人通话状态管理。该 Store 实现了完整的单人通话生命周期管理，包括状态初始化、更新、超时处理和重置等功能。
 
-**更新** 本次重构移除了所有群组通话相关功能，现在专门处理一对一语音和视频通话的状态管理。
+**重要更新** 本次更新重点解决了多设备场景下的 caller 身份持久化问题，确保在通话重置后 caller 设备 ID 和用户 ID 能够正确保存，避免二次通话时的身份丢失问题。
 
-本文件将深入解析重构后的 CallState Store 设计架构，包括简化的状态结构定义、动作方法、计算属性，以及与 CALL_STATUS 和 CALL_TYPE 枚举的关系，同时详细说明 inviteTimeout 超时机制的设计原理。
+本文件将深入解析重构后的 CallState Store 设计架构，包括简化的状态结构定义、动作方法、计算属性，以及与 CALL_STATUS 和 CALL_TYPE 枚举的关系，同时详细说明 inviteTimeout 超时机制的设计原理和 caller 身份持久化的实现细节。
 
 ## 项目结构
 
@@ -94,9 +94,9 @@ GC --> CS
 - `type`: 通话类型枚举值（AUDIO_1V1 或 VIDEO_1V1）
 
 #### 用户身份信息
-- `callerDevId`: 主叫方设备ID
+- `callerDevId`: 主叫方设备ID（**关键：此字段在重置时不会被清空**）
 - `calleeDevId`: 被叫方设备ID
-- `callerUserId`: 主叫方用户ID
+- `callerUserId`: 主叫方用户ID（**关键：此字段在重置时不会被清空**）
 - `calleeUserId`: 被叫方用户ID
 
 #### 超时配置
@@ -120,8 +120,7 @@ GC --> CS
 ### 动作方法详解
 
 #### 状态初始化方法
-- `initCallState(chatClient)`: 通过聊天客户端初始化部分状态内容
-- `initInviteInfo(inviteInfo)`: 初始化邀请信息状态创建（单人通话专用）
+- `initCallState(chatClient)`: 通过聊天客户端初始化部分状态内容，**关键：此方法会设置 callerDevId 和 callerUserId**
 
 #### 状态更新方法
 - `updateCallState(partialState)`: 更新部分通话状态
@@ -133,7 +132,7 @@ GC --> CS
 - `handleTimeout()`: 处理超时逻辑（自动重置为IDLE状态）
 
 #### 状态重置
-- `resetCallState()`: 重置所有通话状态（包含修复的用户ID重置）
+- `resetCallState()`: 重置所有通话状态（**关键：修复了 caller 身份持久化问题**）
 
 #### 新增功能
 - `buildAndUpdateInviteState(inviteInfo)`: 构建并更新邀请状态
@@ -309,14 +308,16 @@ Note over Store : 自动重置为IDLE状态
 **章节来源**
 - [lib/store/callState.ts:58-88](file://lib/store/callState.ts#L58-L88)
 
-### 状态初始化流程
+### caller 身份持久化机制
+
+**重要更新** 本次更新重点解决了多设备场景下的 caller 身份持久化问题：
 
 ```mermaid
 flowchart TD
 Init([初始化]) --> CreateStore["创建CallState Store"]
 CreateStore --> SetDefaults["设置默认状态"]
-SetDefaults --> InitEnums["初始化枚举"]
-InitEnums --> Ready["Store就绪"]
+SetDefaults --> InitCaller["initCallState() 设置 callerDevId/callerUserId"]
+InitCaller --> Ready["Store就绪"]
 Ready --> UserAction{"用户操作"}
 UserAction --> |发起单人通话| InitInvite["initInviteInfo()"]
 UserAction --> |更新状态| UpdateState["updateCallState()"]
@@ -325,7 +326,49 @@ InitInvite --> SetInvite["设置邀请状态"]
 SetInvite --> StartTimer["启动超时计时器"]
 StartTimer --> WaitResponse["等待响应"]
 UpdateState --> ApplyChanges["应用状态变更"]
-ResetState --> ClearAll["清除所有状态"]
+ResetState --> PreserveCaller["保留 callerDevId/callerUserId"]
+PreserveCaller --> ClearOthers["清空其他通话相关字段"]
+ClearOthers --> Ready
+ApplyChanges --> Ready
+WaitResponse --> Response{"收到响应"}
+Response --> |接受| AcceptCall["进入通话状态"]
+Response --> |拒绝| RejectCall["重置为IDLE"]
+Response --> |超时| TimeoutCall["超时处理"]
+AcceptCall --> ActiveCall["活跃通话"]
+RejectCall --> IdleState["IDLE状态"]
+TimeoutCall --> IdleState
+```
+
+**图表来源**
+- [lib/store/callState.ts:36-148](file://lib/store/callState.ts#L36-L148)
+
+#### 持久化策略
+- **callerDevId 和 callerUserId 字段在 resetCallState() 中不会被清空**
+- **这些字段由 initCallState() 从 chatClient 初始化，只要 chatClient 不变就无需重置**
+- **确保多设备场景下二次通话时 caller 身份保持不变**
+
+**章节来源**
+- [lib/store/callState.ts:171-198](file://lib/store/callState.ts#L171-L198)
+
+### 状态初始化流程
+
+```mermaid
+flowchart TD
+Init([初始化]) --> CreateStore["创建CallState Store"]
+CreateStore --> SetDefaults["设置默认状态"]
+SetDefaults --> InitEnums["初始化枚举"]
+InitEnums --> InitCaller["initCallState() 设置 callerDevId/callerUserId"]
+InitCaller --> Ready["Store就绪"]
+Ready --> UserAction{"用户操作"}
+UserAction --> |发起单人通话| InitInvite["initInviteInfo()"]
+UserAction --> |更新状态| UpdateState["updateCallState()"]
+UserAction --> |重置状态| ResetState["resetCallState()"]
+InitInvite --> SetInvite["设置邀请状态"]
+SetInvite --> StartTimer["启动超时计时器"]
+StartTimer --> WaitResponse["等待响应"]
+UpdateState --> ApplyChanges["应用状态变更"]
+ResetState --> PreserveCaller["保留 callerDevId/callerUserId"]
+PreserveCaller --> ClearOthers["清空其他通话相关字段"]
 WaitResponse --> Response{"收到响应"}
 Response --> |接受| AcceptCall["进入通话状态"]
 Response --> |拒绝| RejectCall["重置为IDLE"]
@@ -395,6 +438,7 @@ GROUP --> RTC
 - **定时器清理**: 自动清理超时定时器，防止内存泄漏
 - **状态重置**: 完整的状态重置机制确保资源释放
 - **简化的状态结构**: 移除群组相关字段减少内存占用
+- **caller 身份持久化**: 避免重复初始化 caller 信息，节省资源
 
 ### 响应式优化
 - **按需更新**: 使用 Partial 更新减少不必要的响应式更新
@@ -432,13 +476,20 @@ GROUP --> RTC
 - **问题**: 超时定时器重复创建
 - **解决方案**: 在创建新定时器前先清除旧定时器
 
-#### 用户ID重置问题
-- **问题**: 多端场景下用户ID不匹配
-- **解决方案**: 在重置时正确清理 callerUserId 和 callerDevId
+#### **caller 身份持久化问题** **（新增）**
+- **问题**: 多端场景下 caller 设备 ID 和用户 ID 被清空
+- **解决方案**: 在 resetCallState() 中保留 callerDevId 和 callerUserId 字段
 
 **章节来源**
-- [lib/store/callState.ts:124-125](file://lib/store/callState.ts#L124-L125)
-- [lib/store/callState.ts:114-131](file://lib/store/callState.ts#L114-L131)
+- [lib/store/callState.ts:188-189](file://lib/store/callState.ts#L188-L189)
+
+#### 二次通话身份丢失问题 **（新增）**
+- **问题**: 通话结束后再次发起通话时 caller 信息为空
+- **根本原因**: 代码评审发现 reset 时清空了 callerDevId/callerUserId
+- **解决方案**: 修复 resetCallState() 方法，保留 caller 身份信息
+
+**章节来源**
+- [最新代码评审-CallKitVue3-v1.0.4.md:7-12](file://最新代码评审-CallKitVue3-v1.0.4.md#L7-L12)
 
 ## 结论
 
@@ -450,17 +501,21 @@ GROUP --> RTC
 - **类型安全**: 完整的 TypeScript 类型定义
 - **响应式更新**: 基于 Pinia 的响应式状态管理
 - **扩展性强**: 为未来功能扩展预留空间
+- **多设备兼容**: 通过 caller 身份持久化机制支持多设备场景
 
 ### 功能完整性
 - **状态管理**: 完整的单人通话生命周期管理
 - **超时处理**: 智能的超时机制和异常处理
 - **计算属性**: 高效的状态查询和转换
-- **状态重置**: 完整的资源清理机制
+- **状态重置**: 完整的资源清理机制，**特别修复了 caller 身份持久化问题**
 
 ### 最佳实践
 - **状态隔离**: 专注于单人通话状态类型
 - **错误处理**: 完善的异常捕获和恢复机制
 - **性能优化**: 简化的状态结构和智能的响应式更新
 - **可维护性**: 清晰的代码结构和详细的注释
+- **多设备支持**: 通过 caller 身份持久化确保多设备场景下的稳定性
 
-重构后的 CallState Store 为 Vue3 应用提供了强大而可靠的单人通话状态管理能力，是构建高质量音视频通话应用的重要基础设施。通过移除群组相关功能，现在能够更专注于单人通话场景的优化，提供更好的性能和用户体验。
+**重要更新总结** 本次更新重点关注了多设备场景下的稳定性问题，通过修复 caller 身份持久化机制，确保了在通话重置后 caller 设备 ID 和用户 ID 的正确保存，解决了二次通话时身份丢失的问题。这一改进对于多设备、多端使用的场景尤为重要，提升了整体的用户体验和系统可靠性。
+
+重构后的 CallState Store 为 Vue3 应用提供了强大而可靠的单人通话状态管理能力，是构建高质量音视频通话应用的重要基础设施。通过移除群组相关功能和修复关键的持久化问题，现在能够更专注于单人通话场景的优化，提供更好的性能和用户体验。

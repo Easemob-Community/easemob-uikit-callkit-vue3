@@ -114,16 +114,20 @@ const isChatClientReady = computed(() => {
 // 监听通话状态
 watch(
   () => callStateStore.getCallStatus,
-  (newStatus) => {
+  (newStatus, oldStatus) => {
+    logger.warn(
+      `🔔 [InvitationNotification] watch 触发 | oldStatus=${oldStatus} → newStatus=${newStatus} | isChatClientReady=${isChatClientReady.value}`
+    )
     // 只有在 ChatClient 已登录且状态为 ALERTING 时才显示弹窗
     if (newStatus === CALL_STATUS.ALERTING && isChatClientReady.value) {
       visible.value = true
-      logger.info('InvitationNotification: 显示通话邀请弹窗')
+      logger.warn('🔔 [InvitationNotification] ✅ 显示通话邀请弹窗')
     } else {
       visible.value = false
       if (newStatus === CALL_STATUS.ALERTING && !isChatClientReady.value) {
-        logger.warn('InvitationNotification: 收到通话邀请但 ChatClient 未登录或未初始化，无法显示弹窗')
-        logger.warn('通话邀请被忽略: 请先登录环信账号')
+        logger.warn('🔔 [InvitationNotification] ❌ ChatClient 未就绪，无法显示弹窗')
+      } else {
+        logger.warn(`🔔 [InvitationNotification] ❌ 状态不是 ALERTING，隐藏弹窗 (status=${newStatus})`)
       }
     }
   }
@@ -131,8 +135,9 @@ watch(
 
 // 接听
 const handleAccept = async () => {
+  logger.warn('>>> InvitationNotification.handleAccept 被调用')
   if (processing.value) return
-  
+
   // 检查 ChatClient 是否已登录
   if (!isChatClientReady.value) {
     logger.error('InvitationNotification: ChatClient未登录或未初始化，无法接听通话')
@@ -140,9 +145,10 @@ const handleAccept = async () => {
     visible.value = false
     return
   }
-  
+
   processing.value = true
   try {
+    logger.warn('>>> 开始调用 accept()')
     await accept()
     visible.value = false
   } catch (error) {
@@ -158,8 +164,9 @@ const handleAccept = async () => {
 
 // 拒绝
 const handleReject = async () => {
+  logger.warn('>>> InvitationNotification.handleReject 被调用')
   if (processing.value) return
-  
+
   // 检查 ChatClient 是否已登录
   if (!isChatClientReady.value) {
     logger.error('InvitationNotification: ChatClient未登录或未初始化，无法拒绝通话')
@@ -167,9 +174,10 @@ const handleReject = async () => {
     visible.value = false
     return
   }
-  
+
   processing.value = true
   try {
+    logger.warn('>>> 开始调用 reject()')
     await reject()
     visible.value = false
   } catch (error) {
@@ -185,11 +193,16 @@ const handleReject = async () => {
 
 // 初始化检查
 onMounted(() => {
+  logger.warn(
+    `🔔 [InvitationNotification] onMounted | 当前 status=${callStateStore.getCallStatus} | ALERTING=${CALL_STATUS.ALERTING} | isChatClientReady=${isChatClientReady.value}`
+  )
   if (callStateStore.getCallStatus === CALL_STATUS.ALERTING && isChatClientReady.value) {
     visible.value = true
-    logger.info('InvitationNotification: 组件挂载时发现待处理的通话邀请')
+    logger.warn('🔔 [InvitationNotification] ✅ 组件挂载时发现待处理的通话邀请，立即显示弹窗')
   } else if (callStateStore.getCallStatus === CALL_STATUS.ALERTING && !isChatClientReady.value) {
-    logger.warn('InvitationNotification: 组件挂载时有通话邀请，但用户未登录')
+    logger.warn('🔔 [InvitationNotification] ❌ 组件挂载时有通话邀请，但用户未登录')
+  } else {
+    logger.warn(`🔔 [InvitationNotification] ℹ️ 组件挂载时无待处理邀请 (status=${callStateStore.getCallStatus})`)
   }
 })
 </script>

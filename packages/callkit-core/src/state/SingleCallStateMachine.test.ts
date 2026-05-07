@@ -402,4 +402,82 @@ describe('SingleCallStateMachine', () => {
       expect(r.ok).toBe(false)
     })
   })
+
+  // ═══════════════════════════════════════════════
+  // 媒体状态切换
+  // ═══════════════════════════════════════════════
+
+  describe('toggleAudio', () => {
+    it('初始 audioEnabled 为 true', () => {
+      const sm = createCallerMachine()
+      expect(sm.getState().audioEnabled).toBe(true)
+    })
+
+    it('toggleAudio → 切换为 false 并触发 LOCAL_AUDIO_CHANGED', () => {
+      const sm = createCallerMachine()
+      sm.initInvite({ ...MOCK_CALL, callType: CALL_TYPE.VIDEO_1V1, calleeUserId: MOCK_CALL.calleeUserId })
+
+      const r = sm.toggleAudio()
+      expect(r.ok).toBe(true)
+      expect(r.events).toHaveLength(1)
+      expect(r.events[0]).toMatchObject({
+        type: 'LOCAL_AUDIO_CHANGED',
+        enabled: false,
+      })
+      expect(sm.getState().audioEnabled).toBe(false)
+    })
+
+    it('连续 toggleAudio → 状态来回切换', () => {
+      const sm = createCallerMachine()
+      sm.initInvite({ ...MOCK_CALL, callType: CALL_TYPE.VIDEO_1V1, calleeUserId: MOCK_CALL.calleeUserId })
+
+      sm.toggleAudio()
+      expect(sm.getState().audioEnabled).toBe(false)
+
+      const r2 = sm.toggleAudio()
+      expect(r2.events[0]).toMatchObject({ type: 'LOCAL_AUDIO_CHANGED', enabled: true })
+      expect(sm.getState().audioEnabled).toBe(true)
+    })
+
+    it('reset 后 audioEnabled 恢复为 true', () => {
+      const sm = createCallerMachine()
+      sm.initInvite({ ...MOCK_CALL, callType: CALL_TYPE.VIDEO_1V1, calleeUserId: MOCK_CALL.calleeUserId })
+      sm.toggleAudio()
+      expect(sm.getState().audioEnabled).toBe(false)
+
+      sm.reset()
+      expect(sm.getState().audioEnabled).toBe(true)
+    })
+  })
+
+  describe('toggleVideo', () => {
+    it('初始 videoEnabled 为 true', () => {
+      const sm = createCallerMachine()
+      expect(sm.getState().videoEnabled).toBe(true)
+    })
+
+    it('toggleVideo → 切换为 false 并触发 LOCAL_VIDEO_CHANGED', () => {
+      const sm = createCallerMachine()
+      sm.initInvite({ ...MOCK_CALL, callType: CALL_TYPE.VIDEO_1V1, calleeUserId: MOCK_CALL.calleeUserId })
+
+      const r = sm.toggleVideo()
+      expect(r.ok).toBe(true)
+      expect(r.events).toHaveLength(1)
+      expect(r.events[0]).toMatchObject({
+        type: 'LOCAL_VIDEO_CHANGED',
+        enabled: false,
+      })
+      expect(sm.getState().videoEnabled).toBe(false)
+    })
+
+    it('reset 后 videoEnabled 恢复为 true', () => {
+      const sm = createCallerMachine()
+      sm.initInvite({ ...MOCK_CALL, callType: CALL_TYPE.VIDEO_1V1, calleeUserId: MOCK_CALL.calleeUserId })
+      sm.toggleVideo()
+      expect(sm.getState().videoEnabled).toBe(false)
+
+      sm.reset()
+      expect(sm.getState().videoEnabled).toBe(true)
+    })
+  })
 })

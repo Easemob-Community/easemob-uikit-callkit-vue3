@@ -171,7 +171,7 @@ export interface LocalVideoChangedEvent {
 // 联合类型
 // ────────────────────────────────────────────────
 
-export type CallKitEvent =
+export type UIEvent =
   | IncomingCallEvent
   | CallStartedEvent
   | CallEndedEvent
@@ -180,12 +180,36 @@ export type CallKitEvent =
   | CallRefusedEvent
   | CallBusyEvent
   | CallCanceledEvent
-  | ShouldJoinRtcEvent
-  | ShouldLeaveRtcEvent
-  | ShouldPublishTracksEvent
   | GroupCallInitEvent
   | ParticipantStateChangedEvent
   | ParticipantJoinedEvent
   | ParticipantLeftEvent
+
+export type RtcEvent =
+  | ShouldJoinRtcEvent
+  | ShouldLeaveRtcEvent
+  | ShouldPublishTracksEvent
   | LocalAudioChangedEvent
   | LocalVideoChangedEvent
+
+export type CallKitEvent = UIEvent | RtcEvent
+
+// ────────────────────────────────────────────────
+// 类型守卫（帮助按来源分发事件）
+// ────────────────────────────────────────────────
+
+const rtcEventTypes: Set<CallKitEvent['type']> = new Set([
+  'shouldJoinRtc',
+  'shouldLeaveRtc',
+  'shouldPublishTracks',
+  'localAudioChanged',
+  'localVideoChanged',
+])
+
+export function isUIEvent(event: CallKitEvent): event is UIEvent {
+  return !rtcEventTypes.has(event.type)
+}
+
+export function isRtcEvent(event: CallKitEvent): event is RtcEvent {
+  return rtcEventTypes.has(event.type)
+}

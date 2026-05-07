@@ -8,7 +8,8 @@ import type {
   CancelCallSignalingExt,
   LeaveCallSignalingExt,
 } from '../types/signal.types'
-import type { CALL_TYPE, CALLKIT_CMD_MSG_ACTION_TYPE, CALLKIT_CMD_MSG_RESULT_TYPE } from '../types/callstate.types'
+import { CALL_TYPE } from '../types/callstate.types'
+import type { CALLKIT_CMD_MSG_ACTION_TYPE, CALLKIT_CMD_MSG_RESULT_TYPE } from '../types/callstate.types'
 
 /**
  * MessageBuilder
@@ -48,32 +49,38 @@ export class MessageBuilder {
    */
   static buildInviteExt(params: BuildInviteMessageParams): InviteSignalingExt {
     const ts = params.ts ?? Date.now()
+    // 与旧版 ChatService 对齐：空数组时不携带 invitedMembers 字段
+    const invitedMembers =
+      params.invitedMembers && params.invitedMembers.length > 0
+        ? params.invitedMembers
+        : undefined
     return {
       action: 'invite',
-      callId: params.callId,
-      callerIMName: params.callerUserId,
-      calleeIMName: params.calleeUserId,
-      callerDevId: params.callerDevId,
-      channelName: params.channel,
-      chatType: params.callType,
-      type: params.callType,
+      callId: params.callId || '',
+      callerIMName: params.callerUserId || '',
+      calleeIMName: params.calleeUserId || '',
+      callerDevId: params.callerDevId || '',
+      channelName: params.channel || '',
+      chatType: params.callType || CALL_TYPE.AUDIO_1V1,
+      type: params.callType || CALL_TYPE.AUDIO_1V1,
       ts,
       msgType: 'rtcCallWithAgora',
-      invitedMembers: params.invitedMembers,
+      invitedMembers,
       em_push_ext: {
         type: 'call',
         custom: {
           action: 'invite',
-          channelName: params.channel,
-          type: params.callType,
-          callerDevId: params.callerDevId,
-          callId: params.callId,
+          channelName: params.channel || '',
+          type: params.callType || CALL_TYPE.AUDIO_1V1,
+          callerDevId: params.callerDevId || '',
+          callId: params.callId || '',
           ts,
           msgType: 'rtcCallWithAgora',
-          callerIMName: params.callerUserId,
-          calleeIMName: params.calleeUserId,
-          callerNickname: params.callerInfo?.nickname || params.callerUserId,
-          chatType: params.callType,
+          callerIMName: params.callerUserId || '',
+          calleeIMName: params.calleeUserId || '',
+          // 与旧版对齐：无昵称时 fallback 到空字符串（旧版可能为空字符串）
+          callerNickname: params.callerInfo?.nickname || '',
+          chatType: params.callType || CALL_TYPE.AUDIO_1V1,
         },
       },
       em_apns_ext: {
@@ -81,7 +88,7 @@ export class MessageBuilder {
       },
       ease_chat_uikit_user_info: params.callerInfo
         ? {
-            nickname: params.callerInfo.nickname || params.callerUserId,
+            nickname: params.callerInfo.nickname || params.callerUserId || '',
             avatarURL: params.callerInfo.avatarURL || '',
           }
         : undefined,
@@ -94,7 +101,7 @@ export class MessageBuilder {
    */
   static buildCmdExt(params: BuildCmdMessageParams): SignalingExt {
     const ts = params.ts ?? Date.now()
-    const base = { callId: params.callId, ts, msgType: 'rtcCallWithAgora' }
+    const base = { callId: params.callId || '', ts, msgType: 'rtcCallWithAgora' }
 
     switch (params.action) {
       case 'alert':

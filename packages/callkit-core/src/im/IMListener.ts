@@ -47,7 +47,7 @@ export class IMListener {
       },
     })
 
-    this.logger.info('[IMListener] 监听已挂载')
+    this.logger.warn('🔵 [IMListener] CORE 链路 IM 监听已挂载 | handlerId:', this.handlerId)
   }
 
   unmount(): void {

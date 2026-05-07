@@ -1,5 +1,5 @@
 import type { CALL_TYPE } from '../types/callstate.types'
-import type { CallKitEvent } from '../events/CallKitEvents'
+import type { CallKitEvent, UIEvent, RtcEvent } from '../events/CallKitEvents'
 import type { RtcAdapter } from '../rtc/RtcAdapter'
 import type { Logger } from '../utils/logger'
 
@@ -34,10 +34,14 @@ export interface CallKitCoreConfig {
     nickname?: string
     avatarURL?: string
   }
-  /** RTC 适配器（可选） */
+  /** RTC 适配器（可选）。配置后 Core 会自动处理 RTC 指令事件 */
   rtcAdapter?: RtcAdapter
-  /** 全局事件回调 */
-  onEvent: (event: CallKitEvent) => void
+  /** 全局事件回调（兼容旧接口，与 onUIEvent/onRtcEvent 可共存） */
+  onEvent?: (event: CallKitEvent) => void
+  /** UI 层事件回调：显示弹窗、更新界面、处理通话生命周期 */
+  onUIEvent?: (event: UIEvent) => void
+  /** RTC 指令事件回调：加入/离开频道、发布轨道、切换音视频。若已配置 rtcAdapter 可省略 */
+  onRtcEvent?: (event: RtcEvent) => void
   /** 邀请超时时间（毫秒），默认 30000 */
   inviteTimeout?: number
   /** 自定义日志器（可选） */

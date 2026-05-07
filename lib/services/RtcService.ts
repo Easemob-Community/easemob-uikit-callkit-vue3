@@ -63,6 +63,7 @@ export class RtcService {
   private isVideoEnabled: boolean = true
   private chatClient: any = null // 环信客户端实例
   private autoSubscribe: boolean = true // 是否自动订阅远程用户
+  private isActive: boolean = false // 标记当前是否处于活跃通话中，防止 leaveChannel 后延迟的 track 创建
 
   // 内部 UID 映射（替代 rtcChannelStore.uidToUserIdMap）
   private uidToUserIdMap = new Map<string, string>()
@@ -162,6 +163,7 @@ export class RtcService {
     }
 
     try {
+      this.isActive = true
       this.agoraUid = await this.client.join(
         this.appId,
         channelName,
@@ -172,6 +174,7 @@ export class RtcService {
       logger.rtc('joinChannel', { channelName, uid: this.agoraUid, appId: this.appId })
       return this.agoraUid
     } catch (error) {
+      this.isActive = false
       logger.error('Failed to join channel:', error)
       throw error
     }
@@ -182,6 +185,9 @@ export class RtcService {
    */
   async leaveChannel(): Promise<void> {
     if (!this.client) return
+
+    // 标记为非活跃，阻止延迟完成的 track 创建设置无效状态
+    this.isActive = false
 
     try {
       // 取消发布
@@ -223,7 +229,13 @@ export class RtcService {
         return this.localAudioTrack
       }
 
-      this.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack()
+      const track = await AgoraRTC.createMicrophoneAudioTrack()
+      // 如果 leaveChannel 在此期间被调用，丢弃该 track 并抛出错误
+      if (!this.isActive) {
+        track.close()
+        throw new Error('RtcService became inactive during audio track creation')
+      }
+      this.localAudioTrack = track
       this.onAudioEnabledChange?.(true)
       
       logger.rtc('createAudioTrack', {})
@@ -247,7 +259,13 @@ export class RtcService {
         ? { encoderConfig: this.encoderConfig }
         : undefined
       
-      this.localVideoTrack = await AgoraRTC.createCameraVideoTrack(config)
+      const track = await AgoraRTC.createCameraVideoTrack(config)
+      // 如果 leaveChannel 在此期间被调用，丢弃该 track 并抛出错误
+      if (!this.isActive) {
+        track.close()
+        throw new Error('RtcService became inactive during video track creation')
+      }
+      this.localVideoTrack = track
       this.onVideoEnabledChange?.(true)
 
       // 创建本地视频流
@@ -270,6 +288,12 @@ export class RtcService {
   async publishTracks(tracks: any[]): Promise<void> {
     if (!this.client) {
       throw new Error('RTC client not initialized')
+    }
+    if (!this.isActive) {
+      throw new Error('RtcService is not active, cannot publish tracks')
+    }
+    if (this.client.connectionState !== 'CONNECTED') {
+      throw new Error(`RTC client not connected (state: ${this.client.connectionState}), cannot publish tracks`)
     }
 
     try {
@@ -543,6 +567,10 @@ export class RtcService {
     return this.localVideoTrack
   }
 
+  getLocalAudioTrack(): IMicrophoneAudioTrack | null {
+    return this.localAudioTrack
+  }
+
   /**
    * 检查音频是否静音
    */
@@ -721,6 +749,47 @@ export class RtcService {
     this.client.on('volume-indicator', (volumes: any[]) => {
       this.onVolumeIndicator?.(volumes)
     })
+  }
+
+  /**
+   * 取消发布本地轨道
+   */
+  async unpublishTracks(tracks: any[]): Promise<void> {
+    if (!this.client) {
+      throw new Error('RTC client not initialized')
+    }
+    try {
+      await this.client.unpublish(tracks)
+      logger.rtc('unpublishTracks', {})
+    } catch (error) {
+      logger.error('Failed to unpublish tracks:', error)
+      throw error
+    }
+  }
+
+  /**
+   * 取消订阅远程用户
+   */
+  async unsubscribeRemoteUser(
+    userOrUid: IAgoraRTCRemoteUser | number | string,
+    mediaType: 'audio' | 'video'
+  ): Promise<void> {
+    if (!this.client) {
+      throw new Error('RTC client not initialized')
+    }
+    try {
+      await this.client.unsubscribe(userOrUid as any, mediaType)
+      const uid = typeof userOrUid === 'object' ? userOrUid.uid : userOrUid
+      if (mediaType === 'video') {
+        this.remoteVideoTracks.delete(uid.toString())
+      } else {
+        this.remoteAudioTracks.delete(uid.toString())
+      }
+      logger.info('Unsubscribed remote user:', { uid, mediaType })
+    } catch (error) {
+      logger.error('Failed to unsubscribe remote user:', error)
+      throw error
+    }
   }
 
   /**

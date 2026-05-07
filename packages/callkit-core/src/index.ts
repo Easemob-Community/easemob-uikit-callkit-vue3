@@ -42,6 +42,8 @@ export type { RtcAdapter, JoinRtcParams } from './rtc/RtcAdapter'
 // ─── 事件 ───
 export type {
   CallKitEvent,
+  UIEvent,
+  RtcEvent,
   IncomingCallEvent,
   CallStartedEvent,
   CallEndedEvent,
@@ -60,6 +62,7 @@ export type {
   LocalAudioChangedEvent,
   LocalVideoChangedEvent,
 } from './events/CallKitEvents'
+export { isUIEvent, isRtcEvent } from './events/CallKitEvents'
 export { EventBus } from './events/EventBus'
 
 // ─── 类型 ───

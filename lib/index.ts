@@ -21,6 +21,7 @@ import { useJoinChannel } from "./composables/useJoinChannel";
 import { useParticipants } from "./composables/useParticipants";
 import { useDraggable, useCenteredDraggable, useCornerDraggable } from "./composables/useDraggable";
 import { RtcService } from "./services/RtcService";
+import { RtcServiceAdapter } from "./services/RtcServiceAdapter";
 // 导出组件
 export {
   EasemobChatCallKitProvider,
@@ -39,7 +40,7 @@ export { useCallKit, useCallKitCore, useCallKitEvents, useRtcService, useJoinCha
 // 导出拖拽hook
 export { useDraggable, useCenteredDraggable, useCornerDraggable };
 // 导出RTC服务
-export { RtcService };
+export { RtcService, RtcServiceAdapter };
 
 // 导出类型
 export type {

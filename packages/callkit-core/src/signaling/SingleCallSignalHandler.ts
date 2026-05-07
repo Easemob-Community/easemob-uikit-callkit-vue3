@@ -33,6 +33,7 @@ export class SingleCallSignalHandler implements SignalHandler {
     this.sender = sender
     this.deviceId = deviceId
     this.logger = logger || getLogger()
+    this.logger.warn('📞 [SingleCallSignalHandler] 单聊信令处理器已初始化')
   }
 
   handle(message: CmdMsgBody): DomainEvent[] {
@@ -64,6 +65,12 @@ export class SingleCallSignalHandler implements SignalHandler {
     const ext = message.ext
     if (!ext) return []
 
+    const currentState = this.stateMachine.getState()
+    if (currentState.type === CALL_TYPE.VIDEO_MULTI || currentState.type === CALL_TYPE.AUDIO_MULTI) {
+      this.logger.debug('[SingleCallSignalHandler] alert 为群聊类型，由 GroupCallSignalHandler 处理')
+      return []
+    }
+
     this.logger.signal?.('recv', 'alert', {
       from: message.from,
       callId: ext?.callId,
@@ -87,6 +94,7 @@ export class SingleCallSignalHandler implements SignalHandler {
     // 构建并发送 confirmRing 响应
     const confirmRingPayload = this.buildConfirmRingPayload(message)
     if (confirmRingPayload) {
+      // 与旧版对齐：confirmRing 不设置 deliverOnlineOnly（默认 false）
       this.sender
         .sendCmdMessage(
           message.from as string,
@@ -99,8 +107,7 @@ export class SingleCallSignalHandler implements SignalHandler {
             calleeDevId: ext.calleeDevId as string,
             ts: Date.now(),
             msgType: 'rtcCallWithAgora',
-          } as any,
-          { deliverOnlineOnly: true }
+          } as any
         )
         .catch(() => {})
     }
@@ -148,6 +155,12 @@ export class SingleCallSignalHandler implements SignalHandler {
     const { ext } = message
     if (!ext) return []
 
+    const currentState = this.stateMachine.getState()
+    if (currentState.type === CALL_TYPE.VIDEO_MULTI || currentState.type === CALL_TYPE.AUDIO_MULTI) {
+      this.logger.debug('[SingleCallSignalHandler] confirmRing 为群聊类型，由 GroupCallSignalHandler 处理')
+      return []
+    }
+
     // 多端校验：callerDevId 必须匹配当前设备（confirmRing 是发给主叫的，但被叫也会收到... 等等）
     // 实际上 confirmRing 是主叫发给被叫的。被叫收到时，callerDevId 是主叫的设备ID。
     // 但被叫需要确认这个 confirmRing 是否对应自己当前处理的通话。
@@ -156,8 +169,6 @@ export class SingleCallSignalHandler implements SignalHandler {
     // 啊，原始代码这里的逻辑是：主叫有两个设备时，被叫可能收到来自不同主叫设备的 confirmRing。
     // 但被叫怎么知道主叫的 deviceId？从 invite 中获取。
     // 在 StateMachine 中，callerDevId 已经存储了。
-
-    const currentState = this.stateMachine.getState()
 
     if (ext.callerDevId !== currentState.callerDevId) {
       this.logger.warn(
@@ -195,12 +206,13 @@ export class SingleCallSignalHandler implements SignalHandler {
       return []
     }
 
-    // 已在通话中（非群聊）→ 忽略
+    // 已在通话中 → 忽略（单聊场景；群聊不忽略，需发送 confirmCallee）
     if (
       currentState.status === CALL_STATUS.IN_CALL &&
-      currentState.type !== CALL_TYPE.VIDEO_MULTI
+      currentState.type !== CALL_TYPE.VIDEO_MULTI &&
+      currentState.type !== CALL_TYPE.AUDIO_MULTI
     ) {
-      this.logger.debug('[SingleCallSignalHandler] 已在 IN_CALL，忽略 answerCall')
+      this.logger.debug('[SingleCallSignalHandler] 单聊已在 IN_CALL，忽略 answerCall')
       return []
     }
 
@@ -257,6 +269,7 @@ export class SingleCallSignalHandler implements SignalHandler {
       })
 
       // 单聊：状态流转为 IN_CALL 并触发 SHOULD_JOIN_RTC
+      // 群聊：仅发送 confirmCallee，不触发单聊状态流转（与旧版对齐）
       if (
         currentState.type !== CALL_TYPE.VIDEO_MULTI &&
         currentState.type !== CALL_TYPE.AUDIO_MULTI
@@ -417,6 +430,12 @@ export class SingleCallSignalHandler implements SignalHandler {
       return []
     }
 
+    // confirmCallee 的 result 字段语义：accept 才进入通话，refuse/busy 应忽略
+    if (ext.result && ext.result !== 'accept') {
+      this.logger.info(`[SingleCallSignalHandler] confirmCallee result=${ext.result}，忽略`)
+      return []
+    }
+
     const stateResult = this.stateMachine.receiveConfirmCallee()
     return stateResult.events
   }
@@ -432,6 +451,7 @@ export class SingleCallSignalHandler implements SignalHandler {
       result: string
     }
   ): void {
+    // 与旧版对齐：confirmCallee 不设置 deliverOnlineOnly（默认 false）
     this.sender
       .sendCmdMessage(
         to,
@@ -444,8 +464,7 @@ export class SingleCallSignalHandler implements SignalHandler {
           result: payload.result,
           ts: Date.now(),
           msgType: 'rtcCallWithAgora',
-        } as any,
-        { deliverOnlineOnly: true }
+        } as any
       )
       .catch(() => {})
   }

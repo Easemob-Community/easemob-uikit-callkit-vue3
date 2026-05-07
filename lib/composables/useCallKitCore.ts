@@ -27,6 +27,7 @@ import { useCallStateStore } from '../store/callState'
 import { useGlobalCallStore } from '../store/globalCall'
 import { useGroupCallStore } from '../modules/groupCall'
 import { useRtcChannelStore } from '../store/rtcChannel'
+import { useSingleCallRtcStore } from '../store/singleCallRtc'
 import { CALL_STATUS, CALL_TYPE, HANGUP_REASON } from '../types/callstate.types'
 import type { UseCallKitReturn, CallParams, GroupCallParams } from '../types'
 import { callKitEventBus } from '../core/events/CallKitEventBus'
@@ -72,6 +73,17 @@ function buildEventContext(
 }
 
 // ───────────────────────────────────────────────
+// 模块级单例（供 InvitationNotification 等组件跨 setup 调用）
+// ───────────────────────────────────────────────
+
+let sharedCoreInstance: CallKitCore | null = null
+let coreRefCount = 0
+
+export function isCoreActive(): boolean {
+  return sharedCoreInstance !== null
+}
+
+// ───────────────────────────────────────────────
 // Composable
 // ───────────────────────────────────────────────
 
@@ -80,8 +92,23 @@ export function useCallKitCore(): UseCallKitReturn {
   const callStateStore = useCallStateStore()
   const globalCallStore = useGlobalCallStore()
   const rtcChannelStore = useRtcChannelStore()
+  const singleCallRtcStore = useSingleCallRtcStore()
 
-  let coreInstance: CallKitCore | null = null
+  /**
+   * 清理 RTC 资源（离开频道 + 释放轨道）
+   */
+  const cleanupRtc = async (): Promise<void> => {
+    const rtcService = rtcChannelStore.getRtcService()
+    if (rtcService) {
+      try {
+        await rtcService.leaveChannel()
+        logger.info('[useCallKitCore] RTC 频道已离开')
+      } catch (e) {
+        logger.warn('[useCallKitCore] 离开 RTC 频道失败', e)
+      }
+    }
+    singleCallRtcStore.clearLeftUsers()
+  }
 
   /**
    * 懒创建 CallKitCore 实例
@@ -91,7 +118,7 @@ export function useCallKitCore(): UseCallKitReturn {
     if (!imClient) {
       throw new Error('ChatClient 未初始化')
     }
-    if (!coreInstance) {
+    if (!sharedCoreInstance) {
       // 卸载旧链路监听器，避免 IM 消息被重复处理
       try {
         const { unmountListeners } = useListenerManager()
@@ -101,7 +128,7 @@ export function useCallKitCore(): UseCallKitReturn {
         logger.warn('[useCallKitCore] 卸载旧链路监听器失败（可能尚未挂载）', e)
       }
 
-      coreInstance = new CallKitCore({
+      sharedCoreInstance = new CallKitCore({
         imClient: imClient as any,
         onEvent: handleCoreEvent,
         inviteTimeout: callStateStore.inviteTimeout || 30000,
@@ -112,9 +139,9 @@ export function useCallKitCore(): UseCallKitReturn {
         },
         createMessage: (options: any) => ChatSDK.message.create(options),
       })
-      logger.info('[useCallKitCore] CallKitCore 实例已创建')
+      logger.warn('🟢 [useCallKitCore] CallKitCore 实例已创建 → CORE 链路正式接管')
     }
-    return coreInstance
+    return sharedCoreInstance
   }
 
   /**
@@ -127,6 +154,9 @@ export function useCallKitCore(): UseCallKitReturn {
       // ── 单聊：来电 ──
       case 'incomingCall': {
         const p = event.payload
+        logger.warn(
+          `📞 [useCallKitCore] incomingCall | callId=${p.callId} | caller=${p.callerUserId} | type=${p.callType}`
+        )
         callStateStore.updateCallState({
           callId: p.callId,
           channel: p.channel,
@@ -136,6 +166,7 @@ export function useCallKitCore(): UseCallKitReturn {
           calleeUserId: p.calleeUserId,
           token: p.token,
         })
+        logger.warn('🔄 [useCallKitCore] 单聊被叫方 → callStateStore.setCallStatus(ALERTING)')
         callStateStore.setCallStatus(CALL_STATUS.ALERTING)
         callStateStore.startTimeoutTimer()
 
@@ -173,6 +204,9 @@ export function useCallKitCore(): UseCallKitReturn {
           break
         }
 
+        logger.warn(
+          `🔄 [useCallKitCore] statusChanged: callStateStore.setCallStatus(${to}) | 当前用户=${currentUserId} | isCaller=${isCaller}`
+        )
         callStateStore.setCallStatus(to)
         break
       }
@@ -194,6 +228,7 @@ export function useCallKitCore(): UseCallKitReturn {
         const reason = mapCoreReasonToLib(event.payload.reason)
         const duration = event.payload.duration || 0
         callStateStore.resetCallState()
+        cleanupRtc().catch((e) => logger.warn('[useCallKitCore] RTC 清理失败', e))
         callKitEventBus.emit('callEnded', {
           ...buildBaseEventFields(ctx, false),
           reason,
@@ -203,9 +238,9 @@ export function useCallKitCore(): UseCallKitReturn {
       }
 
       // ── 超时 ──
+      // 注：状态重置由紧随其后的 callEnded 统一处理，避免重复 reset
       case 'callTimeout': {
         const ctx = buildEventContext(callStateStore)
-        callStateStore.resetCallState()
         callKitEventBus.emit('callTimeout', buildBaseEventFields(ctx, false))
         break
       }
@@ -213,7 +248,6 @@ export function useCallKitCore(): UseCallKitReturn {
       // ── 拒绝 ──
       case 'callRefused': {
         const ctx = buildEventContext(callStateStore)
-        callStateStore.resetCallState()
         callKitEventBus.emit('callRefused', {
           ...buildBaseEventFields(ctx, false),
           isRemote: event.payload.isRemote,
@@ -224,7 +258,6 @@ export function useCallKitCore(): UseCallKitReturn {
       // ── 忙线 ──
       case 'callBusy': {
         const ctx = buildEventContext(callStateStore)
-        callStateStore.resetCallState()
         callKitEventBus.emit('callBusy', buildBaseEventFields(ctx, false))
         break
       }
@@ -232,7 +265,6 @@ export function useCallKitCore(): UseCallKitReturn {
       // ── 取消 ──
       case 'callCanceled': {
         const ctx = buildEventContext(callStateStore)
-        callStateStore.resetCallState()
         callKitEventBus.emit('callCanceled', {
           ...buildBaseEventFields(ctx, false),
           isRemote: event.payload.isRemote,
@@ -253,6 +285,11 @@ export function useCallKitCore(): UseCallKitReturn {
       case 'groupCallInit': {
         const p = event.payload
         const groupCallStore = useGroupCallStore()
+        const isCaller = p.callerUserId === currentUserId
+
+        logger.warn(
+          `👥 [useCallKitCore] groupCallInit | callId=${p.callId} | channel=${p.channel} | isCaller=${isCaller} | currentUser=${currentUserId}`
+        )
 
         groupCallStore.initSession({
           sessionId: p.channel,
@@ -263,19 +300,19 @@ export function useCallKitCore(): UseCallKitReturn {
           startTime: Date.now(),
         })
 
-        // 添加本地用户
+        // 添加本地用户（主叫方=joinedRtc，被邀请方=invited）
         const localUserInfo = globalCallStore.getUserInfo(currentUserId)
         groupCallStore.addParticipant({
           userId: currentUserId,
           nickname: localUserInfo.nickname || currentUserId,
           avatarUrl: localUserInfo.avatarURL,
-          state: 'joinedRtc',
+          state: isCaller ? 'joinedRtc' : 'invited',
           isLocal: true,
           videoTrack: null,
           audioTrack: null,
           localStream: null,
           isMuted: false,
-          isCameraOn: p.callType === 'video',
+          isCameraOn: isCaller && p.callType === 'video',
           isSpeaking: false,
         })
 
@@ -306,6 +343,16 @@ export function useCallKitCore(): UseCallKitReturn {
           callerUserId: p.callerUserId,
           calleeUserId: p.groupId,
         })
+
+        // 被邀请方需要进入 ALERTING 状态以触发 UI 显示
+        if (isCaller) {
+          logger.warn('🔄 [useCallKitCore] 群聊主叫方 → callStateStore.setCallStatus(IN_CALL)')
+          callStateStore.setCallStatus(CALL_STATUS.IN_CALL)
+        } else {
+          logger.warn('🔄 [useCallKitCore] 群聊被叫方 → callStateStore.setCallStatus(ALERTING) + startTimeoutTimer')
+          callStateStore.setCallStatus(CALL_STATUS.ALERTING)
+          callStateStore.startTimeoutTimer()
+        }
         break
       }
 
@@ -367,13 +414,31 @@ export function useCallKitCore(): UseCallKitReturn {
         break
       }
 
-      // ── RTC 离开 / 发布轨道（暂不处理，Phase 5 接入） ──
-      case 'shouldLeaveRtc':
-      case 'shouldPublishTracks':
-      case 'localAudioChanged':
-      case 'localVideoChanged':
-        logger.debug(`[useCallKitCore] 暂不处理事件: ${event.type}`)
+      // ── RTC 离开指令 ──
+      case 'shouldLeaveRtc': {
+        cleanupRtc().catch((e) => logger.warn('[useCallKitCore] RTC 清理失败', e))
         break
+      }
+
+      // ── 发布轨道 ──
+      case 'shouldPublishTracks': {
+        logger.debug('[useCallKitCore] shouldPublishTracks 暂不处理')
+        break
+      }
+
+      // ── 本地音频状态变化 ──
+      case 'localAudioChanged': {
+        rtcChannelStore.setAudioEnabled(event.payload.enabled)
+        logger.debug('[useCallKitCore] 本地音频状态:', event.payload.enabled)
+        break
+      }
+
+      // ── 本地视频状态变化 ──
+      case 'localVideoChanged': {
+        rtcChannelStore.setVideoEnabled(event.payload.enabled)
+        logger.debug('[useCallKitCore] 本地视频状态:', event.payload.enabled)
+        break
+      }
 
       default:
         // @ts-ignore
@@ -385,11 +450,13 @@ export function useCallKitCore(): UseCallKitReturn {
   // 生命周期
   // ───────────────────────────────────────────────
 
+  coreRefCount++
   onUnmounted(() => {
-    if (coreInstance) {
-      coreInstance.destroy()
-      coreInstance = null
-      logger.info('[useCallKitCore] CallKitCore 实例已销毁')
+    coreRefCount--
+    if (coreRefCount === 0 && sharedCoreInstance) {
+      sharedCoreInstance.destroy()
+      sharedCoreInstance = null
+      logger.info('[useCallKitCore] CallKitCore 实例已销毁（refCount=0）')
     }
   })
 
@@ -537,8 +604,13 @@ export function useCallKitCore(): UseCallKitReturn {
 
       // 主叫方立即加入 RTC
       const { joinChannel } = useJoinChannel()
-      await joinChannel()
-      logger.info('[useCallKitCore] 主叫方已加入 RTC 频道')
+      try {
+        await joinChannel()
+        logger.info('[useCallKitCore] 主叫方已加入 RTC 频道')
+      } catch (rtcError) {
+        logger.error('[useCallKitCore] 主叫方加入 RTC 失败', rtcError)
+        // 不阻断流程：invite 已发出，被叫方仍可接受
+      }
     } catch (error) {
       logger.error('[useCallKitCore] 发起群组通话失败', error)
       // 回滚
@@ -557,6 +629,7 @@ export function useCallKitCore(): UseCallKitReturn {
     logger.info('[useCallKitCore] hangup', { reason })
     const core = ensureCore()
     await core.hangup()
+    await cleanupRtc()
   }
 
   const cancel = async () => {

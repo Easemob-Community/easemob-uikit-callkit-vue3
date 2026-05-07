@@ -52,24 +52,47 @@
 
 ## 剩余工作
 
-### Phase 5: RTC 适配层（待实施）
+### Phase 5: RTC 适配层 ✅ 已收尾
 **目标**: Core 的 `RtcAdapter` 接口正式接入 Agora SDK
 
-- [ ] 实现 `RtcAdapter` 接口（基于现有 `RtcService`）
-- [ ] `CallKitCore` 构造函数传入 `rtcAdapter`
-- [ ] Core 发出 `shouldPublishTracks` / `shouldLeaveRtc` 事件的处理
-- [ ] 单聊：`localAudioChanged` / `localVideoChanged` → `callStateStore` / `singleCallRtcStore`
-- [ ] 群聊：`RtcMediaBridge` 消费 Core 事件（替代现有 `useListenerManager` 的群聊分支）
+- [x] 实现 `RtcAdapter` 接口（`lib/services/RtcServiceAdapter.ts`）
+- [x] `CallKitCore` 中自动调用注入的 `rtcAdapter`（`shouldJoinRtc`/`shouldLeaveRtc`/`shouldPublishTracks`）
+- [x] `RtcService` 补充 `unpublishTracks` / `unsubscribeRemoteUser` / `getLocalAudioTrack`
+- [x] `useCallKitCore` adapter 中 `shouldLeaveRtc` → `cleanupRtc()`
+- [x] `SingleCallStateMachine` 添加 `audioEnabled` / `videoEnabled` 状态管理
+- [x] Core 发出 `localAudioChanged` / `localVideoChanged` → adapter 同步到 `rtcChannelStore`
+- [x] 群聊：`RtcMediaBridge` 消费 Core 事件（替代现有 `useListenerManager` 的群聊分支）→ **长期保留双轨，不强制替代**
 
-### Phase 6: 旧链路废弃与迁移
-**目标**: 验证 Core 链路完全替代旧链路后，移除旧代码
+**Phase 4-5 修复与收尾记录**:
+- ✅ 群聊 `answerCall`：被叫方接受后直接进入 `IN_CALL` + `SHOULD_JOIN_RTC`
+- ✅ `groupCall` 中 `joinChannel()` 失败不再阻断流程
+- ✅ `SingleCallStateMachine` 新增 `audioEnabled` / `videoEnabled` 状态
+- ✅ `CallKitCore` 新增 `toggleAudio()` / `toggleVideo()` API
+- ✅ `useCallKitCore` adapter 处理 `localAudioChanged` / `localVideoChanged`
+- ✅ `RtcServiceAdapter` 实现完整 `RtcAdapter` 接口
+- ✅ `CallKitCore` 自动调用注入的 `rtcAdapter`
+- ✅ 新增 11 个单元/集成测试（状态机 7 个 + Core 4 个），全部通过
 
-- [ ] `test/App.vue` 默认启用 Core 链路（移除 `?core=1` 开关）
-- [ ] 删除 `lib/composables/useCallKit.ts`（旧链路）
-- [ ] 删除 `lib/composables/useListenerManager.ts`（旧 monolith）
-- [ ] 删除 `lib/deprecated/` 中已迁移的旧组件
-- [ ] `lib/signaling/` 中的旧 Handler（Pinia 依赖版本）迁移确认后删除
-- [ ] 回归测试：单聊/群聊完整通话流程
+### Phase 6: 双轨一致性验证与长期并行（策略调整）
+**目标**: 旧链路已发布且稳定，Core 新链路与之长期并行，通过对比验证行为一致性
+
+**策略变更**: 由「替换废弃」转为「长期双轨 + 渐进验证」
+
+- [ ] **一致性验证清单**
+  - [ ] 单聊主叫流程：发起 → 响铃 → 接受 → 进入通话 → 挂断（新旧链路对比）
+  - [ ] 单聊被叫流程：收到邀请 → 接受 → 进入通话 → 挂断（新旧链路对比）
+  - [ ] 群聊主叫流程：发起 → 成员接受 → 进入通话 → 挂断（新旧链路对比）
+  - [ ] 异常场景：拒绝 / 忙线 / 超时 / 取消（新旧链路对比）
+  - [ ] 多端场景：主叫多端 / 被叫多端（新旧链路对比）
+- [ ] **渐进迭代**
+  - [ ] 新功能优先在 Core 链路实现，旧链路保持冻结
+  - [ ] `test/App.vue` `?core=1` 开关长期保留，作为验证入口
+  - [ ] Core 链路通过充分验证后，后续版本可将 `useCallKitCore` 作为默认导出（旧链路仍保留）
+- [ ] **不删除的旧代码**
+  - `lib/composables/useCallKit.ts` — 旧链路主入口，已发布稳定
+  - `lib/composables/useListenerManager.ts` — 旧 monolith，保持兼容
+  - `lib/signaling/` 中的旧 Handler — 保持兼容
+  - `lib/deprecated/` — 按 AGENTS.md 保留
 
 ### Phase 7: 发布与文档
 - [ ] `packages/callkit-core` 独立版本发布（v0.1.0 → v1.0.0）

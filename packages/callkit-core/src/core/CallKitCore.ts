@@ -8,6 +8,7 @@ import type {
   EasemobConnection,
 } from './CallKitCore.types'
 import type { CallKitEvent } from '../events/CallKitEvents'
+import { isUIEvent, isRtcEvent } from '../events/CallKitEvents'
 import type { DomainEvent, SingleCallState } from '../state/SingleCallStateMachine'
 import { getLogger } from '../utils/logger'
 import type { Logger } from '../utils/logger'
@@ -75,6 +76,7 @@ export class CallKitCore {
     this.groupCallHandler = new GroupCallSignalHandler(
       this.groupCallSession,
       this.singleCallState,
+      this.signalSender,
       this.userId,
       this.logger
     )
@@ -103,6 +105,8 @@ export class CallKitCore {
     this.imListener.mount()
 
     this.logger.info('[CallKitCore] 初始化完成', { userId: this.userId, deviceId: this.deviceId })
+    this.logger.warn('🚀 ========== CallKitCore 链路已激活 ========== 🚀')
+    this.logger.warn('   版本: callkit-core | 用户:', this.userId, '| 设备:', this.deviceId)
   }
 
   // ───────────────────────────────────────────────
@@ -171,44 +175,36 @@ export class CallKitCore {
 
     // 兼容旧版 accept: boolean 参数
     const result = params.result ?? (params.accept ? 'accept' : 'refuse')
+    const isGroupCall = state.type === CALL_TYPE.VIDEO_MULTI || state.type === CALL_TYPE.AUDIO_MULTI
+
+    // 构建并发送 answerCall 信令（群聊也是点对点发给主叫方）
+    const ext = MessageBuilder.buildCmdExt({
+      action: 'answerCall',
+      callId: state.callId,
+      callerDevId: state.callerDevId,
+      calleeDevId: this.deviceId,
+      result,
+    })
+
+    await this.signalSender.sendCmdMessage(
+      state.callerUserId,
+      'singleChat',
+      ext as any,
+      { deliverOnlineOnly: true }
+    )
 
     if (result === 'accept') {
-      // ── 接受分支 ──
-      // 发送 answerCall 信令
-      const ext = MessageBuilder.buildCmdExt({
-        action: 'answerCall',
-        callId: state.callId,
-        callerDevId: state.callerDevId,
-        calleeDevId: this.deviceId,
-        result: 'accept',
-      })
-
-      await this.signalSender.sendCmdMessage(
-        state.callerUserId,
-        'singleChat',
-        ext as any,
-        { deliverOnlineOnly: true }
-      )
-
-      // 被叫方状态保持 ALERTING，等待 confirmCallee 后再进入 IN_CALL
-      // （由 SingleCallSignalHandler.handleConfirmCallee 处理）
+      if (isGroupCall) {
+        // 群聊：直接进入 IN_CALL + SHOULD_JOIN_RTC（群聊没有 confirmCallee 机制）
+        this.logger.info('[CallKitCore] 群聊接受，直接进入 IN_CALL')
+        const stateResult = this.singleCallState.receiveAnswer('accept')
+        this.processEvents(stateResult.events, state)
+      } else {
+        // 单聊：保持 ALERTING，等待 confirmCallee 后再进入 IN_CALL
+        this.logger.info('[CallKitCore] 单聊接受，等待 confirmCallee')
+      }
     } else {
       // ── 拒绝/忙线分支 ──
-      const ext = MessageBuilder.buildCmdExt({
-        action: 'answerCall',
-        callId: state.callId,
-        callerDevId: state.callerDevId,
-        calleeDevId: this.deviceId,
-        result,
-      })
-
-      await this.signalSender.sendCmdMessage(
-        state.callerUserId,
-        'singleChat',
-        ext as any,
-        { deliverOnlineOnly: true }
-      )
-
       // 清理本地状态
       const hangupReason = result === 'busy' ? HANGUP_REASON.BUSY : HANGUP_REASON.REFUSE
       const hangupResult = this.singleCallState.hangup(hangupReason)
@@ -231,6 +227,9 @@ export class CallKitCore {
     }
 
     // 根据状态决定发送 cancelCall 还是 leaveCall
+    const isGroupCall =
+      state.type === CALL_TYPE.VIDEO_MULTI || state.type === CALL_TYPE.AUDIO_MULTI
+
     if (currentStatus === CALL_STATUS.INVITING || currentStatus === CALL_STATUS.ALERTING) {
       // 发送 cancelCall
       const ext = MessageBuilder.buildCmdExt({
@@ -238,16 +237,50 @@ export class CallKitCore {
         callId: state.callId,
         callerDevId: state.callerDevId,
       })
-      const targetId = state.callerUserId === this.userId ? state.calleeUserId : state.callerUserId
-      await this.signalSender.sendCmdMessage(targetId, 'singleChat', ext as any).catch(() => {})
+
+      if (isGroupCall) {
+        // 群聊：发送到群 groupId，携带 receiverList 定向给被邀请成员（与旧版 CallService 对齐）
+        const groupSnapshot = this.groupCallSession.getSnapshot()
+        const groupId = groupSnapshot?.groupId || state.calleeUserId
+        const receiverList = this.groupCallSession
+          .getAllParticipants()
+          .filter((p) => p.userId !== this.userId && p.state === 'invited')
+          .map((p) => p.userId)
+        if (groupId && receiverList.length > 0) {
+          await this.signalSender
+            .sendCmdMessage(groupId, 'groupChat', ext as any, { receiverList })
+            .catch(() => {})
+        }
+      } else {
+        // 单聊
+        const targetId = state.callerUserId === this.userId ? state.calleeUserId : state.callerUserId
+        await this.signalSender.sendCmdMessage(targetId, 'singleChat', ext as any).catch(() => {})
+      }
     } else if (currentStatus === CALL_STATUS.IN_CALL) {
       // 发送 leaveCall
       const ext = MessageBuilder.buildCmdExt({
         action: 'leaveCall',
         callId: state.callId,
       })
-      const targetId = state.callerUserId === this.userId ? state.calleeUserId : state.callerUserId
-      await this.signalSender.sendCmdMessage(targetId, 'singleChat', ext as any).catch(() => {})
+
+      if (isGroupCall) {
+        // 群聊：发送到群 groupId，携带 receiverList 定向给通话中成员（与旧版 CallService 对齐）
+        const groupSnapshot = this.groupCallSession.getSnapshot()
+        const groupId = groupSnapshot?.groupId || state.calleeUserId
+        const receiverList = this.groupCallSession
+          .getAllParticipants()
+          .filter((p) => p.userId !== this.userId && p.state !== 'left')
+          .map((p) => p.userId)
+        if (groupId && receiverList.length > 0) {
+          await this.signalSender
+            .sendCmdMessage(groupId, 'groupChat', ext as any, { receiverList })
+            .catch(() => {})
+        }
+      } else {
+        // 单聊
+        const targetId = state.callerUserId === this.userId ? state.calleeUserId : state.callerUserId
+        await this.signalSender.sendCmdMessage(targetId, 'singleChat', ext as any).catch(() => {})
+      }
     }
 
     const reason = params?.reason === 'cancel'
@@ -293,8 +326,9 @@ export class CallKitCore {
     })
 
     // 初始化单聊状态机（群聊也用它存储 callId/channel/token）
+    // 群聊时 calleeUserId 使用 groupId，与旧版 lib/ 保持一致
     const stateResult = this.singleCallState.initInvite({
-      calleeUserId: '',
+      calleeUserId: params.groupId,
       callType: params.callType,
       callerDevId: this.deviceId,
       callerUserId: this.userId,
@@ -305,15 +339,16 @@ export class CallKitCore {
     })
 
     // 发送 invite 文本消息（groupChat）
+    // calleeUserId 在群聊时使用 groupId，与旧版 lib/ 的 callStateStore.calleeUserId = groupId 对齐
     const ext = MessageBuilder.buildInviteExt({
       callId,
       callerUserId: this.userId,
-      calleeUserId: '',
+      calleeUserId: params.groupId,
       callerDevId: this.deviceId,
       channel,
       callType: params.callType,
       invitedMembers: params.participantIds,
-      groupInfo: { groupId: params.groupId },
+      groupInfo: { groupId: params.groupId, groupName: params.groupId },
       callerInfo: this.config.userProfile,
     })
 
@@ -325,6 +360,28 @@ export class CallKitCore {
       params.groupId
     )
 
+    this.processEvents(stateResult.events, this.singleCallState.getState())
+  }
+
+  // ───────────────────────────────────────────────
+  // 媒体控制
+  // ───────────────────────────────────────────────
+
+  /**
+   * 切换本地音频（静音/取消静音）
+   */
+  toggleAudio(): void {
+    if (this.destroyed) throw new Error('CallKitCore 已销毁')
+    const stateResult = this.singleCallState.toggleAudio()
+    this.processEvents(stateResult.events, this.singleCallState.getState())
+  }
+
+  /**
+   * 切换本地视频（开启/关闭摄像头）
+   */
+  toggleVideo(): void {
+    if (this.destroyed) throw new Error('CallKitCore 已销毁')
+    const stateResult = this.singleCallState.toggleVideo()
     this.processEvents(stateResult.events, this.singleCallState.getState())
   }
 
@@ -381,14 +438,29 @@ export class CallKitCore {
   }
 
   private handleTextMessage(msg: any): void {
+    // 无条件日志：所有文本消息都记录，方便排查消息是否到达 core
+    const rawExt = msg.ext as any
+    const bodyExt = msg.body?.ext as any
+    const ext = rawExt || bodyExt
+    this.logger.warn('✉️ [CallKitCore] handleTextMessage 被调用', {
+      from: msg.from,
+      to: msg.to,
+      msgType: msg.type,
+      chatType: msg.chatType,
+      hasRawExt: !!rawExt,
+      hasBodyExt: !!bodyExt,
+      extAction: ext?.action,
+      extCallId: ext?.callId,
+      self: this.isSelfMessage(msg),
+    })
+
     if (this.isSelfMessage(msg)) {
-      this.logger.debug('[CallKitCore] 忽略自己发送的文本消息')
+      this.logger.warn('[CallKitCore] ❌ 忽略自己发送的文本消息')
       return
     }
 
-    const ext = msg.ext as any
     if (!ext || ext.action !== 'invite') {
-      this.logger.debug('[CallKitCore] 忽略非 invite 文本消息')
+      this.logger.warn('[CallKitCore] ❌ 忽略非 invite 文本消息 | ext.action=', ext?.action)
       return
     }
 
@@ -397,10 +469,49 @@ export class CallKitCore {
       ext.chatType === CALL_TYPE.AUDIO_MULTI ||
       ext.callkitGroupInfo?.groupId
 
+    this.logger.warn(
+      isGroupCall
+        ? '✉️ [CallKitCore] ✅ 【群聊】确认收到 invite 文本消息 → 进入群聊处理分支'
+        : '✉️ [CallKitCore] ✅ 【单聊】确认收到 invite 文本消息 → 进入单聊处理分支',
+      { from: msg.from, callId: ext.callId, channel: ext.channelName, type: ext.type }
+    )
+
     if (isGroupCall) {
-      // 群聊 invite
+      // 群聊 invite：同时初始化 singleCallState（被叫方需要它来处理 confirmCallee / cancelCall / leaveCall）
+      const callId = ext.callId as string
+      const channel = ext.channelName as string
+      const callType = ext.type as CALL_TYPE
+      const callerDevId = ext.callerDevId as string
+      const callerUserId = (ext.callerIMName as string) || (msg.from as string) || ''
+
+      if (this.singleCallState.getState().status === CALL_STATUS.IDLE) {
+        this.logger.warn('🔄 [CallKitCore] 群聊被叫方：singleCallState 从 IDLE → ALERTING')
+        const groupId = ext?.callkitGroupInfo?.groupId || ext?.groupId || ''
+        const stateResult = this.singleCallState.initIncoming({
+          callId,
+          channel,
+          token: '',
+          callType,
+          callerDevId,
+          callerUserId,
+          calleeDevId: this.deviceId,
+          calleeUserId: groupId, // 群聊时 calleeUserId 使用 groupId，与旧版对齐
+        })
+        // 处理状态机返回的 STATUS_CHANGED 事件，确保 callStateStore 同步到 ALERTING
+        this.processEvents(stateResult.events, this.singleCallState.getState())
+      } else {
+        this.logger.warn(
+          '[CallKitCore] ⚠️ 群聊被叫方：singleCallState 不是 IDLE，跳过 initIncoming | 当前状态=',
+          this.singleCallState.getState().status
+        )
+      }
+
       const events = this.groupCallHandler.handleInviteTextMessage(msg)
+      this.logger.warn('[CallKitCore] 群聊 invite 处理后事件:', events.map((e: any) => e.type))
       this.processEvents(events, this.singleCallState.getState())
+
+      // 被叫方收到 invite 后回发 alert CMD（与旧版 useListenerManager 对齐）
+      this.sendAlertSignal(msg.from as string, ext.callId as string, ext.callerDevId as string)
     } else {
       // 单聊 invite
       this.handleSingleCallInvite(msg, ext)
@@ -412,8 +523,16 @@ export class CallKitCore {
     const channel = ext.channelName as string
     const callType = ext.type as CALL_TYPE
     const callerDevId = ext.callerDevId as string
-    const callerUserId = ext.callerIMName as string
-    const calleeUserId = ext.calleeIMName as string
+    const callerUserId = (ext.callerIMName as string) || (msg.from as string) || ''
+    const calleeUserId = (ext.calleeIMName as string) || (msg.to as string) || ''
+
+    this.logger.debug('[CallKitCore] handleSingleCallInvite', {
+      from: msg.from,
+      callerIMName: ext.callerIMName,
+      calleeIMName: ext.calleeIMName,
+      resolvedCallerId: callerUserId,
+      resolvedCalleeId: calleeUserId,
+    })
 
     // 获取 RTC token
     let token = ''
@@ -456,17 +575,48 @@ export class CallKitCore {
 
     // 处理状态机返回的事件（STATUS_CHANGED）
     this.processEvents(stateResult.events, this.singleCallState.getState())
+
+    // 被叫方收到 invite 后回发 alert CMD（与旧版 useListenerManager 对齐）
+    this.sendAlertSignal(msg.from as string, callId, callerDevId)
+  }
+
+  /**
+   * 发送 alert CMD 信令给主叫方
+   */
+  private sendAlertSignal(to: string, callId: string, callerDevId: string): void {
+    const alertExt = MessageBuilder.buildCmdExt({
+      action: 'alert',
+      callId,
+      callerDevId,
+      calleeDevId: this.deviceId,
+    })
+    this.signalSender
+      .sendCmdMessage(to, 'singleChat', alertExt as any, { deliverOnlineOnly: true })
+      .catch(() => {})
   }
 
   private handleCmdMessage(msg: any): void {
+    // 无条件日志：所有 CMD 消息都记录
+    this.logger.warn('📨 [CallKitCore] handleCmdMessage 被调用', {
+      from: msg.from,
+      to: msg.to,
+      action: msg.action,
+      extAction: msg.ext?.action,
+      callId: msg.ext?.callId,
+      self: this.isSelfMessage(msg),
+    })
+
     if (this.isSelfMessage(msg)) {
-      this.logger.debug('[CallKitCore] 忽略自己发送的 CMD 消息')
+      this.logger.warn('[CallKitCore] ❌ 忽略自己发送的 CMD 消息')
       return
     }
 
     const events = this.signalRouter.dispatch(msg)
     if (events.length > 0) {
+      this.logger.warn('📨 [CallKitCore] ✅ CMD 消息处理后产生事件:', events.map((e) => e.type))
       this.processEvents(events, this.singleCallState.getState())
+    } else {
+      this.logger.warn('📨 [CallKitCore] ⚠️ CMD 消息未产生任何事件（可能被忽略或 handler 返回空）')
     }
   }
 
@@ -479,8 +629,58 @@ export class CallKitCore {
       const callKitEvent = this.mapDomainEvent(event, snapshot)
       if (callKitEvent) {
         this.emitEvent(callKitEvent)
+        this.handleRtcEvent(callKitEvent)
       }
     })
+  }
+
+  /**
+   * 当配置了 rtcAdapter 时，自动处理 RTC 相关事件
+   */
+  private handleRtcEvent(event: CallKitEvent): void {
+    const adapter = this.config.rtcAdapter
+    if (!adapter) return
+
+    switch (event.type) {
+      case 'shouldJoinRtc': {
+        const p = event.payload
+        adapter
+          .joinChannel({
+            channel: p.channel,
+            token: p.token,
+            uid: p.uid,
+          })
+          .catch((e) => this.logger.error('[CallKitCore] rtcAdapter.joinChannel 失败:', e))
+        break
+      }
+
+      case 'shouldLeaveRtc': {
+        adapter.leaveChannel().catch(() => {})
+        break
+      }
+
+      case 'shouldPublishTracks': {
+        const p = event.payload
+        adapter
+          .publishLocalTracks(p.trackTypes)
+          .catch((e) => this.logger.error('[CallKitCore] rtcAdapter.publishLocalTracks 失败:', e))
+        break
+      }
+
+      case 'localAudioChanged': {
+        adapter
+          .setAudioEnabled(event.payload.enabled)
+          .catch((e) => this.logger.error('[CallKitCore] rtcAdapter.setAudioEnabled 失败:', e))
+        break
+      }
+
+      case 'localVideoChanged': {
+        adapter
+          .setVideoEnabled(event.payload.enabled)
+          .catch((e) => this.logger.error('[CallKitCore] rtcAdapter.setVideoEnabled 失败:', e))
+        break
+      }
+    }
   }
 
   private mapDomainEvent(event: DomainEvent, snapshot: SingleCallState): CallKitEvent | null {
@@ -622,16 +822,50 @@ export class CallKitCore {
         }
       }
 
+      case 'LOCAL_AUDIO_CHANGED': {
+        return {
+          type: 'localAudioChanged',
+          payload: { enabled: event.enabled },
+        }
+      }
+
+      case 'LOCAL_VIDEO_CHANGED': {
+        return {
+          type: 'localVideoChanged',
+          payload: { enabled: event.enabled },
+        }
+      }
+
       default:
         return null
     }
   }
 
   private emitEvent(event: CallKitEvent): void {
-    try {
-      this.config.onEvent(event)
-    } catch (err) {
-      this.logger.error('[CallKitCore] onEvent 回调执行失败:', err)
+    // 1. 兼容旧接口：onEvent 接收所有事件
+    if (this.config.onEvent) {
+      try {
+        this.config.onEvent(event)
+      } catch (err) {
+        this.logger.error('[CallKitCore] onEvent 回调执行失败:', err)
+      }
+    }
+
+    // 2. 按来源分发到新接口
+    if (isUIEvent(event) && this.config.onUIEvent) {
+      try {
+        this.config.onUIEvent(event)
+      } catch (err) {
+        this.logger.error('[CallKitCore] onUIEvent 回调执行失败:', err)
+      }
+    }
+
+    if (isRtcEvent(event) && this.config.onRtcEvent) {
+      try {
+        this.config.onRtcEvent(event)
+      } catch (err) {
+        this.logger.error('[CallKitCore] onRtcEvent 回调执行失败:', err)
+      }
     }
   }
 }

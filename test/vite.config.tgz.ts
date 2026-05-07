@@ -14,6 +14,7 @@ export default defineConfig({
     alias: {
       // tgz 模式下不使用别名，直接从 node_modules 中解析包
       // 确保已在 test 目录下执行：pnpm add ../easemob-chat-callkit-vue3-1.0.0.tgz
+      '^@easemob/callkit-core$': resolve(__dirname, '../packages/callkit-core/src/index.ts')
     }
   }
 })

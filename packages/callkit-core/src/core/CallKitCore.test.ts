@@ -237,10 +237,11 @@ describe('CallKitCore', () => {
         },
       })
       events.length = 0
+      client.send.mockClear()
 
       await core.answerCall({ callId: 'call_abc', accept: true })
 
-      // 验证 answerCall 已发送
+      // 验证 answerCall 已发送（被叫方收到 invite 后已发送 alert，此处只验证 answerCall）
       expect(client.send).toHaveBeenCalledTimes(1)
       const lastSendCall = (client.send as any).mock.calls.at(-1)
       const sentMsg = lastSendCall[0]
@@ -274,9 +275,11 @@ describe('CallKitCore', () => {
         },
       })
       events.length = 0
+      client.send.mockClear()
 
       await core.answerCall({ callId: 'call_abc', accept: false })
 
+      // 被叫方收到 invite 后已发送 alert，此处只验证 answerCall
       expect(client.send).toHaveBeenCalledTimes(1)
       const lastSendCall = (client.send as any).mock.calls.at(-1)
       expect(lastSendCall[0].ext.result).toBe('refuse')
@@ -484,6 +487,114 @@ describe('CallKitCore', () => {
       const session = core.getGroupCallSession()
       expect(session).not.toBeNull()
       expect(session!.groupId).toBe('group_001')
+    })
+  })
+
+  describe('toggleAudio / toggleVideo', () => {
+    it('toggleAudio → 触发 localAudioChanged 事件', () => {
+      const { core, events } = createCore()
+
+      // 使用内部状态机直接设置状态
+      core['singleCallState']['state'].status = CALL_STATUS.IN_CALL
+      core['singleCallState']['state'].callId = 'call_test'
+
+      events.length = 0
+      core.toggleAudio()
+
+      expect(events).toHaveLength(1)
+      expect(events[0].type).toBe('localAudioChanged')
+      expect((events[0] as any).payload.enabled).toBe(false)
+
+      core.toggleAudio()
+      expect(events).toHaveLength(2)
+      expect((events[1] as any).payload.enabled).toBe(true)
+    })
+
+    it('toggleVideo → 触发 localVideoChanged 事件', () => {
+      const { core, events } = createCore()
+
+      core['singleCallState']['state'].status = CALL_STATUS.IN_CALL
+      core['singleCallState']['state'].callId = 'call_test'
+
+      events.length = 0
+      core.toggleVideo()
+
+      expect(events).toHaveLength(1)
+      expect(events[0].type).toBe('localVideoChanged')
+      expect((events[0] as any).payload.enabled).toBe(false)
+    })
+  })
+
+  describe('rtcAdapter 自动调用', () => {
+    it('shouldJoinRtc 时自动调用 rtcAdapter.joinChannel', async () => {
+      const mockAdapter = {
+        joinChannel: vi.fn().mockResolvedValue(undefined),
+        leaveChannel: vi.fn().mockResolvedValue(undefined),
+        publishLocalTracks: vi.fn().mockResolvedValue(undefined),
+        unpublishLocalTracks: vi.fn().mockResolvedValue(undefined),
+        subscribeRemoteUser: vi.fn().mockResolvedValue(undefined),
+        unsubscribeRemoteUser: vi.fn().mockResolvedValue(undefined),
+        setAudioEnabled: vi.fn().mockResolvedValue(undefined),
+        setVideoEnabled: vi.fn().mockResolvedValue(undefined),
+      }
+
+      const client = createMockIMClient()
+      const adapterCore = new CallKitCore({
+        imClient: client,
+        onEvent: () => {},
+        rtcAdapter: mockAdapter as any,
+      })
+
+      await adapterCore.inviteCall({ calleeUserId: 'user_b', callType: CALL_TYPE.VIDEO_1V1 })
+
+      // 模拟收到 accept，触发 shouldJoinRtc
+      const handlerMap = getHandlerMap(client)
+      const state = adapterCore.getSingleCallState()
+      handlerMap.onCmdMessage({
+        from: 'user_b',
+        ext: {
+          action: 'answerCall',
+          callId: state.callId,
+          callerDevId: state.callerDevId,
+          calleeDevId: 'dev_b',
+          result: 'accept',
+          ts: Date.now(),
+          msgType: 'rtcCallWithAgora',
+        },
+      })
+
+      expect(mockAdapter.joinChannel).toHaveBeenCalledTimes(1)
+      const joinArgs = mockAdapter.joinChannel.mock.calls[0][0]
+      expect(joinArgs.channel).toBe(state.channel)
+      expect(joinArgs.token).toBe(state.token)
+    })
+
+    it('toggleAudio 时自动调用 rtcAdapter.setAudioEnabled', () => {
+      const mockAdapter = {
+        joinChannel: vi.fn().mockResolvedValue(undefined),
+        leaveChannel: vi.fn().mockResolvedValue(undefined),
+        publishLocalTracks: vi.fn().mockResolvedValue(undefined),
+        unpublishLocalTracks: vi.fn().mockResolvedValue(undefined),
+        subscribeRemoteUser: vi.fn().mockResolvedValue(undefined),
+        unsubscribeRemoteUser: vi.fn().mockResolvedValue(undefined),
+        setAudioEnabled: vi.fn().mockResolvedValue(undefined),
+        setVideoEnabled: vi.fn().mockResolvedValue(undefined),
+      }
+
+      const client = createMockIMClient()
+      const adapterCore = new CallKitCore({
+        imClient: client,
+        onEvent: () => {},
+        rtcAdapter: mockAdapter as any,
+      })
+
+      adapterCore['singleCallState']['state'].status = CALL_STATUS.IN_CALL
+      adapterCore['singleCallState']['state'].callId = 'call_test'
+
+      adapterCore.toggleAudio()
+
+      expect(mockAdapter.setAudioEnabled).toHaveBeenCalledTimes(1)
+      expect(mockAdapter.setAudioEnabled).toHaveBeenCalledWith(false)
     })
   })
 
