@@ -15,5 +15,5 @@
       "@easemob/callkit-core": ["../callkit-core/src/index.ts"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.vue"]
+  "include": ["src/**/*.ts", "src/**/*.vue", "src/**/*.tsx"]
 }

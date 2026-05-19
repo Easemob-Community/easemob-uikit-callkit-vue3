@@ -1,3 +1,5 @@
+console.warn('[callkit-vue3] lib/ 目录已废弃，请使用 @easemob/callkit-vue3')
+
 import { type App, type Plugin } from "vue";
 import { createPinia } from "pinia";
 import "./style.css";

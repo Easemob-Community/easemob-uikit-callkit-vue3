@@ -1,0 +1,77 @@
+/* 通话窗口容器 - 仿微信比例 */
+.easemob-chat-single-call {
+  /* 位置由 JS 控制 (useDraggable)，这里只定义尺寸和样式 */
+  width: 360px;
+  height: 640px;
+  max-width: 90vw;
+  max-height: 90vh;
+  /* 背景图通过组件 props 动态设置 */
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 16px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  /* 拖拽时禁用过渡，确保丝滑流畅 */
+  will-change: left, top;
+}
+
+.easemob-chat-single-call:active {
+  cursor: grabbing;
+}
+
+/* 拖拽时的样式 */
+.easemob-chat-single-call.is-dragging {
+  cursor: grabbing;
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.6);
+  transition: none;
+}
+
+/* 通话内容区域（非拖拽区域） */
+.call-content {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* 通话内容区域内需要交互的元素恢复点击 */
+.call-content > * {
+  pointer-events: auto;
+}
+
+.minimize-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+  backdrop-filter: blur(10px);
+  z-index: 100;
+}
+
+.minimize-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
+}
+
+.minimize-btn svg {
+  width: 18px;
+  height: 18px;
+}

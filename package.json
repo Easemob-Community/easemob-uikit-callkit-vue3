@@ -25,10 +25,13 @@
     "build": "vue-tsc -b && vite build",
     "build:lib": "vite build --config vite.lib.config.ts",
     "build:pack": "pnpm build:lib && pnpm pack",
+    "build:core": "pnpm --filter @easemob/callkit-core build",
+    "build:all": "pnpm build:core && pnpm build:lib",
     "preview": "vite preview",
     "test": "pnpm run test:source",
     "test:source": "cd test && pnpm run switch:source && pnpm run dev:source",
-    "test:tgz": "pnpm run build:pack && cd test && pnpm run switch:tgz && pnpm run dev:tgz"
+    "test:tgz": "pnpm run build:pack && cd test && pnpm run switch:tgz && pnpm run dev:tgz",
+    "typecheck": "vue-tsc --noEmit --skipLibCheck"
   },
   "peerDependencies": {
     "agora-rtc-sdk-ng": "^4.14.0",

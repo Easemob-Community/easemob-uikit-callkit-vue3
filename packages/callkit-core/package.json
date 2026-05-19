@@ -1,6 +1,6 @@
 {
   "name": "@easemob/callkit-core",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Framework-agnostic call signaling core for Easemob IM",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -29,11 +29,14 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "docs:build": "typedoc",
+    "docs:serve": "typedoc --watch"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.5",
     "terser": "^5.47.1",
+    "typedoc": "^0.28.19",
     "typescript": "~5.8.3",
     "vite": "^7.1.2",
     "vite-plugin-dts": "^4.5.4",
