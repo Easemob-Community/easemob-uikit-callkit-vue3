@@ -7,8 +7,21 @@ export default defineConfig({
     lib: {
       entry: resolve(__dirname, 'src/index.ts'),
       name: 'CallKitCore',
-      fileName: (format) => `index.${format === 'es' ? 'js' : 'cjs'}`,
-      formats: ['es', 'cjs'],
+      fileName: (format) => {
+        switch (format) {
+          case 'es':
+            return 'index.js'
+          case 'cjs':
+            return 'index.cjs'
+          case 'umd':
+            return 'index.umd.js'
+          case 'iife':
+            return 'index.iife.js'
+          default:
+            return `index.${format}.js`
+        }
+      },
+      formats: ['es', 'cjs', 'umd', 'iife'],
     },
     rollupOptions: {
       // 外部依赖：peerDependencies 和 devDependencies 不打入包内
@@ -21,6 +34,7 @@ export default defineConfig({
     },
     outDir: 'dist',
     sourcemap: true,
+    minify: 'terser',
   },
   plugins: [
     dts({

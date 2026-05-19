@@ -63,4 +63,9 @@ export interface RtcAdapter {
    * 切换麦克风设备
    */
   switchMicrophone?(deviceId: string): Promise<void>
+
+  /**
+   * 切换音频输出设备（移动端：扬声器/听筒）
+   */
+  switchAudioOutput?(device: 'speaker' | 'earpiece'): Promise<void>
 }

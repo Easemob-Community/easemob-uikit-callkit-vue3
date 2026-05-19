@@ -5,6 +5,8 @@ import { getLogger } from '../utils/logger'
 export interface IMListenerCallbacks {
   onTextMessage?: (msg: any) => void
   onCmdMessage?: (msg: any) => void
+  onConnected?: () => void
+  onDisconnected?: () => void
 }
 
 /**
@@ -44,6 +46,14 @@ export class IMListener {
       onCmdMessage: (msg: any) => {
         this.logger.debug('[IMListener] onCmdMessage', { from: msg.from, action: msg.action })
         this.callbacks.onCmdMessage?.(msg)
+      },
+      onConnected: () => {
+        this.logger.info('[IMListener] IM 已连接')
+        this.callbacks.onConnected?.()
+      },
+      onDisconnected: () => {
+        this.logger.warn('[IMListener] IM 已断开')
+        this.callbacks.onDisconnected?.()
       },
     })
 

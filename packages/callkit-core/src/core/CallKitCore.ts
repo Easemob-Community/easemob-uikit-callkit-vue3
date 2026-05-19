@@ -12,6 +12,7 @@ import { isUIEvent, isRtcEvent } from '../events/CallKitEvents'
 import type { DomainEvent, SingleCallState } from '../state/SingleCallStateMachine'
 import { getLogger } from '../utils/logger'
 import type { Logger } from '../utils/logger'
+import { EventBus } from '../events/EventBus'
 import { SingleCallStateMachine } from '../state/SingleCallStateMachine'
 import { GroupCallSession } from '../state/GroupCallSession'
 import { SignalRouter } from '../signaling/SignalRouter'
@@ -50,9 +51,13 @@ export class CallKitCore {
   private deviceId: string
   private inviteTimeoutMs: number
 
+  // 事件总线（供上层精细订阅）
+  private eventBus: EventBus<{ callKitEvent: CallKitEvent }>
+
   constructor(config: CallKitCoreConfig) {
     this.config = config
     this.logger = config.logger || getLogger()
+    this.eventBus = new EventBus<{ callKitEvent: CallKitEvent }>(this.logger)
 
     // 提取当前用户信息
     this.userId = config.imClient.context?.userId || config.imClient.user || ''
@@ -100,6 +105,8 @@ export class CallKitCore {
       {
         onTextMessage: (msg) => this.handleTextMessage(msg),
         onCmdMessage: (msg) => this.handleCmdMessage(msg),
+        onConnected: () => this.handleIMConnected(),
+        onDisconnected: () => this.handleIMDisconnected(),
       },
       this.logger
     )
@@ -316,6 +323,71 @@ export class CallKitCore {
   // ───────────────────────────────────────────────
 
   /**
+   * 通话中邀请更多成员加入群聊通话
+   */
+  async inviteMoreParticipants(participantIds: string[]): Promise<void> {
+    if (this.destroyed) throw new Error('CallKitCore 已销毁')
+
+    const state = this.singleCallState.getState()
+    if (state.status !== CALL_STATUS.IN_CALL && state.status !== CALL_STATUS.INVITING) {
+      this.logger.warn('[CallKitCore] inviteMoreParticipants: 当前不在通话中，忽略')
+      return
+    }
+
+    const isGroupCall = state.type === CALL_TYPE.VIDEO_MULTI || state.type === CALL_TYPE.AUDIO_MULTI
+    if (!isGroupCall) {
+      this.logger.warn('[CallKitCore] inviteMoreParticipants: 当前不是群聊通话，忽略')
+      return
+    }
+
+    const groupSnapshot = this.groupCallSession.getSnapshot()
+    const groupId = groupSnapshot?.groupId
+    if (!groupId) {
+      this.logger.warn('[CallKitCore] inviteMoreParticipants: 群聊会话未初始化')
+      return
+    }
+
+    // 添加新参与者到会话
+    participantIds.forEach((userId: string) => {
+      if (!this.groupCallSession.getParticipant(userId)) {
+        this.groupCallSession.addParticipant({
+          userId,
+          nickname: userId,
+          avatarUrl: '',
+          state: 'invited',
+          isLocal: false,
+          isMuted: false,
+          isCameraOn: false,
+          isSpeaking: false,
+        })
+      }
+    })
+
+    // 发送 invite 文本消息
+    const ext = MessageBuilder.buildInviteExt({
+      callId: state.callId,
+      callerUserId: this.userId,
+      calleeUserId: groupId,
+      callerDevId: this.deviceId,
+      channel: state.channel,
+      callType: state.type,
+      invitedMembers: participantIds,
+      groupInfo: { groupId, groupName: groupId },
+      callerInfo: this.config.userProfile,
+    })
+
+    await this.signalSender.sendInviteMessage(
+      participantIds,
+      'groupChat',
+      '[群通话邀请]',
+      ext as any,
+      groupId
+    )
+
+    this.logger.info('[CallKitCore] 已发送追加邀请', { groupId, participantIds })
+  }
+
+  /**
    * 发起群聊通话
    */
   async inviteGroupCall(params: InviteGroupCallParams): Promise<void> {
@@ -439,10 +511,34 @@ export class CallKitCore {
   reportRtcEvent(report: RtcReport): void {
     this.logger.info('[CallKitCore] reportRtcEvent', report)
 
-    if (report.type === 'userJoined' && report.payload.userId) {
-      this.groupCallSession.markJoinedRtc(report.payload.userId)
-    } else if (report.type === 'userLeft' && report.payload.userId) {
-      this.groupCallSession.markLeftRtc(report.payload.userId)
+    const { type, payload } = report
+
+    // 群聊参与者 RTC 状态同步
+    if (payload.userId) {
+      switch (type) {
+        case 'userJoined':
+        case 'userPublished':
+          this.groupCallSession.markJoinedRtc(payload.userId)
+          break
+        case 'userLeft':
+        case 'userUnpublished':
+          this.groupCallSession.markLeftRtc(payload.userId)
+          break
+      }
+    }
+
+    // 网络质量/说话状态/错误等事件直接透传给上层
+    if (
+      type === 'networkQuality' ||
+      type === 'speaking' ||
+      type === 'stoppedSpeaking' ||
+      type === 'error'
+    ) {
+      const rtcEvent: CallKitEvent = {
+        type: 'rtcReport',
+        payload: report as any,
+      } as any
+      this.emitEvent(rtcEvent)
     }
   }
 
@@ -458,6 +554,62 @@ export class CallKitCore {
     return this.groupCallSession.getSnapshot()
   }
 
+  /**
+   * 当前是否在通话中（IN_CALL 状态）
+   */
+  isInCall(): boolean {
+    return this.singleCallState.isInCall()
+  }
+
+  /**
+   * 当前是否在呼叫/响铃中（INVITING 或 ALERTING 状态）
+   */
+  isCalling(): boolean {
+    const status = this.singleCallState.getState().status
+    return status === CALL_STATUS.INVITING || status === CALL_STATUS.ALERTING
+  }
+
+  /**
+   * 获取当前通话类型，无通话时返回 null
+   */
+  getCurrentCallType(): CALL_TYPE | null {
+    const state = this.singleCallState.getState()
+    return state.status === CALL_STATUS.IDLE ? null : state.type
+  }
+
+  /**
+   * 获取当前通话 ID，无通话时返回空字符串
+   */
+  getCurrentCallId(): string {
+    return this.singleCallState.getState().callId
+  }
+
+  /**
+   * 当前是否空闲
+   */
+  isIdle(): boolean {
+    return this.singleCallState.isIdle()
+  }
+
+  // ───────────────────────────────────────────────
+  // 事件订阅（供上层精细控制）
+  // ───────────────────────────────────────────────
+
+  /**
+   * 订阅通话事件
+   * @returns 取消订阅函数
+   */
+  onEvent(handler: (event: CallKitEvent) => void): () => void {
+    return this.eventBus.on('callKitEvent', handler)
+  }
+
+  /**
+   * 订阅单次通话事件
+   */
+  onceEvent(handler: (event: CallKitEvent) => void): () => void {
+    return this.eventBus.once('callKitEvent', handler)
+  }
+
   // ───────────────────────────────────────────────
   // 生命周期
   // ───────────────────────────────────────────────
@@ -468,6 +620,7 @@ export class CallKitCore {
 
     this.clearInviteTimeout()
     this.imListener.unmount()
+    this.eventBus.clear()
     this.singleCallState.reset()
     this.groupCallSession.destroy()
 
@@ -972,7 +1125,14 @@ export class CallKitCore {
 
   private emitEvent(event: CallKitEvent): void {
     this.logger.warn('[CallKitCore] emitEvent:', event.type, '| onEvent存在=', !!this.config.onEvent, '| onUIEvent存在=', !!this.config.onUIEvent)
-    // 1. 兼容旧接口：onEvent 接收所有事件
+    // 1. 通过 EventBus 分发（供上层 onEvent/offEvent 使用）
+    try {
+      this.eventBus.emit('callKitEvent', event)
+    } catch (err) {
+      this.logger.error('[CallKitCore] EventBus 分发失败:', err)
+    }
+
+    // 2. 兼容旧接口：onEvent 接收所有事件
     if (this.config.onEvent) {
       try {
         this.config.onEvent(event)
@@ -982,7 +1142,7 @@ export class CallKitCore {
       }
     }
 
-    // 2. 按来源分发到新接口
+    // 3. 按来源分发到新接口
     if (isUIEvent(event) && this.config.onUIEvent) {
       try {
         this.config.onUIEvent(event)
@@ -999,6 +1159,24 @@ export class CallKitCore {
         this.logger.error('[CallKitCore] onRtcEvent 回调执行失败:', err)
       }
     }
+  }
+
+  // ───────────────────────────────────────────────
+  // 内部：IM 连接状态管理
+  // ───────────────────────────────────────────────
+
+  private handleIMConnected(): void {
+    this.logger.info('[CallKitCore] IM 已重新连接')
+    // IM 重连后，如果当前有进行中的通话，需要确保监听仍然有效
+    if (!this.destroyed && this.imListener) {
+      this.logger.info('[CallKitCore] IM 重连恢复：监听状态正常')
+    }
+  }
+
+  private handleIMDisconnected(): void {
+    this.logger.warn('[CallKitCore] IM 已断开连接')
+    // IM 断开后，通话状态保持不变，等待重连或超时
+    // 如果通话正在进行，由 RTC 层维持音视频，信令暂时中断
   }
 
   // ───────────────────────────────────────────────

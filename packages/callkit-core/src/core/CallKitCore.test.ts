@@ -237,7 +237,7 @@ describe('CallKitCore', () => {
         },
       })
       events.length = 0
-      client.send.mockClear()
+      ;(client.send as any).mockClear()
 
       await core.answerCall({ callId: 'call_abc', accept: true })
 
@@ -275,7 +275,7 @@ describe('CallKitCore', () => {
         },
       })
       events.length = 0
-      client.send.mockClear()
+      ;(client.send as any).mockClear()
 
       await core.answerCall({ callId: 'call_abc', accept: false })
 

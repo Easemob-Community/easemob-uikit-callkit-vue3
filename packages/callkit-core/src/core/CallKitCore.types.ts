@@ -84,11 +84,33 @@ export interface InviteGroupCallParams {
 // ────────────────────────────────────────────────
 
 export interface RtcReport {
-  type: 'rtcJoined' | 'rtcLeft' | 'userJoined' | 'userLeft' | 'userPublished' | 'userUnpublished'
+  type:
+    | 'rtcJoined'
+    | 'rtcLeft'
+    | 'userJoined'
+    | 'userLeft'
+    | 'userPublished'
+    | 'userUnpublished'
+    | 'userAudioMuted'
+    | 'userAudioUnmuted'
+    | 'userVideoMuted'
+    | 'userVideoUnmuted'
+    | 'networkQuality'
+    | 'speaking'
+    | 'stoppedSpeaking'
+    | 'error'
   payload: {
     userId?: string
     uid?: string | number
     mediaType?: 'audio' | 'video'
     track?: any
+    /** 网络质量：0=未知, 1=优, 2=良, 3=一般, 4=差, 5=极差, 6=断开 */
+    quality?: number
+    /** 说话音量 0-100 */
+    volume?: number
+    /** 错误信息 */
+    error?: string
+    /** 错误码 */
+    errorCode?: number
   }
 }

@@ -35,6 +35,7 @@ export { SignalSender } from './signaling/SignalSender'
 // ─── IM ───
 export type { IMProvider, IMMessage } from './im/IMProvider'
 export { IMListener } from './im/IMListener'
+export type { IMListenerCallbacks } from './im/IMListener'
 
 // ─── RTC ───
 export type { RtcAdapter, JoinRtcParams } from './rtc/RtcAdapter'
