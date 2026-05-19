@@ -91,6 +91,8 @@ export interface ShouldJoinRtcEvent {
   payload: BaseEvent & {
     token: string
     uid: number | string
+    /** Agora App ID（来自 IM 服务端 getRTCToken 返回），为空时上层使用初始化时传入的 appId */
+    appId?: string
     role: 'caller' | 'callee'
   }
 }

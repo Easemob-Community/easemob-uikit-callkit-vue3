@@ -25,8 +25,8 @@ export default defineConfig({
     cleanReleaseDist(),
     vue(),
     dts({
-      include: ['lib/**/*'],
-      exclude: ['lib/**/*.test.ts', 'lib/**/*.spec.ts'],
+      include: ['packages/callkit-vue3/src/**/*'],
+      exclude: ['packages/callkit-vue3/src/**/*.test.ts', 'packages/callkit-vue3/src/**/*.spec.ts'],
       outDir: 'dist',
       tsconfigPath: './tsconfig.app.json',
       rollupTypes: true,
@@ -37,7 +37,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     lib: {
-      entry: path.resolve(__dirname, 'lib/index.ts'),
+      entry: path.resolve(__dirname, 'packages/callkit-vue3/src/index.ts'),
       name: 'EasemobChatCallKit',
       formats: ['es', 'umd'],
       fileName: (format) => `index.${format === 'es' ? 'js' : 'umd.js'}`
@@ -62,7 +62,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, 'lib')
+      '@': path.resolve(__dirname, 'packages/callkit-vue3/src')
     }
   }
 })

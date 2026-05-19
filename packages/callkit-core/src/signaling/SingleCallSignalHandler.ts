@@ -20,20 +20,25 @@ import { CALL_STATUS, CALL_TYPE, HANGUP_REASON } from '../types/callstate.types'
 export class SingleCallSignalHandler implements SignalHandler {
   private stateMachine: SingleCallStateMachine
   private sender: SignalSender
-  private deviceId: string
+  private getDeviceId: () => string
   private logger: Logger
 
   constructor(
     stateMachine: SingleCallStateMachine,
     sender: SignalSender,
-    deviceId: string,
+    deviceIdProvider: (() => string) | string,
     logger?: Logger
   ) {
     this.stateMachine = stateMachine
     this.sender = sender
-    this.deviceId = deviceId
+    // 兼容字符串入参（旧测试用例），运行时优先使用 provider 实时读取
+    this.getDeviceId = typeof deviceIdProvider === 'function' ? deviceIdProvider : () => deviceIdProvider
     this.logger = logger || getLogger()
     this.logger.warn('📞 [SingleCallSignalHandler] 单聊信令处理器已初始化')
+  }
+
+  private get deviceId(): string {
+    return this.getDeviceId()
   }
 
   handle(message: CmdMsgBody): DomainEvent[] {

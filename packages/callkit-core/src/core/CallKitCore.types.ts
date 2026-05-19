@@ -17,7 +17,16 @@ export interface EasemobConnection {
   send: (msg: any) => Promise<any>
   addEventHandler: (id: string, handlers: Record<string, (...args: any[]) => void>) => void
   removeEventHandler: (id: string) => void
-  getRTCToken: (channel: string) => Promise<{ accessToken: string; appId: string }>
+  /**
+   * 获取 Agora RTC Token。
+   * 环信真实 SDK 返回结构为 `{ data: { RTCToken, appId, RTCUId, expireIn } }`，
+   * 为了兼容早期代码与精简 mock，额外允许顶层 `accessToken`/`appId` 字段。
+   */
+  getRTCToken: (channel: string) => Promise<{
+    data?: { RTCToken?: string; appId?: string; RTCUId?: number; expireIn?: number }
+    accessToken?: string
+    appId?: string
+  }>
   getUserIdByRTCUIds: (uids: (number | string)[]) => Promise<{ data: Record<string, string> }>
 }
 

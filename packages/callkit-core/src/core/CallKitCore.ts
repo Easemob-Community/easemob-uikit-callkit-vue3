@@ -46,10 +46,21 @@ export class CallKitCore {
   private destroyed = false
   private inviteTimer: ReturnType<typeof setTimeout> | null = null
 
-  // 当前用户信息
-  private userId: string
-  private deviceId: string
+  // RTC token 元数据（来自 IM 服务端 getRTCToken）
+  // 注意：Agora 加入频道时使用的 uid 必须是服务端返回的 RTCUId（数值型），而不是 IM 的字符串 userId
+  private rtcAppId: string = ''
+  private rtcUid: number = 0
+
+  // 当前用户信息（实时读取：因 Provider 在登录前就 init，必须每次发送时从 imClient 取最新值，与旧版 lib/services/ChatService.ts 行为对齐）
   private inviteTimeoutMs: number
+
+  private get userId(): string {
+    return this.config.imClient.context?.userId || (this.config.imClient as any).user || ''
+  }
+
+  private get deviceId(): string {
+    return this.config.imClient.context?.jid?.clientResource || ''
+  }
 
   // 事件总线（供上层精细订阅）
   private eventBus: EventBus<{ callKitEvent: CallKitEvent }>
@@ -59,9 +70,7 @@ export class CallKitCore {
     this.logger = config.logger || getLogger()
     this.eventBus = new EventBus<{ callKitEvent: CallKitEvent }>(this.logger)
 
-    // 提取当前用户信息
-    this.userId = config.imClient.context?.userId || config.imClient.user || ''
-    this.deviceId = config.imClient.context?.jid?.clientResource || ''
+    // userId / deviceId 通过 getter 实时读取，避免登录前快照导致 ext 字段为空
     this.inviteTimeoutMs = config.inviteTimeout || 30000
 
     // 初始化状态层
@@ -72,18 +81,18 @@ export class CallKitCore {
     this.signalRouter = new SignalRouter(this.logger)
     this.signalSender = new SignalSender(config.imClient, this.logger, config.createMessage)
 
-    // 初始化 Handler
+    // 初始化 Handler（传入 provider 函数，确保每次校验/读取时都拿最新登录态）
     this.singleCallHandler = new SingleCallSignalHandler(
       this.singleCallState,
       this.signalSender,
-      this.deviceId,
+      () => this.deviceId,
       this.logger
     )
     this.groupCallHandler = new GroupCallSignalHandler(
       this.groupCallSession,
       this.singleCallState,
       this.signalSender,
-      this.userId,
+      () => this.userId,
       this.logger
     )
 
@@ -112,9 +121,9 @@ export class CallKitCore {
     )
     this.imListener.mount()
 
-    this.logger.info('[CallKitCore] 初始化完成', { userId: this.userId, deviceId: this.deviceId })
+    this.logger.info('[CallKitCore] 初始化完成（userId/deviceId 将在登录后实时读取）')
     this.logger.warn('🚀 ========== CallKitCore 链路已激活 ========== 🚀')
-    this.logger.warn('   版本: callkit-core | 用户:', this.userId, '| 设备:', this.deviceId)
+    this.logger.warn('   版本: callkit-core | 当前用户:', this.userId || '(尚未登录)', '| 设备:', this.deviceId || '(尚未登录)')
   }
 
   // ───────────────────────────────────────────────
@@ -130,14 +139,8 @@ export class CallKitCore {
     const callId = generateRandomChannel(16)
     const channel = generateRandomChannel(12)
 
-    // 获取 RTC token
-    let token = ''
-    try {
-      const tokenRes = await this.config.imClient.getRTCToken(channel)
-      token = tokenRes.accessToken
-    } catch (err) {
-      this.logger.warn('[CallKitCore] 获取 RTC token 失败，使用空token', err)
-    }
+    // 获取 RTC token（兼容真实 SDK 返回 { data: { RTCToken, appId, RTCUId } } 与精简 mock）
+    const token = await this.fetchRtcToken(channel)
 
     // 状态机流转
     const stateResult = this.singleCallState.initInvite({
@@ -403,14 +406,8 @@ export class CallKitCore {
     const channel = generateRandomChannel(12)
     const callTypeStr = params.callType === CALL_TYPE.VIDEO_MULTI ? 'video' : 'audio'
 
-    // 获取 RTC token
-    let token = ''
-    try {
-      const tokenRes = await this.config.imClient.getRTCToken(channel)
-      token = tokenRes.accessToken
-    } catch (err) {
-      this.logger.warn('[CallKitCore] 获取 RTC token 失败', err)
-    }
+    // 获取 RTC token（兼容真实 SDK 返回 { data: { RTCToken, appId, RTCUId } } 与精简 mock）
+    const token = await this.fetchRtcToken(channel)
 
     // 初始化群聊会话
     this.groupCallSession.init({
@@ -510,6 +507,41 @@ export class CallKitCore {
   // ───────────────────────────────────────────────
   // RTC 反馈
   // ───────────────────────────────────────────────
+
+  /**
+   * 获取 RTC token（并缓存 appId / RTCUId）
+   * - 环信真实 SDK：`{ data: { RTCToken, appId, RTCUId, expireIn } }`
+   * - 早期 / 精简 mock：`{ accessToken, appId }`
+   * 为了与旧版 lib/composables/useJoinChannel.ts 行为对齐，同步保存 rtcAppId、rtcUid供
+   * shouldJoinRtc 事件透传给上层 RtcAdapter（Agora 的 join 必须使用服务端返回的数值型 uid）。
+   */
+  private async fetchRtcToken(channel: string): Promise<string> {
+    try {
+      const tokenRes: any = await this.config.imClient.getRTCToken(channel)
+      const data: any = tokenRes?.data ?? tokenRes ?? {}
+      const token: string = data.RTCToken ?? data.accessToken ?? tokenRes?.accessToken ?? ''
+      const appId: string = data.appId ?? tokenRes?.appId ?? ''
+      const rtcUid: number = Number(data.RTCUId ?? data.rtcUid ?? 0) || 0
+
+      if (appId) this.rtcAppId = appId
+      if (rtcUid) this.rtcUid = rtcUid
+
+      if (!token) {
+        this.logger.warn('[CallKitCore] getRTCToken 返回 token 为空', { tokenRes })
+      } else {
+        this.logger.info('[CallKitCore] 获取 RTC token 成功', {
+          channel,
+          appId: this.rtcAppId,
+          rtcUid: this.rtcUid,
+          hasToken: !!token,
+        })
+      }
+      return token
+    } catch (err) {
+      this.logger.warn('[CallKitCore] 获取 RTC token 失败，使用空 token', err)
+      return ''
+    }
+  }
 
   /**
    * 上层调用 RTC SDK 后，通过此方法反馈 RTC 事件给核心库
@@ -821,13 +853,7 @@ export class CallKitCore {
     })
 
     // 获取 RTC token（Warning #6：使用 await 确保 token 可用）
-    let token = ''
-    try {
-      const tokenRes = await this.config.imClient.getRTCToken(channel)
-      token = tokenRes.accessToken
-    } catch {
-      this.logger.warn('[CallKitCore] 被叫方获取 RTC token 失败，使用空 token')
-    }
+    const token = await this.fetchRtcToken(channel)
 
     // 状态机初始化
     const stateResult = this.singleCallState.initIncoming({
@@ -949,6 +975,7 @@ export class CallKitCore {
             channel: p.channel,
             token: p.token,
             uid: p.uid,
+            appId: p.appId,
           })
           .catch((e) => this.logger.error('[CallKitCore] rtcAdapter.joinChannel 失败:', e))
         break
@@ -1066,7 +1093,10 @@ export class CallKitCore {
           payload: {
             ...base,
             token: event.token,
-            uid: this.userId,
+            // Agora 加入频道必须使用服务端返回的 RTCUId（数值型），
+            // 无法获取时兑底为 IM userId（与旧版付费智能兑底逻辑一致）
+            uid: this.rtcUid || this.userId,
+            appId: this.rtcAppId || undefined,
             role: event.role,
           },
         }

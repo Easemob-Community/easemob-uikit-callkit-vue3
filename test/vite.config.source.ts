@@ -21,11 +21,11 @@ export default defineConfig({
     alias: [
       {
         find: /^easemob-chat-callkit-vue3\/style\.css$/,
-        replacement: resolve(__dirname, '../lib/style.css')
+        replacement: resolve(__dirname, '../packages/callkit-vue3/src/style.css')
       },
       {
         find: /^easemob-chat-callkit-vue3$/,
-        replacement: resolve(__dirname, '../lib/index.ts')
+        replacement: resolve(__dirname, '../packages/callkit-vue3/src/index.ts')
       },
       {
         find: /^@easemob\/callkit-core$/,

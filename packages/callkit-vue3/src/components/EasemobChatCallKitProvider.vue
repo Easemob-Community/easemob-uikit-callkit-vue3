@@ -14,6 +14,7 @@ import { logger, LogLevel, Logger } from '../utils/logger';
 import { RingtoneService } from '../utils/ringtone';
 import { registerUserInfoProvider, registerGroupInfoProvider, clearProfileProviders, type UserInfoProvider } from '../services/UserProfileService';
 import { fetchUserInfoById } from '../utils/imSdkAdapter';
+import { VERSION as CORE_VERSION } from '@easemob/callkit-core';
 
 // 确保组件挂载完成后再渲染插槽
 const mounted = ref(false)
@@ -185,6 +186,11 @@ watchEffect(() => {
 // 组件挂载完成
 onMounted(() => {
   mounted.value = true
+  // 强制输出内部依赖版本号（便于问题排查和版本感知）
+  console.info(
+    `%c[EasemobChatCallKit] callkit-core v${CORE_VERSION}`,
+    'color: #4ade80; font-weight: bold;'
+  )
   // HMR 安全：延迟检查 RtcService 是否被旧实例销毁，需要重新初始化。
   // webpack/vue-cli HMR 时，旧组件的 async destroyRtcService 可能在新组件 mount 后才完成，
   // 导致 watchEffect 中的条件判断为 false（RtcService 当时还存在），之后被销毁却不再触发初始化。

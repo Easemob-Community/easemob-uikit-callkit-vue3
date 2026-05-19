@@ -27,6 +27,7 @@ import {
   type GroupParticipant,
   type RtcAdapter,
 } from '@easemob/callkit-core'
+import { ChatSDK } from '../core/sdk/imSDK'
 import { useRtcChannelStore } from '../store/rtcChannel'
 import { useCallTimerStore } from '../store/callTimer'
 import { useGlobalCallStore } from '../store/globalCall'
@@ -549,6 +550,20 @@ export function useCallKitCore() {
       inviteTimeout: config.inviteTimeout,
       rtcAdapter: createRtcAdapter(),
       onEvent: handleCoreEvent,
+      // 兼容 full 版（静态 ChatSDK.message.create）与 miniCore（实例 client.Message.create）
+      createMessage: (options: any) => {
+        const sdkAny = ChatSDK as any
+        if (sdkAny?.message?.create) {
+          return sdkAny.message.create(options)
+        }
+        const client = config.imClient as any
+        if (client?.Message?.create) {
+          return client.Message.create(options)
+        }
+        throw new Error(
+          '[useCallKitCore] 无法创建消息：未检测到 message.create API（请确认 easemob-websdk full 版已安装，或 miniCore 已注册消息插件）'
+        )
+      },
     })
 
     _coreInstance = core

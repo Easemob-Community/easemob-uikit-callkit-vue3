@@ -21,22 +21,27 @@ export class GroupCallSignalHandler implements SignalHandler {
   private session: GroupCallSession
   private stateMachine: SingleCallStateMachine
   private sender: SignalSender
-  private userId: string
+  private getUserId: () => string
   private logger: Logger
 
   constructor(
     session: GroupCallSession,
     stateMachine: SingleCallStateMachine,
     sender: SignalSender,
-    userId: string,
+    userIdProvider: (() => string) | string,
     logger?: Logger
   ) {
     this.session = session
     this.stateMachine = stateMachine
     this.sender = sender
-    this.userId = userId
+    // 兼容字符串入参（旧测试用例），运行时优先使用 provider 实时读取
+    this.getUserId = typeof userIdProvider === 'function' ? userIdProvider : () => userIdProvider
     this.logger = logger || getLogger()
     this.logger.warn('👥 [GroupCallSignalHandler] 群聊信令处理器已初始化')
+  }
+
+  private get userId(): string {
+    return this.getUserId()
   }
 
   /**

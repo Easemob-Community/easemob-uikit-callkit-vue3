@@ -17,7 +17,9 @@ function createMockIMClient(overrides?: Partial<EasemobConnection>): EasemobConn
     send: vi.fn().mockResolvedValue({}),
     addEventHandler: vi.fn(),
     removeEventHandler: vi.fn(),
-    getRTCToken: vi.fn().mockResolvedValue({ accessToken: 'rtc_token', appId: 'app_id' }),
+    getRTCToken: vi.fn().mockResolvedValue({
+      data: { RTCToken: 'rtc_token', appId: 'app_id', RTCUId: 123, expireIn: 86400 },
+    }),
     getUserIdByRTCUIds: vi.fn().mockResolvedValue({ data: {} }),
     message: {
       create: vi.fn().mockImplementation((options: any) => ({ ...options, id: 'msg_mock' })),
