@@ -27,7 +27,7 @@ export class SignalSender {
     targetId: string | string[],
     chatType: 'singleChat' | 'groupChat',
     message: string,
-    ext: SignalingExt,
+    ext: SignalingExt | Record<string, any>,
     groupId?: string
   ): Promise<any> {
     const isGroupChat = Array.isArray(targetId)
@@ -55,7 +55,7 @@ export class SignalSender {
   async sendCmdMessage(
     targetId: string,
     chatType: 'singleChat' | 'groupChat',
-    ext: SignalingExt,
+    ext: SignalingExt | Record<string, any>,
     options?: {
       deliverOnlineOnly?: boolean
       receiverList?: string[]

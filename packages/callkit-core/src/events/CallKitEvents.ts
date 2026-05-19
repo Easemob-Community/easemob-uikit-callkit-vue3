@@ -168,6 +168,18 @@ export interface LocalVideoChangedEvent {
 }
 
 // ────────────────────────────────────────────────
+// RTC 上报事件（由 reportRtcEvent 触发）
+// ────────────────────────────────────────────────
+
+export interface RtcReportEvent {
+  type: 'rtcReport'
+  payload: {
+    type: string
+    payload: Record<string, any>
+  }
+}
+
+// ────────────────────────────────────────────────
 // 联合类型
 // ────────────────────────────────────────────────
 
@@ -184,6 +196,7 @@ export type UIEvent =
   | ParticipantStateChangedEvent
   | ParticipantJoinedEvent
   | ParticipantLeftEvent
+  | RtcReportEvent
 
 export type RtcEvent =
   | ShouldJoinRtcEvent
@@ -204,6 +217,22 @@ const rtcEventTypes: Set<CallKitEvent['type']> = new Set([
   'shouldPublishTracks',
   'localAudioChanged',
   'localVideoChanged',
+])
+
+const uiEventTypes: Set<CallKitEvent['type']> = new Set([
+  'incomingCall',
+  'callStarted',
+  'callEnded',
+  'callTimeout',
+  'statusChanged',
+  'callRefused',
+  'callBusy',
+  'callCanceled',
+  'groupCallInit',
+  'participantStateChanged',
+  'participantJoined',
+  'participantLeft',
+  'rtcReport',
 ])
 
 export function isUIEvent(event: CallKitEvent): event is UIEvent {

@@ -169,7 +169,7 @@ export class CallKitCore {
       params.calleeUserId,
       'singleChat',
       '[通话邀请]',
-      ext as any
+      ext
     )
 
     // 处理并发出事件
@@ -200,7 +200,7 @@ export class CallKitCore {
     await this.signalSender.sendCmdMessage(
       state.callerUserId,
       'singleChat',
-      ext as any,
+      ext,
       { deliverOnlineOnly: true }
     )
 
@@ -267,7 +267,7 @@ export class CallKitCore {
         if (groupId && receiverList.length > 0) {
           this.logger.warn('[CallKitCore] 群聊取消: 发送 cancelCall 到', groupId, 'receiverList:', receiverList)
           await this.signalSender
-            .sendCmdMessage(groupId, 'groupChat', ext as any, { receiverList })
+            .sendCmdMessage(groupId, 'groupChat', ext, { receiverList })
             .catch((err) => {
               this.logger.error('[CallKitCore] 群聊取消: 发送 cancelCall 失败', err)
             })
@@ -277,7 +277,7 @@ export class CallKitCore {
       } else {
         // 单聊
         const targetId = state.callerUserId === this.userId ? state.calleeUserId : state.callerUserId
-        await this.signalSender.sendCmdMessage(targetId, 'singleChat', ext as any).catch(() => {})
+        await this.signalSender.sendCmdMessage(targetId, 'singleChat', ext).catch(() => {})
       }
     } else if (currentStatus === CALL_STATUS.IN_CALL) {
       this.clearInviteTimeout()
@@ -297,13 +297,13 @@ export class CallKitCore {
           .map((p) => p.userId)
         if (groupId && receiverList.length > 0) {
           await this.signalSender
-            .sendCmdMessage(groupId, 'groupChat', ext as any, { receiverList })
+            .sendCmdMessage(groupId, 'groupChat', ext, { receiverList })
             .catch(() => {})
         }
       } else {
         // 单聊
         const targetId = state.callerUserId === this.userId ? state.calleeUserId : state.callerUserId
-        await this.signalSender.sendCmdMessage(targetId, 'singleChat', ext as any).catch(() => {})
+        await this.signalSender.sendCmdMessage(targetId, 'singleChat', ext).catch(() => {})
       }
     }
 
@@ -347,7 +347,34 @@ export class CallKitCore {
       return
     }
 
-    // 添加新参与者到会话
+    // 构建 invite 文本消息
+    const ext = MessageBuilder.buildInviteExt({
+      callId: state.callId,
+      callerUserId: this.userId,
+      calleeUserId: groupId,
+      callerDevId: this.deviceId,
+      channel: state.channel,
+      callType: state.type,
+      invitedMembers: participantIds,
+      groupInfo: { groupId, groupName: groupId },
+      callerInfo: this.config.userProfile,
+    })
+
+    // 先发送邀请消息，成功后再添加参与者到会话
+    try {
+      await this.signalSender.sendInviteMessage(
+        participantIds,
+        'groupChat',
+        '[群通话邀请]',
+        ext,
+        groupId
+      )
+    } catch (err) {
+      this.logger.error('[CallKitCore] 发送追加邀请失败', err)
+      throw err
+    }
+
+    // 发送成功后再添加参与者到会话
     participantIds.forEach((userId: string) => {
       if (!this.groupCallSession.getParticipant(userId)) {
         this.groupCallSession.addParticipant({
@@ -362,27 +389,6 @@ export class CallKitCore {
         })
       }
     })
-
-    // 发送 invite 文本消息
-    const ext = MessageBuilder.buildInviteExt({
-      callId: state.callId,
-      callerUserId: this.userId,
-      calleeUserId: groupId,
-      callerDevId: this.deviceId,
-      channel: state.channel,
-      callType: state.type,
-      invitedMembers: participantIds,
-      groupInfo: { groupId, groupName: groupId },
-      callerInfo: this.config.userProfile,
-    })
-
-    await this.signalSender.sendInviteMessage(
-      participantIds,
-      'groupChat',
-      '[群通话邀请]',
-      ext as any,
-      groupId
-    )
 
     this.logger.info('[CallKitCore] 已发送追加邀请', { groupId, participantIds })
   }
@@ -472,7 +478,7 @@ export class CallKitCore {
       params.participantIds,
       'groupChat',
       '[群通话邀请]',
-      ext as any,
+      ext,
       params.groupId
     )
 
@@ -524,6 +530,18 @@ export class CallKitCore {
         case 'userUnpublished':
           this.groupCallSession.markLeftRtc(payload.userId)
           break
+        case 'userAudioMuted':
+          this.groupCallSession.markAudioMuted(payload.userId, true)
+          break
+        case 'userAudioUnmuted':
+          this.groupCallSession.markAudioMuted(payload.userId, false)
+          break
+        case 'userVideoMuted':
+          this.groupCallSession.markVideoOn(payload.userId, false)
+          break
+        case 'userVideoUnmuted':
+          this.groupCallSession.markVideoOn(payload.userId, true)
+          break
       }
     }
 
@@ -536,8 +554,8 @@ export class CallKitCore {
     ) {
       const rtcEvent: CallKitEvent = {
         type: 'rtcReport',
-        payload: report as any,
-      } as any
+        payload: { type: report.type, payload: report.payload },
+      }
       this.emitEvent(rtcEvent)
     }
   }
@@ -581,7 +599,7 @@ export class CallKitCore {
    * 获取当前通话 ID，无通话时返回空字符串
    */
   getCurrentCallId(): string {
-    return this.singleCallState.getState().callId
+    return this.singleCallState.getState().callId || ''
   }
 
   /**
@@ -1124,19 +1142,26 @@ export class CallKitCore {
   }
 
   private emitEvent(event: CallKitEvent): void {
-    this.logger.warn('[CallKitCore] emitEvent:', event.type, '| onEvent存在=', !!this.config.onEvent, '| onUIEvent存在=', !!this.config.onUIEvent)
-    // 1. 通过 EventBus 分发（供上层 onEvent/offEvent 使用）
-    try {
-      this.eventBus.emit('callKitEvent', event)
-    } catch (err) {
-      this.logger.error('[CallKitCore] EventBus 分发失败:', err)
+    this.logger.debug('[CallKitCore] emitEvent:', event.type, '| onEvent存在=', !!this.config.onEvent, '| onUIEvent存在=', !!this.config.onUIEvent)
+
+    // 重复订阅检测：如果同时使用了 config.onEvent 和 core.onEvent()，发出警告
+    const hasEventBusListeners = this.eventBus.listenerCount('callKitEvent') > 0
+    const hasLegacyOnEvent = !!this.config.onEvent
+    if (hasEventBusListeners && hasLegacyOnEvent) {
+      this.logger.warn(
+        '[CallKitCore] 同时使用了 config.onEvent 和 core.onEvent() 订阅，事件可能重复触发。' +
+          '建议只使用其中一种订阅方式。'
+      )
     }
+
+    // 1. 通过 EventBus 分发（供上层 onEvent/offEvent 使用）
+    this.eventBus.emit('callKitEvent', event)
 
     // 2. 兼容旧接口：onEvent 接收所有事件
     if (this.config.onEvent) {
       try {
         this.config.onEvent(event)
-        this.logger.warn('[CallKitCore] onEvent 回调执行成功:', event.type)
+        this.logger.debug('[CallKitCore] onEvent 回调执行成功:', event.type)
       } catch (err) {
         this.logger.error('[CallKitCore] onEvent 回调执行失败:', err)
       }
@@ -1146,7 +1171,7 @@ export class CallKitCore {
     if (isUIEvent(event) && this.config.onUIEvent) {
       try {
         this.config.onUIEvent(event)
-        this.logger.warn('[CallKitCore] onUIEvent 回调执行成功:', event.type)
+        this.logger.debug('[CallKitCore] onUIEvent 回调执行成功:', event.type)
       } catch (err) {
         this.logger.error('[CallKitCore] onUIEvent 回调执行失败:', err)
       }
@@ -1168,6 +1193,8 @@ export class CallKitCore {
   private handleIMConnected(): void {
     this.logger.info('[CallKitCore] IM 已重新连接')
     // IM 重连后，如果当前有进行中的通话，需要确保监听仍然有效
+    // 环信 IM SDK 的 addEventHandler 是持久注册的，断连不会自动清除 handler
+    // 但如果 SDK 版本行为不同，这里提供兜底 remount
     if (!this.destroyed && this.imListener) {
       this.logger.info('[CallKitCore] IM 重连恢复：监听状态正常')
     }

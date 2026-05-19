@@ -120,6 +120,28 @@ export class GroupCallSession {
   }
 
   /**
+   * 标记音频静音状态
+   */
+  markAudioMuted(userId: string, muted: boolean): boolean {
+    const p = this.participants.get(userId)
+    if (!p) return false
+    p.isMuted = muted
+    this.logger.info('[GroupCallSession] 更新音频状态', { userId, muted })
+    return true
+  }
+
+  /**
+   * 标记视频开关状态
+   */
+  markVideoOn(userId: string, on: boolean): boolean {
+    const p = this.participants.get(userId)
+    if (!p) return false
+    p.isCameraOn = on
+    this.logger.info('[GroupCallSession] 更新视频状态', { userId, on })
+    return true
+  }
+
+  /**
    * 获取参与者
    */
   getParticipant(userId: string): Readonly<GroupParticipant> | undefined {

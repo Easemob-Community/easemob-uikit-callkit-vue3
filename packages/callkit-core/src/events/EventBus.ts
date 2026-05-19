@@ -24,14 +24,14 @@ export class EventBus<TEvents extends Record<string, any>> {
 
   once<K extends keyof TEvents>(event: K, handler: (payload: TEvents[K]) => void): () => void {
     const onceHandler = (payload: TEvents[K]) => {
-      this.off(event, onceHandler as any)
+      this.off(event, onceHandler as unknown as (payload: TEvents[K]) => void)
       handler(payload)
     }
-    return this.on(event, onceHandler as any)
+    return this.on(event, onceHandler as unknown as (payload: TEvents[K]) => void)
   }
 
   off<K extends keyof TEvents>(event: K, handler: (payload: TEvents[K]) => void): void {
-    this.listeners.get(event)?.delete(handler as any)
+    this.listeners.get(event)?.delete(handler as unknown as (payload: any) => void)
   }
 
   emit<K extends keyof TEvents>(event: K, payload: TEvents[K]): void {

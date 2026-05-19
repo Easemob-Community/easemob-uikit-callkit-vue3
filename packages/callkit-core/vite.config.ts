@@ -6,7 +6,7 @@ export default defineConfig({
   build: {
     lib: {
       entry: resolve(__dirname, 'src/index.ts'),
-      name: 'CallKitCore',
+      name: 'EaseMobCallKitCore',
       fileName: (format) => {
         switch (format) {
           case 'es':
@@ -34,7 +34,8 @@ export default defineConfig({
     },
     outDir: 'dist',
     sourcemap: true,
-    minify: 'terser',
+    // es/cjs 保持未压缩（便于调试和 tree-shaking），umd/iife 在 fileName 中通过 .min.js 区分压缩版本
+    minify: false,
   },
   plugins: [
     dts({
