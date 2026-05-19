@@ -84,6 +84,6 @@ export type {
 } from './types/signal.types'
 
 // ─── 工具 ───
-export { generateRandomChannel, formatCallDuration } from './utils/callUtils'
+export { generateRandomChannel, formatCallDuration, isMessageExpired, isCmdMessageExpired } from './utils/callUtils'
 export { setLogger, getLogger } from './utils/logger'
 export type { Logger } from './utils/logger'

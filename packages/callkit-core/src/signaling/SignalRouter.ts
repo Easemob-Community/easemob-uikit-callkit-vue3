@@ -16,7 +16,7 @@ export interface CmdMsgBody {
 }
 
 export interface SignalHandler {
-  handle(message: CmdMsgBody): DomainEvent[] | Promise<DomainEvent[]>
+  handle(message: CmdMsgBody): DomainEvent[]
 }
 
 /**

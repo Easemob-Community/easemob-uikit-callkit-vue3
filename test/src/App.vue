@@ -96,6 +96,13 @@
           <pre v-if="idbLogContent" class="idb-log-preview">{{ idbLogContent }}</pre>
         </div>
 
+        <!-- CallKit Core 测试面板 -->
+        <div class="call-demo">
+          <h3>CallKit Core 信令测试</h3>
+          <p style="font-size: 13px; color: #666; margin: 4px 0 8px;">基于 callkit-core 纯信令层的独立测试面板（不依赖 UI 组件）</p>
+          <CallKitCoreTestHarness :im-client="chatClient" :sdk="SDK" />
+        </div>
+
         <!-- 事件日志展示 -->
         <div class="event-log-section" v-if="eventLogs.length > 0">
           <h3>📡 CallKit 事件日志</h3>
@@ -137,6 +144,7 @@ import {
   EasemobChatSingleCall, 
   EasemobChatMultiCall 
 } from 'easemob-chat-callkit-vue3'
+import CallKitCoreTestHarness from '../../packages/callkit-vue3/src/demo/CallKitCoreTestHarness.vue'
 
 // 启用 IndexedDB 日志持久化
 Logger.getInstance({ enableIDB: true, idbRetentionDays: 3 })

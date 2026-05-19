@@ -20,7 +20,7 @@ import { SingleCallSignalHandler } from '../signaling/SingleCallSignalHandler'
 import { GroupCallSignalHandler } from '../signaling/GroupCallSignalHandler'
 import { IMListener } from '../im/IMListener'
 import { MessageBuilder } from '../signaling/MessageBuilder'
-import { generateRandomChannel } from '../utils/callUtils'
+import { generateRandomChannel, isMessageExpired, isCmdMessageExpired } from '../utils/callUtils'
 import { CALL_STATUS, CALL_TYPE, HANGUP_REASON } from '../types/callstate.types'
 
 /**
@@ -43,6 +43,7 @@ export class CallKitCore {
   private groupCallHandler: GroupCallSignalHandler
   private imListener: IMListener
   private destroyed = false
+  private inviteTimer: ReturnType<typeof setTimeout> | null = null
 
   // 当前用户信息
   private userId: string
@@ -143,6 +144,9 @@ export class CallKitCore {
       timeout: this.inviteTimeoutMs,
     })
 
+    // 启动超时定时器（Critical #1：超时事件由 CallKitCore 消费）
+    this.startInviteTimeout()
+
     // 发送 invite 文本消息
     const ext = MessageBuilder.buildInviteExt({
       callId,
@@ -195,10 +199,10 @@ export class CallKitCore {
 
     if (result === 'accept') {
       if (isGroupCall) {
-        // 群聊：直接进入 IN_CALL + SHOULD_JOIN_RTC（群聊没有 confirmCallee 机制）
-        this.logger.info('[CallKitCore] 群聊接受，直接进入 IN_CALL')
-        const stateResult = this.singleCallState.receiveAnswer('accept')
-        this.processEvents(stateResult.events, state)
+        // 群聊：被叫接受后不直接进入 IN_CALL，等待主叫方发送 confirmCallee
+        // （修复 Critical #4：避免二次 SHOULD_JOIN_RTC）
+        this.logger.info('[CallKitCore] 群聊接受，等待 confirmCallee 后再进入 IN_CALL')
+        this.clearInviteTimeout()
       } else {
         // 单聊：保持 ALERTING，等待 confirmCallee 后再进入 IN_CALL
         this.logger.info('[CallKitCore] 单聊接受，等待 confirmCallee')
@@ -231,6 +235,7 @@ export class CallKitCore {
       state.type === CALL_TYPE.VIDEO_MULTI || state.type === CALL_TYPE.AUDIO_MULTI
 
     if (currentStatus === CALL_STATUS.INVITING || currentStatus === CALL_STATUS.ALERTING) {
+      this.clearInviteTimeout()
       // 发送 cancelCall
       const ext = MessageBuilder.buildCmdExt({
         action: 'cancelCall',
@@ -257,6 +262,7 @@ export class CallKitCore {
         await this.signalSender.sendCmdMessage(targetId, 'singleChat', ext as any).catch(() => {})
       }
     } else if (currentStatus === CALL_STATUS.IN_CALL) {
+      this.clearInviteTimeout()
       // 发送 leaveCall
       const ext = MessageBuilder.buildCmdExt({
         action: 'leaveCall',
@@ -290,6 +296,7 @@ export class CallKitCore {
       : HANGUP_REASON.HANGUP
 
     const hangupResult = this.singleCallState.hangup(reason)
+    this.clearInviteTimeout()
     this.processEvents(hangupResult.events, state)
   }
 
@@ -422,6 +429,7 @@ export class CallKitCore {
     if (this.destroyed) return
     this.destroyed = true
 
+    this.clearInviteTimeout()
     this.imListener.unmount()
     this.singleCallState.reset()
     this.groupCallSession.destroy()
@@ -469,6 +477,53 @@ export class CallKitCore {
       ext.chatType === CALL_TYPE.AUDIO_MULTI ||
       ext.callkitGroupInfo?.groupId
 
+    // ========= Critical #2: 忙线自动拒绝 =========
+    const currentStatus = this.singleCallState.getState().status
+    if (currentStatus > CALL_STATUS.IDLE) {
+      this.logger.warn('[CallKitCore] ❌ 当前已在通话中，发送忙线拒绝 | currentStatus=', currentStatus)
+      const busyExt = MessageBuilder.buildCmdExt({
+        action: 'answerCall',
+        callId: ext.callId as string,
+        callerDevId: ext.callerDevId as string,
+        calleeDevId: this.deviceId,
+        result: 'busy',
+      })
+      this.signalSender
+        .sendCmdMessage(msg.from as string, 'singleChat', busyExt as any, {
+          deliverOnlineOnly: true,
+        })
+        .catch(() => {})
+      return
+    }
+
+    // ========= Critical #3: 接收者校验 =========
+    if (!isGroupCall) {
+      // 单聊：检查消息是否发给当前用户
+      if (msg.to && msg.to !== this.userId) {
+        this.logger.warn('[CallKitCore] ❌ 单聊 invite 接收者不是当前用户 | msg.to=', msg.to)
+        return
+      }
+      // 单聊：设备 ID 校验
+      if (ext.calleeDevId && ext.calleeDevId !== this.deviceId) {
+        this.logger.warn('[CallKitCore] ❌ 单聊 invite calleeDevId 不匹配 | ext=', ext.calleeDevId, '| my=', this.deviceId)
+        return
+      }
+    } else {
+      // 群聊：检查当前用户是否在被邀请列表中
+      const invitedMembers: string[] = ext.invitedMembers || []
+      if (invitedMembers.length > 0 && !invitedMembers.includes(this.userId)) {
+        this.logger.warn('[CallKitCore] ❌ 群聊 invite 当前用户不在被邀请列表中')
+        return
+      }
+    }
+
+    // ========= Critical #3: 过期检查 =========
+    const msgTime = msg.time || ext.ts
+    if (msgTime && isMessageExpired(msgTime, this.inviteTimeoutMs + 10000)) {
+      this.logger.warn('[CallKitCore] ❌ invite 消息已过期 | msgTime=', msgTime)
+      return
+    }
+
     this.logger.warn(
       isGroupCall
         ? '✉️ [CallKitCore] ✅ 【群聊】确认收到 invite 文本消息 → 进入群聊处理分支'
@@ -499,6 +554,8 @@ export class CallKitCore {
         })
         // 处理状态机返回的 STATUS_CHANGED 事件，确保 callStateStore 同步到 ALERTING
         this.processEvents(stateResult.events, this.singleCallState.getState())
+        // 启动超时定时器
+        this.startInviteTimeout()
       } else {
         this.logger.warn(
           '[CallKitCore] ⚠️ 群聊被叫方：singleCallState 不是 IDLE，跳过 initIncoming | 当前状态=',
@@ -518,7 +575,7 @@ export class CallKitCore {
     }
   }
 
-  private handleSingleCallInvite(msg: any, ext: any): void {
+  private async handleSingleCallInvite(msg: any, ext: any): Promise<void> {
     const callId = ext.callId as string
     const channel = ext.channelName as string
     const callType = ext.type as CALL_TYPE
@@ -534,15 +591,13 @@ export class CallKitCore {
       resolvedCalleeId: calleeUserId,
     })
 
-    // 获取 RTC token
+    // 获取 RTC token（Warning #6：使用 await 确保 token 可用）
     let token = ''
     try {
-      const tokenRes = (this.config.imClient as any).getRTCToken?.(channel)
-      if (tokenRes && typeof tokenRes.then === 'function') {
-        tokenRes.then((res: any) => { token = res.accessToken }).catch(() => {})
-      }
+      const tokenRes = await this.config.imClient.getRTCToken(channel)
+      token = tokenRes.accessToken
     } catch {
-      // 同步失败则忽略，token 可能由上层另行获取
+      this.logger.warn('[CallKitCore] 被叫方获取 RTC token 失败，使用空 token')
     }
 
     // 状态机初始化
@@ -556,6 +611,9 @@ export class CallKitCore {
       calleeDevId: this.deviceId,
       calleeUserId,
     })
+
+    // 启动超时定时器
+    this.startInviteTimeout()
 
     // 发出 incomingCall 事件
     const incomingEvent: CallKitEvent = {
@@ -608,6 +666,19 @@ export class CallKitCore {
 
     if (this.isSelfMessage(msg)) {
       this.logger.warn('[CallKitCore] ❌ 忽略自己发送的 CMD 消息')
+      return
+    }
+
+    // ========= Critical #3: CMD 过滤 — 只处理 rtcCall 类型 =========
+    if (msg.action !== 'rtcCall') {
+      this.logger.warn('[CallKitCore] ❌ 忽略非 rtcCall CMD 消息 | action=', msg.action)
+      return
+    }
+
+    // ========= Critical #3: CMD 过期检查 =========
+    const cmdTime = msg.time || msg.ext?.ts
+    if (cmdTime && isCmdMessageExpired(cmdTime)) {
+      this.logger.warn('[CallKitCore] ❌ CMD 消息已过期 | cmdTime=', cmdTime)
       return
     }
 
@@ -866,6 +937,32 @@ export class CallKitCore {
       } catch (err) {
         this.logger.error('[CallKitCore] onRtcEvent 回调执行失败:', err)
       }
+    }
+  }
+
+  // ───────────────────────────────────────────────
+  // 内部：超时定时器管理（Critical #1）
+  // ───────────────────────────────────────────────
+
+  /**
+   * 启动邀请超时定时器。
+   * 超时后调用状态机的 timeout() 并通过 processEvents 消费事件，
+   * 确保上层 UI 能收到 callTimeout + callEnded 事件。
+   */
+  private startInviteTimeout(): void {
+    this.clearInviteTimeout()
+    this.inviteTimer = setTimeout(() => {
+      const result = this.singleCallState.timeout()
+      if (result.ok) {
+        this.processEvents(result.events, this.singleCallState.getState())
+      }
+    }, this.inviteTimeoutMs)
+  }
+
+  private clearInviteTimeout(): void {
+    if (this.inviteTimer) {
+      clearTimeout(this.inviteTimer)
+      this.inviteTimer = null
     }
   }
 }

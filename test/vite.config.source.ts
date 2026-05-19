@@ -22,6 +22,10 @@ export default defineConfig({
       {
         find: /^@easemob\/callkit-core$/,
         replacement: resolve(__dirname, '../packages/callkit-core/src/index.ts')
+      },
+      {
+        find: /^@easemob\/callkit-vue3$/,
+        replacement: resolve(__dirname, '../packages/callkit-vue3/src/index.ts')
       }
     ]
   }

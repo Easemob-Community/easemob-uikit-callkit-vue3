@@ -14,14 +14,12 @@ import { useSingleCallRtcStore } from "./store/singleCallRtc";
 import { useCallTimerStore } from "./store/callTimer";
 import { useGlobalCallStore } from "./store/globalCall";
 import { useCallKit } from "./composables/useCallKit";
-import { useCallKitCore } from "./composables/useCallKitCore";
 import { useCallKitEvents } from "./composables/useCallKitEvents";
 import { useRtcService } from "./composables/useRtcService";
 import { useJoinChannel } from "./composables/useJoinChannel";
 import { useParticipants } from "./composables/useParticipants";
 import { useDraggable, useCenteredDraggable, useCornerDraggable } from "./composables/useDraggable";
 import { RtcService } from "./services/RtcService";
-import { RtcServiceAdapter } from "./services/RtcServiceAdapter";
 // 导出组件
 export {
   EasemobChatCallKitProvider,
@@ -36,11 +34,11 @@ export {
 // 导出store
 export { useCallStateStore, useRtcChannelStore, useGlobalCallStore, useSingleCallRtcStore, useCallTimerStore };
 // 导出部分hook
-export { useCallKit, useCallKitCore, useCallKitEvents, useRtcService, useJoinChannel, useParticipants };
+export { useCallKit, useCallKitEvents, useRtcService, useJoinChannel, useParticipants };
 // 导出拖拽hook
 export { useDraggable, useCenteredDraggable, useCornerDraggable };
 // 导出RTC服务
-export { RtcService, RtcServiceAdapter };
+export { RtcService };
 
 // 导出类型
 export type {

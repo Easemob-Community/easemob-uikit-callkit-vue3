@@ -402,6 +402,17 @@ export class SingleCallSignalHandler implements SignalHandler {
       return []
     }
 
+    // 与 lib 对齐：ALERTING/INVITING 状态下只有来自主叫方的 leaveCall 才挂断
+    if (
+      currentState.status === CALL_STATUS.ALERTING ||
+      currentState.status === CALL_STATUS.INVITING
+    ) {
+      if (message.from !== currentState.callerUserId) {
+        this.logger.warn('[SingleCallSignalHandler] leaveCall callId 匹配但发送者不是主叫方，忽略')
+        return []
+      }
+    }
+
     const stateResult = this.stateMachine.receiveLeave()
     return stateResult.events
   }

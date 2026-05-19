@@ -183,7 +183,7 @@ export class SingleCallStateMachine {
       inviteTimeout: params.timeout ?? DEFAULT_TIMEOUT,
     }
 
-    this.startTimeout()
+    // 超时定时器由 CallKitCore 层管理，不在状态机内启动
     this.logger.stateChange?.(oldStatus, CALL_STATUS.INVITING, { callId: params.callId })
 
     return {
@@ -228,7 +228,7 @@ export class SingleCallStateMachine {
       calleeUserId: params.calleeUserId,
     }
 
-    this.startTimeout()
+    // 超时定时器由 CallKitCore 层管理，不在状态机内启动
     this.logger.stateChange?.(oldStatus, CALL_STATUS.ALERTING, { callId: params.callId })
 
     return {
@@ -248,6 +248,10 @@ export class SingleCallStateMachine {
 
   /**
    * 主叫方收到 alert（被叫已响铃）
+   *
+   * 与 lib 对齐：收到 alert 后保持 INVITING 状态不变（lib 的 handleAlertSignalMessage
+   * 不修改 callState.status），只记录 calleeDevId 和发送 confirmRing。
+   * 状态直到收到 confirmRing 后才变为 RECEIVED_CONFIRM_RING。
    */
   receiveAlert(calleeDevId: string): TransitionResult {
     if (this.state.status !== CALL_STATUS.INVITING) {
@@ -257,24 +261,14 @@ export class SingleCallStateMachine {
       return { ok: false, events: [] }
     }
 
-    this.clearTimeout()
-    const oldStatus = this.state.status
-    this.state.status = CALL_STATUS.ALERTING
+    // 不改变状态，只记录被叫设备 ID（与 lib 对齐）
     this.state.calleeDevId = calleeDevId
-    this.startTimeout()
-    this.logger.stateChange?.(oldStatus, CALL_STATUS.ALERTING, { callId: this.state.callId })
+    this.logger.info('[SingleCallStateMachine] receiveAlert: 保持 INVITING，记录 calleeDevId', {
+      callId: this.state.callId,
+      calleeDevId,
+    })
 
-    return {
-      ok: true,
-      events: [
-        {
-          type: 'STATUS_CHANGED',
-          from: oldStatus,
-          to: CALL_STATUS.ALERTING,
-          callId: this.state.callId,
-        },
-      ],
-    }
+    return { ok: true, events: [] }
   }
 
   /**
@@ -447,19 +441,23 @@ export class SingleCallStateMachine {
       return { ok: false, events: [] }
     }
 
+    // 已在 IN_CALL 状态 → 不重复派发事件（防止群聊被叫二次 join）
     if (this.state.status === CALL_STATUS.IN_CALL) {
-      this.logger.info('[SingleCallStateMachine] receiveConfirmCallee: 已是 IN_CALL')
-    } else {
-      const oldStatus = this.state.status
-      this.state.status = CALL_STATUS.IN_CALL
-      this.state.startTime = Date.now()
-      this.logger.stateChange?.(oldStatus, CALL_STATUS.IN_CALL, { callId: this.state.callId })
+      this.logger.info('[SingleCallStateMachine] receiveConfirmCallee: 已是 IN_CALL，跳过')
+      return { ok: false, events: [] }
     }
+
+    // 保存旧状态后再修改（修复 #7：from 字段永远是 IN_CALL 的 bug）
+    const oldStatus = this.state.status
+    this.state.status = CALL_STATUS.IN_CALL
+    this.state.startTime = Date.now()
+    this.clearTimeout()
+    this.logger.stateChange?.(oldStatus, CALL_STATUS.IN_CALL, { callId: this.state.callId })
 
     const events: DomainEvent[] = [
       {
         type: 'STATUS_CHANGED',
-        from: this.state.status === CALL_STATUS.IN_CALL ? CALL_STATUS.IN_CALL : CALL_STATUS.CONFIRM_CALLEE,
+        from: oldStatus,
         to: CALL_STATUS.IN_CALL,
         callId: this.state.callId,
       },
@@ -539,12 +537,19 @@ export class SingleCallStateMachine {
     this.logger.stateChange?.(oldStatus, CALL_STATUS.IDLE, { trigger: 'forceReset' })
   }
 
-  // ─── 内部方法 ───
+  // ─── 超时管理（由外部调用） ───
 
-  private startTimeout(): void {
+  /**
+   * 启动超时定时器。
+   * 超时后自动调用 onTimeout 回调（由 CallKitCore 注册），确保事件不会被丢弃。
+   */
+  startTimeout(onTimeout?: (result: TransitionResult) => void): void {
     this.clearTimeout()
     this.state.inviteTimeoutTimer = setTimeout(() => {
-      this.timeout()
+      const result = this.timeout()
+      if (onTimeout && result.ok) {
+        onTimeout(result)
+      }
     }, this.state.inviteTimeout)
   }
 

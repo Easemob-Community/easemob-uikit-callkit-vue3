@@ -16,6 +16,27 @@ export const generateRandomChannel = (length: number = 8): string => {
   }
   return result;
 };
+
+/**
+ * 检查消息是否已过期
+ * 与 lib/composables/useListenerManager.ts 中的 isMessageExpired 对齐
+ * @param messageTime 消息时间戳（毫秒）
+ * @param toleranceMs 容忍时间（毫秒），默认 40000（30s invite超时 + 10s 容差）
+ * @returns 是否已过期
+ */
+export const isMessageExpired = (messageTime: number, toleranceMs: number = 40000): boolean => {
+  if (!messageTime || messageTime <= 0) return false;
+  return Date.now() - messageTime > toleranceMs;
+};
+
+/**
+ * CMD 消息过期检查（与 lib 对齐，默认 60s）
+ * @param messageTime 消息时间戳（毫秒）
+ * @returns 是否已过期
+ */
+export const isCmdMessageExpired = (messageTime: number): boolean => {
+  return isMessageExpired(messageTime, 60000);
+};
 /**
  * 格式化通话时间
  * @param seconds 秒数
