@@ -149,8 +149,10 @@ export function useCallKit(): UseCallKitReturn {
       logger.error("accept: 无法获取主叫方 ID");
       throw new Error("无法获取主叫方 ID");
     }
-    if (coreCallState.status !== CALL_STATUS.ALERTING) {
-      logger.warn(`accept: 当前状态不是 ALERTING，无法接听`);
+    // 被叫可接听区间：ALERTING(2) 与握手中间态 RECEIVED_CONFIRM_RING(4)
+    const acceptableStatuses: number[] = [CALL_STATUS.ALERTING, CALL_STATUS.RECEIVED_CONFIRM_RING];
+    if (!acceptableStatuses.includes(coreCallState.status as number)) {
+      logger.warn(`accept: 当前状态不在可接听区间 (status=${coreCallState.status})，无法接听`);
       return;
     }
     try {

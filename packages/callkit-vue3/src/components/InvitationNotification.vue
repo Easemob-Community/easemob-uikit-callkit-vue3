@@ -111,6 +111,14 @@ const isChatClientReady = computed(() => {
   return client && chatClientStore.getClientDeviceId
 })
 
+// 被叫等待用户操作的状态区间：ALERTING(2) ~ RECEIVED_CONFIRM_RING(4)
+// 此区间内弹窗必须保持显示（含被叫与主叫握手中间态 CONFIRM_RING/RECEIVED_CONFIRM_RING）
+const WAITING_STATES: number[] = [
+  CALL_STATUS.ALERTING,
+  CALL_STATUS.CONFIRM_RING,
+  CALL_STATUS.RECEIVED_CONFIRM_RING,
+]
+
 // 监听通话状态
 watch(
   () => coreCallState.status,
@@ -118,17 +126,24 @@ watch(
     logger.warn(
       `🔔 [InvitationNotification] watch 触发 | oldStatus=${oldStatus} → newStatus=${newStatus} | isChatClientReady=${isChatClientReady.value}`
     )
-    // 只有在 ChatClient 已登录且状态为 ALERTING 时才显示弹窗
-    if (newStatus === CALL_STATUS.ALERTING && isChatClientReady.value) {
-      visible.value = true
-      logger.warn('🔔 [InvitationNotification] ✅ 显示通话邀请弹窗')
-    } else {
-      visible.value = false
-      if (newStatus === CALL_STATUS.ALERTING && !isChatClientReady.value) {
-        logger.warn('🔔 [InvitationNotification] ❌ ChatClient 未就绪，无法显示弹窗')
-      } else {
-        logger.warn(`🔔 [InvitationNotification] ❌ 状态不是 ALERTING，隐藏弹窗 (status=${newStatus})`)
+    // 进入被叫等待区间 → 显示弹窗
+    if (WAITING_STATES.includes(newStatus as number) && isChatClientReady.value) {
+      if (!visible.value) {
+        visible.value = true
+        logger.warn(`🔔 [InvitationNotification] ✅ 显示通话邀请弹窗 (status=${newStatus})`)
       }
+      return
+    }
+    // ChatClient 未就绪
+    if (WAITING_STATES.includes(newStatus as number) && !isChatClientReady.value) {
+      logger.warn('🔔 [InvitationNotification] ❌ ChatClient 未就绪，无法显示弹窗')
+      visible.value = false
+      return
+    }
+    // 离开等待区间 → 隐藏弹窗（IDLE / ANSWER_CALL / IN_CALL 等）
+    if (visible.value) {
+      visible.value = false
+      logger.warn(`🔔 [InvitationNotification] ❌ 离开等待区间，隐藏弹窗 (status=${newStatus})`)
     }
   }
 )
@@ -191,16 +206,18 @@ const handleReject = async () => {
 
 // 初始化检查
 onMounted(() => {
+  const curStatus = coreCallState.status
+  const inWaiting = WAITING_STATES.includes(curStatus as number)
   logger.warn(
-    `🔔 [InvitationNotification] onMounted | 当前 status=${coreCallState.status} | ALERTING=${CALL_STATUS.ALERTING} | isChatClientReady=${isChatClientReady.value}`
+    `🔔 [InvitationNotification] onMounted | 当前 status=${curStatus} | inWaiting=${inWaiting} | isChatClientReady=${isChatClientReady.value}`
   )
-  if (coreCallState.status === CALL_STATUS.ALERTING && isChatClientReady.value) {
+  if (inWaiting && isChatClientReady.value) {
     visible.value = true
     logger.warn('🔔 [InvitationNotification] ✅ 组件挂载时发现待处理的通话邀请，立即显示弹窗')
-  } else if (coreCallState.status === CALL_STATUS.ALERTING && !isChatClientReady.value) {
+  } else if (inWaiting && !isChatClientReady.value) {
     logger.warn('🔔 [InvitationNotification] ❌ 组件挂载时有通话邀请，但用户未登录')
   } else {
-    logger.warn(`🔔 [InvitationNotification] ℹ️ 组件挂载时无待处理邀请 (status=${coreCallState.status})`)
+    logger.warn(`🔔 [InvitationNotification] ℹ️ 组件挂载时无待处理邀请 (status=${curStatus})`)
   }
 })
 </script>
