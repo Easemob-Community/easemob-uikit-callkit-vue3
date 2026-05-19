@@ -42,10 +42,6 @@ export interface RtcServiceConfig {
   onAudioEnabledChange?: (enabled: boolean) => void
   onVideoEnabledChange?: (enabled: boolean) => void
   onLocalStreamChange?: (stream: MediaStream | null) => void
-  onUidToUserIdMapping?: (uid: string, userId: string) => void
-  onUserJoinedRtc?: (userId: string) => void
-  onUserLeftRtc?: (userId: string) => void
-  popPendingUserId?: () => string | undefined
 }
 
 export class RtcService {
@@ -65,8 +61,11 @@ export class RtcService {
   private autoSubscribe: boolean = true // 是否自动订阅远程用户
   private isActive: boolean = false // 标记当前是否处于活跃通话中，防止 leaveChannel 后延迟的 track 创建
 
-  // 内部 UID 映射（替代 rtcChannelStore.uidToUserIdMap）
+  // 内部 UID 映射和用户状态管理（替代 singleCallRtcStore）
   private uidToUserIdMap = new Map<string, string>()
+  private joinedRtcUsers = new Set<string>()
+  private leftUsers = new Set<string>()
+  private pendingUserIds = new Set<string>()
 
   // 回调函数
   private onNetworkQualityChange?: (quality: any) => void
@@ -80,10 +79,6 @@ export class RtcService {
   private onAudioEnabledChange?: (enabled: boolean) => void
   private onVideoEnabledChange?: (enabled: boolean) => void
   private onLocalStreamChange?: (stream: MediaStream | null) => void
-  private onUidToUserIdMapping?: (uid: string, userId: string) => void
-  private onUserJoinedRtc?: (userId: string) => void
-  private onUserLeftRtc?: (userId: string) => void
-  private popPendingUserIdFn?: () => string | undefined
 
   constructor(config: RtcServiceConfig) {
     this.appId = config.appId
@@ -99,10 +94,6 @@ export class RtcService {
     this.onAudioEnabledChange = config.onAudioEnabledChange
     this.onVideoEnabledChange = config.onVideoEnabledChange
     this.onLocalStreamChange = config.onLocalStreamChange
-    this.onUidToUserIdMapping = config.onUidToUserIdMapping
-    this.onUserJoinedRtc = config.onUserJoinedRtc
-    this.onUserLeftRtc = config.onUserLeftRtc
-    this.popPendingUserIdFn = config.popPendingUserId
   }
 
   /**
@@ -635,11 +626,10 @@ export class RtcService {
 
       // 1. 先检查是否有待加入的userId（从 answerCall 信令添加）
       if (!userId) {
-        const pendingUserId = this.popPendingUserIdFn?.()
+        const pendingUserId = this.popPendingUserId()
         if (pendingUserId) {
           userId = pendingUserId
           this.uidToUserIdMap.set(user.uid.toString(), userId)
-          this.onUidToUserIdMapping?.(user.uid.toString(), userId)
           logger.info('User-joined: 使用待加入列表匹配 userId:', { uid: user.uid, userId })
         }
       }
@@ -651,7 +641,6 @@ export class RtcService {
           userId = res.data[user.uid]
           if (userId) {
             this.uidToUserIdMap.set(user.uid.toString(), userId)
-            this.onUidToUserIdMapping?.(user.uid.toString(), userId)
             logger.info('User-joined: 通过API获取userId映射:', { uid: user.uid, userId })
           } else {
             logger.warn('User-joined: API返回的userId为空:', user.uid)
@@ -663,7 +652,7 @@ export class RtcService {
 
       // 标记用户已加入RTC
       if (userId) {
-        this.onUserJoinedRtc?.(userId)
+        this.markUserJoinedRtc(userId)
         logger.info('[RTC DEBUG] 用户已标记为加入RTC:', { uid: user.uid, userId })
       } else {
         logger.warn('User-joined: 未能获取userId映射，使用uid作为默认值:', user.uid)
@@ -685,7 +674,7 @@ export class RtcService {
 
       // 标记用户已离开RTC
       if (userId) {
-        this.onUserLeftRtc?.(userId)
+        this.markUserLeftRtc(userId)
       }
 
       this.onUserLeft?.(userId || user.uid.toString())
@@ -701,8 +690,7 @@ export class RtcService {
           userId = res.data[user.uid]
           if (userId) {
             this.uidToUserIdMap.set(user.uid.toString(), userId)
-            this.onUidToUserIdMapping?.(user.uid.toString(), userId)
-            this.onUserJoinedRtc?.(userId)
+            this.markUserJoinedRtc(userId)
             logger.info('[RTC DEBUG] user-published 时标记用户加入:', { uid: user.uid, userId, mediaType })
           }
         } catch (error) {
@@ -792,13 +780,101 @@ export class RtcService {
     }
   }
 
+  // ─── 用户状态管理（替代 singleCallRtcStore）───
+
+  /**
+   * 添加 UID 到 userId 的映射
+   */
+  setUidToUserIdMapping(uid: string, userId: string) {
+    this.uidToUserIdMap.set(uid, userId)
+    logger.debug('RTC UID映射已更新:', { uid, userId })
+  }
+
+  /**
+   * 根据 UID 获取 userId
+   */
+  getUserIdByUid(uid: string): string | null {
+    return this.uidToUserIdMap.get(uid) || null
+  }
+
+  /**
+   * 标记用户已加入 RTC 频道
+   */
+  markUserJoinedRtc(userId: string) {
+    this.joinedRtcUsers.add(userId)
+    if (this.leftUsers.has(userId)) {
+      this.leftUsers.delete(userId)
+      logger.debug('用户重新加入RTC，从leftUsers中移除:', userId)
+    }
+    logger.debug('用户已加入RTC频道:', userId)
+  }
+
+  /**
+   * 标记用户离开 RTC 频道
+   */
+  markUserLeftRtc(userId: string) {
+    this.joinedRtcUsers.delete(userId)
+    this.leftUsers.add(userId)
+    logger.debug('用户已离开RTC频道并标记为leftUser:', userId)
+  }
+
+  /**
+   * 检查用户是否已加入 RTC 频道
+   */
+  isUserInRtc(userId: string): boolean {
+    return this.joinedRtcUsers.has(userId)
+  }
+
+  /**
+   * 检查用户是否已明确离开
+   */
+  hasUserLeft(userId: string): boolean {
+    return this.leftUsers.has(userId)
+  }
+
+  /**
+   * 添加待加入 RTC 的 userId
+   */
+  addPendingUserId(userId: string) {
+    this.pendingUserIds.add(userId)
+    logger.debug('用户已标记为待加入RTC:', userId)
+  }
+
+  /**
+   * 获取第一个待加入的 userId 并移除
+   */
+  popPendingUserId(): string | null {
+    const iter = this.pendingUserIds.values()
+    const first = iter.next()
+    if (!first.done) {
+      const userId = first.value
+      this.pendingUserIds.delete(userId)
+      logger.debug('从待加入列表中取出userId:', userId)
+      return userId
+    }
+    return null
+  }
+
+  /**
+   * 重置所有用户状态
+   */
+  resetUserState() {
+    this.uidToUserIdMap.clear()
+    this.joinedRtcUsers.clear()
+    this.pendingUserIds.clear()
+    this.leftUsers.clear()
+    logger.debug('RtcService 用户状态已重置')
+  }
+
+  // ─── 销毁 ───
+
   /**
    * 销毁RTC服务
    */
   async destroy(): Promise<void> {
     try {
       await this.leaveChannel()
-      
+
       // 清理并停止所有远程轨道
       this.remoteVideoTracks.forEach((track, userId) => {
         try {
@@ -809,7 +885,7 @@ export class RtcService {
         }
       })
       this.remoteVideoTracks.clear()
-      
+
       this.remoteAudioTracks.forEach((track, userId) => {
         try {
           track.stop()
@@ -819,18 +895,19 @@ export class RtcService {
         }
       })
       this.remoteAudioTracks.clear()
-      
+
       if (this.client) {
         this.client.removeAllListeners()
         this.client = null
       }
-      
+
       // 重置状态标志
       this.isAudioEnabled = true
       this.isVideoEnabled = true
       this.agoraUid = 0
       this.currentCameraDeviceId = null
-      
+      this.resetUserState()
+
       logger.rtc('destroy', {})
     } catch (error) {
       logger.error('Failed to destroy RtcService:', error)

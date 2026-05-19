@@ -47,7 +47,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
-import { useCallStateStore } from '../store/callState'
+import { useCallKitCore } from '../composables/useCallKitCore'
 import { useChatClientStore } from '../store/chatClient'
 import { useCallKit } from '../composables/useCallKit'
 import { CALL_STATUS, CALL_TYPE } from '../types/callstate.types'
@@ -55,7 +55,7 @@ import { logger } from '../utils/logger'
 import { useGroupCallStore } from '../modules/groupCall'
 import { useGlobalCallStore } from '../store/globalCall'
 
-const callStateStore = useCallStateStore()
+const { callState: coreCallState } = useCallKitCore()
 const chatClientStore = useChatClientStore()
 const groupCallStore = useGroupCallStore()
 const globalCallStore = useGlobalCallStore()
@@ -66,7 +66,7 @@ const processing = ref(false)
 
 // 计算属性
 const callerName = computed(() => {
-  const callerUserId = callStateStore.getCallState.callerUserId
+  const callerUserId = coreCallState.callerUserId
   if (callerUserId) {
     const userInfo = globalCallStore.getUserInfo(callerUserId)
     return userInfo?.nickname || callerUserId
@@ -75,7 +75,7 @@ const callerName = computed(() => {
 })
 
 const callerAvatar = computed(() => {
-  const callerUserId = callStateStore.getCallState.callerUserId
+  const callerUserId = coreCallState.callerUserId
   if (callerUserId) {
     const userInfo = globalCallStore.getUserInfo(callerUserId)
     return userInfo?.avatarURL || ''
@@ -84,14 +84,14 @@ const callerAvatar = computed(() => {
 })
 
 const callType = computed(() => {
-  const type = callStateStore.getCallState.type
+  const type = coreCallState.type
   if (type === CALL_TYPE.VIDEO_1V1 || type === CALL_TYPE.VIDEO_MULTI) return 'video'
   if (type === CALL_TYPE.AUDIO_1V1 || type === CALL_TYPE.AUDIO_MULTI) return 'audio'
   return 'audio'
 })
 
 const isGroupCall = computed(() => {
-  const type = callStateStore.getCallState.type
+  const type = coreCallState.type
   return type === CALL_TYPE.VIDEO_MULTI || type === CALL_TYPE.AUDIO_MULTI
 })
 
@@ -113,7 +113,7 @@ const isChatClientReady = computed(() => {
 
 // 监听通话状态
 watch(
-  () => callStateStore.getCallStatus,
+  () => coreCallState.status,
   (newStatus, oldStatus) => {
     logger.warn(
       `🔔 [InvitationNotification] watch 触发 | oldStatus=${oldStatus} → newStatus=${newStatus} | isChatClientReady=${isChatClientReady.value}`
@@ -154,9 +154,8 @@ const handleAccept = async () => {
   } catch (error) {
     logger.error('InvitationNotification: 接听失败:', error)
     logger.error('接听失败:', error)
-    // 兜底：信令发送失败也要关闭弹窗并清理状态
+    // 兜底：信令发送失败也要关闭弹窗
     visible.value = false
-    callStateStore.resetCallState()
   } finally {
     processing.value = false
   }
@@ -183,9 +182,8 @@ const handleReject = async () => {
   } catch (error) {
     logger.error('InvitationNotification: 拒绝失败:', error)
     logger.error('拒绝失败:', error)
-    // 兜底：信令发送失败也要关闭弹窗并清理状态
+    // 兜底：信令发送失败也要关闭弹窗
     visible.value = false
-    callStateStore.resetCallState()
   } finally {
     processing.value = false
   }
@@ -194,15 +192,15 @@ const handleReject = async () => {
 // 初始化检查
 onMounted(() => {
   logger.warn(
-    `🔔 [InvitationNotification] onMounted | 当前 status=${callStateStore.getCallStatus} | ALERTING=${CALL_STATUS.ALERTING} | isChatClientReady=${isChatClientReady.value}`
+    `🔔 [InvitationNotification] onMounted | 当前 status=${coreCallState.status} | ALERTING=${CALL_STATUS.ALERTING} | isChatClientReady=${isChatClientReady.value}`
   )
-  if (callStateStore.getCallStatus === CALL_STATUS.ALERTING && isChatClientReady.value) {
+  if (coreCallState.status === CALL_STATUS.ALERTING && isChatClientReady.value) {
     visible.value = true
     logger.warn('🔔 [InvitationNotification] ✅ 组件挂载时发现待处理的通话邀请，立即显示弹窗')
-  } else if (callStateStore.getCallStatus === CALL_STATUS.ALERTING && !isChatClientReady.value) {
+  } else if (coreCallState.status === CALL_STATUS.ALERTING && !isChatClientReady.value) {
     logger.warn('🔔 [InvitationNotification] ❌ 组件挂载时有通话邀请，但用户未登录')
   } else {
-    logger.warn(`🔔 [InvitationNotification] ℹ️ 组件挂载时无待处理邀请 (status=${callStateStore.getCallStatus})`)
+    logger.warn(`🔔 [InvitationNotification] ℹ️ 组件挂载时无待处理邀请 (status=${coreCallState.status})`)
   }
 })
 </script>

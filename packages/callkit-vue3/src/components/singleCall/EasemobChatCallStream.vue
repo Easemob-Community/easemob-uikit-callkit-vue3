@@ -47,11 +47,11 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import type { IAgoraRTCRemoteUser } from 'agora-rtc-sdk-ng'
-import { useCallStateStore } from '../../store/callState'
 import { useRtcChannelStore } from '../../store/rtcChannel'
 import { useCallTimerStore } from '../../store/callTimer'
 import { useGlobalCallStore } from '../../store/globalCall'
 import { useCallKit } from '../../composables/useCallKit'
+import { useCallKitCore } from '../../composables/useCallKitCore'
 import { logger } from '../../utils/logger'
 import CallInfoBar from './CallInfoBar.vue'
 import CallControls from './CallControls.vue'
@@ -66,8 +66,8 @@ const emit = defineEmits<{
   ended: []
 }>()
 
-// 从 store 获取 RtcService 实例
-const callStateStore = useCallStateStore()
+// 从 core 获取状态和从 store 获取 RtcService 实例
+const { callState: coreCallState } = useCallKitCore()
 const rtcChannelStore = useRtcChannelStore()
 const callTimerStore = useCallTimerStore()
 const globalCallStore = useGlobalCallStore()
@@ -85,8 +85,7 @@ const callDuration = computed(() => callTimerStore.formattedCallDuration)
 
 // 远程用户信息
 const remoteUserName = computed(() => {
-  const callState = callStateStore.getCallState
-  const remoteUserId = callState.calleeUserId || callState.callerUserId
+  const remoteUserId = coreCallState.calleeUserId || coreCallState.callerUserId
   if (remoteUserId) {
     const userInfo = globalCallStore.getUserInfo(remoteUserId)
     return userInfo.nickname || remoteUserId
@@ -240,7 +239,7 @@ const playLocalVideo = () => {
 }
 
 onMounted(() => {
-  // 不在这里加入频道，因为 useListenerManager 已经处理了加入频道的逻辑
+  // 不在这里加入频道，因为 callkit-core 已经处理了加入频道的逻辑
   // 这里只需要设置本地视频播放和监听远程用户事件
   logger.info('EasemobChatCallStream mounted, 等待RTC连接就绪')
   
@@ -314,8 +313,7 @@ onMounted(() => {
     setTimeout(() => {
       if (props.type === 'video' && rtcService.value) {
         // 获取远程用户ID并重新播放
-        const callStateStore = useCallStateStore()
-        const remoteUserId = callStateStore.calleeUserId || callStateStore.callerUserId
+        const remoteUserId = coreCallState.calleeUserId || coreCallState.callerUserId
         if (remoteUserId) {
           playRemoteVideo(remoteUserId)
         }

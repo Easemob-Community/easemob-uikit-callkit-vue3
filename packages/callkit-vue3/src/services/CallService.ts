@@ -1,439 +1,82 @@
 // src/services/callService.ts
-import { useCallStateStore } from "../store/callState";
-import { useChatClientStore } from "../store/chatClient";
 import { useRtcChannelStore } from "../store/rtcChannel";
 import { useCallTimerStore } from "../store/callTimer";
 import { useGlobalCallStore } from "../store/globalCall";
-import { HANGUP_REASON, CALL_STATUS, CALL_TYPE } from "../types/callstate.types";
-import { useSignalManager } from "../composables/useSignalManager";
 import { useGroupCallStore } from "../modules/groupCall";
 import { logger } from "../utils/logger";
-import { callKitEventBus } from "../core/events/CallKitEventBus";
-import { buildBaseEventFields, getCurrentUserId } from "../core/events/helpers";
 
+/**
+ * CallService - 纯资源清理服务
+ *
+ * 职责：通话结束时的 RTC 资源清理、计时器重置、小窗状态重置。
+ * 信令发送和状态机管理由 callkit-core 负责，此处不做任何信令操作。
+ */
 export class CallService {
-  private svcLogger = logger;
-
-  // 延迟获取store实例，确保在Pinia激活后使用
-  private get callStateStore() {
-    return useCallStateStore();
-  }
-
   private get rtcChannelStore() {
     return useRtcChannelStore();
   }
 
-  private get chatClientStore() {
-    return useChatClientStore();
-  }
-
-  async hangup(reason: HANGUP_REASON = HANGUP_REASON.HANGUP) {
-    this.svcLogger.info("CallService.hangup:", { reason });
-    this.svcLogger.event('hangup', { reason, callId: this.callStateStore.getCallState.callId });
-
-    try {
-      // 防止重复调用
-      const callStateStore = this.callStateStore;
-      if (
-        !callStateStore ||
-        typeof callStateStore.getCallStatus === "undefined"
-      ) {
-        this.svcLogger.error("CallState store not properly initialized");
-        return;
-      }
-
-      const currentStatus = callStateStore.getCallStatus;
-      if (currentStatus === CALL_STATUS.IDLE) {
-        this.svcLogger.warn("Call is not active, skip hangup");
-        return;
-      }
-    } catch (error) {
-      this.svcLogger.error("Error checking call status:", error);
-      return;
-    }
+  /**
+   * 清理通话相关资源
+   * 由 useEndCall / useCallKit 在 core hangup 后调用，或 core 失败时回退调用
+   */
+  async cleanup(): Promise<void> {
+    logger.info('[CallService] 开始清理通话资源');
 
     try {
-      // 选择并执行相应的策略
-      await this.executeHangupStrategy(reason);
+      // 1. 离开 RTC 频道并清理轨道
+      const rtcService = this.rtcChannelStore.getRtcService();
+      if (rtcService) {
+        try {
+          await rtcService.leaveChannel();
+          logger.info('[CallService] 已离开 RTC 频道');
+        } catch (e) {
+          logger.warn('[CallService] 离开 RTC 频道失败:', e);
+        }
+      }
 
-      // 执行通用的清理和状态重置
-      await this.cleanupMediaResources();
-      await this.cleanupConnection();
-      this.resetState(reason);
-
-      this.svcLogger.info(`Hangup completed successfully with reason: ${reason}`);
-    } catch (error) {
-      this.svcLogger.error("Hangup process failed:", error);
-      // 即使出错也要尝试重置基本状态
+      // 2. 重置 RTC Channel Store
       try {
-        this.callStateStore.setCallStatus(CALL_STATUS.IDLE);
-      } catch (resetError) {
-        this.svcLogger.error(
-          "Failed to reset state after hangup error:",
-          resetError
-        );
-      }
-      throw error;
-    }
-  }
-
-  // 执行特定的挂断策略
-  private async executeHangupStrategy(reason: HANGUP_REASON): Promise<void> {
-    // 简化的策略选择逻辑，直接基于reason判断
-    if (reason === HANGUP_REASON.CANCEL) {
-      await this.handleCancelStrategy();
-    } else if (this.isRemoteReason(reason)) {
-      // 远程操作不需要发送消息
-      return;
-    } else {
-      // 普通挂断策略
-      await this.handleNormalHangupStrategy(reason);
-    }
-  }
-
-  // 判断是否为远程原因
-  private isRemoteReason(reason: HANGUP_REASON): boolean {
-    const remoteReasons: HANGUP_REASON[] = [
-      HANGUP_REASON.REMOTE_CANCEL,
-      HANGUP_REASON.REMOTE_REFUSE,
-      HANGUP_REASON.BUSY,
-      HANGUP_REASON.NO_RESPONSE,
-      HANGUP_REASON.REMOTE_NO_RESPONSE,
-      HANGUP_REASON.HANDLE_ON_OTHER_DEVICE,
-    ];
-    return remoteReasons.includes(reason);
-  }
-
-  // 普通挂断策略
-  private async handleNormalHangupStrategy(
-    reason: HANGUP_REASON
-  ): Promise<void> {
-    try {
-      const callState = this.callStateStore.getCallState;
-      if (!callState) {
-        logger.warn("CallService: 挂断失败，通话状态为空");
-        return;
+        this.rtcChannelStore.reset();
+        logger.info('[CallService] RTC Channel Store 已重置');
+      } catch (e) {
+        logger.warn('[CallService] 重置 RTC Channel Store 失败:', e);
       }
 
-      // 使用 useSignalManager 发送 leaveCall 信令
-      const { sendLeaveMessage } = useSignalManager();
-      
-      // 判断是群组通话还是一对一通话
-      const isGroupCall = 
-        callState.type === CALL_TYPE.VIDEO_MULTI || 
-        callState.type === CALL_TYPE.AUDIO_MULTI;
-      
-      if (isGroupCall) {
-        // 群组通话：发送群定向消息给通话中的其他人
-        const groupCallStore = useGroupCallStore();
-        const groupId = groupCallStore.session?.groupId;
-        if (!groupId) {
-          logger.warn("CallService: 群组通话挂断失败，groupId 为空");
-          return;
-        }
-        
-        // 获取还在通话中的成员（state 不为 left）
-        const currentUserId = this.chatClientStore.getChatClient?.user;
-        const receiverList = groupCallStore.participantList
-          .filter(p => p.userId !== currentUserId && p.state !== 'left')
-          .map(p => p.userId);
-        
-        logger.info(
-          `CallService: 发送群组离开通话信令，群组: ${groupId}，接收者: ${receiverList.join(',') || '无'}`
-        );
-        
-        // 如果有需要通知的成员，发送群定向消息
-        if (receiverList.length > 0) {
-          await sendLeaveMessage(
-            groupId,
-            "groupChat",
-            receiverList
-          );
-          logger.info("CallService: 群组离开通话信令发送成功");
-        } else {
-          logger.info("CallService: 没有需要通知的成员，跳过发送 leaveCall");
-        }
-      } else {
-        // 一对一通话：发送单聊消息
-        const targetUserId = 
-          callState.calleeUserId && callState.calleeUserId !== this.chatClientStore.getChatClient?.user
-            ? callState.calleeUserId
-            : callState.callerUserId;
-        
-        if (!targetUserId) {
-          logger.warn("CallService: 一对一通话挂断失败，目标用户ID为空");
-          return;
-        }
-        
-        logger.info(
-          `CallService: 发送一对一离开通话信令，目标用户: ${targetUserId}`
-        );
-        
-        await sendLeaveMessage(
-          targetUserId,
-          "singleChat"
-        );
-        
-        logger.info("CallService: 离开通话信令发送成功");
-      }
-    } catch (error) {
-      logger.error("CallService: 发送离开通话信令失败:", error);
-      // 发送失败不影响后续流程
-    }
-  }
-
-  // 取消呼叫策略
-  private async handleCancelStrategy(): Promise<void> {
-    try {
-      const callState = this.callStateStore.getCallState;
-      if (!callState) {
-        logger.warn("CallService: 取消通话失败，通话状态为空");
-        return;
-      }
-
-      // 使用 useSignalManager 发送 cancelCall 信令
-      const { sendCancelMessage } = useSignalManager();
-      
-      // 判断是群组通话还是一对一通话
-      const isGroupCall = 
-        callState.type === CALL_TYPE.VIDEO_MULTI || 
-        callState.type === CALL_TYPE.AUDIO_MULTI;
-      
-      if (isGroupCall) {
-        // 群组通话：发送群定向消息给所有被邀请的成员
-        const groupCallStore = useGroupCallStore();
-        const groupId = groupCallStore.session?.groupId;
-        if (!groupId) {
-          logger.warn("CallService: 群组通话取消失败，groupId 为空");
-          return;
-        }
-        
-        // 获取被邀请的成员列表（排除自己）
-        const currentUserId = this.chatClientStore.getChatClient?.user;
-        const receiverList = groupCallStore.participantList
-          .filter(p => p.userId !== currentUserId && p.state === 'invited')
-          .map(p => p.userId);
-        
-        if (receiverList.length === 0) {
-          logger.warn("CallService: 群组通话取消失败，没有需要通知的被邀请成员");
-          return;
-        }
-        
-        logger.info(
-          `CallService: 发送群组取消通话信令，群组: ${groupId}，接收者: ${receiverList.join(',')}`
-        );
-        
-        await sendCancelMessage(
-          groupId,
-          "groupChat",
-          receiverList
-        );
-        
-        logger.info("CallService: 群组取消通话信令发送成功");
-      } else {
-        // 一对一通话：发送单聊消息
-        if (!callState.calleeUserId) {
-          logger.warn("CallService: 取消通话失败，缺少被叫方信息");
-          return;
-        }
-        
-        logger.info(
-          `CallService: 发送取消通话信令，目标用户: ${callState.calleeUserId}`
-        );
-        
-        await sendCancelMessage(
-          callState.calleeUserId,
-          "singleChat"
-        );
-        
-        logger.info("CallService: 取消通话信令发送成功");
-      }
-    } catch (error) {
-      logger.error("CallService: 发送取消通话信令失败:", error);
-      // 发送失败不影响后续流程
-    }
-  }
-
-  // 清理媒体资源
-  private async cleanupMediaResources(): Promise<void> {
-    try {
-      const rtcService = this.rtcChannelStore.getRtcService()
-      if (!rtcService) {
-        logger.debug('CallService: RtcService 未初始化，无需清理媒体资源')
-        return
-      }
-  
-      logger.info('CallService: 开始清理媒体资源')
-        
-      // 获取 RTC 客户端
-      const client = rtcService.getClient()
-      if (!client) {
-        logger.debug('CallService: RTC 客户端不存在')
-        return
-      }
-  
-      // 取消发布所有本地轨道
-      if (client.connectionState === 'CONNECTED') {
-        const localTracks = client.localTracks
-        if (localTracks && localTracks.length > 0) {
-          try {
-            await client.unpublish(localTracks)
-            logger.info('CallService: 已取消发布所有本地轨道')
-          } catch (error) {
-            logger.error('CallService: 取消发布本地轨道失败:', error)
-          }
-        }
-      }
-  
-      logger.info('CallService: 媒体资源清理完成')
-    } catch (error) {
-      this.svcLogger.error('Error cleaning up media resources:', error)
-    }
-  }
-
-  // 清理连接
-  private async cleanupConnection(): Promise<void> {
-    try {
-      const rtcService = this.rtcChannelStore.getRtcService()
-      if (!rtcService) {
-        logger.debug('CallService: RtcService 未初始化，无需清理连接')
-        return
-      }
-  
-      logger.info('CallService: 开始清理 RTC 连接')
-  
-      // 调用 RtcService 的 leaveChannel 方法，它会：
-      // 1. 取消发布本地轨道
-      // 2. 关闭本地轨道
-      // 3. 离开频道
-      await rtcService.leaveChannel()
-        
-      logger.info('CallService: 已离开 RTC 频道')
-  
-      // 使用 rtcChannelStore 的 reset 方法完整清理所有 RTC 状态
-      this.rtcChannelStore.reset()
-        
-      logger.info('CallService: RTC 连接清理完成')
-    } catch (error) {
-      this.svcLogger.error('Error cleaning up connection:', error)
-    }
-  }
-
-  // 重置状态
-  private resetState(reason: HANGUP_REASON): void {
-    try {
-      const callStateStore = this.callStateStore;
-      if (!callStateStore) {
-        this.svcLogger.error("CallState store not available for reset");
-        return;
-      }
-
-      const callState = callStateStore.getCallState;
-
-      // 计算通话时长
-      let duration = 0;
+      // 3. 重置通话计时器
       try {
         const callTimerStore = useCallTimerStore();
-        if (callTimerStore.callStartTime > 0) {
-          duration = Date.now() - callTimerStore.callStartTime;
-          callTimerStore.reset();
-        }
-        // 群通话时长从 groupCallStore 计算
+        callTimerStore.reset();
+      } catch (_e) {
+        // 忽略
+      }
+
+      // 4. 重置群聊会话
+      try {
         const groupCallStore = useGroupCallStore();
-        if (groupCallStore.session?.startTime && groupCallStore.session.startTime > 0) {
-          duration = Date.now() - groupCallStore.session.startTime;
+        if (groupCallStore.session) {
           groupCallStore.destroySession();
         }
       } catch (_e) {
-        // 忽略计时器获取失败
+        // 忽略
       }
 
-      // 触发 callEnded 事件（在重置状态之前，确保能拿到 callInfo）
-      const remoteReasons: HANGUP_REASON[] = [
-        HANGUP_REASON.REMOTE_CANCEL,
-        HANGUP_REASON.REMOTE_REFUSE,
-        HANGUP_REASON.REMOTE_NO_RESPONSE,
-        HANGUP_REASON.BUSY,
-      ];
-      const isLocal = !remoteReasons.includes(reason);
-
-      const currentUserId = getCurrentUserId();
-      let endedBy: string | undefined;
-      if (isLocal) {
-        endedBy = currentUserId;
-      } else if (
-        reason === HANGUP_REASON.REMOTE_CANCEL ||
-        reason === HANGUP_REASON.REMOTE_REFUSE ||
-        reason === HANGUP_REASON.REMOTE_NO_RESPONSE ||
-        reason === HANGUP_REASON.BUSY
-      ) {
-        // 远程原因：挂断/拒绝/忙线方为对方
-        endedBy =
-          callState.callerUserId === currentUserId
-            ? callState.calleeUserId
-            : callState.callerUserId;
+      // 5. 重置小窗状态
+      try {
+        const globalCallStore = useGlobalCallStore();
+        if (globalCallStore.isMinimized) {
+          globalCallStore.isMinimized = false;
+        }
+      } catch (_e) {
+        // 忽略
       }
 
-      callKitEventBus.emit("callEnded", {
-        ...buildBaseEventFields(
-          {
-            callId: callState.callId,
-            channel: callState.channel,
-            type: callState.type,
-            callerUserId: callState.callerUserId,
-            calleeUserId: callState.calleeUserId,
-            groupId: undefined,
-          },
-          isLocal
-        ),
-        reason,
-        duration,
-        endedBy,
-      });
-
-      logger.info(`[CallService] 重置通话状态，原因: ${reason}, 重置前状态: ${callStateStore.getCallStatus}, 时长: ${duration}ms`);
-      logger.event('callEnded', {
-        reason,
-        duration,
-        endedBy,
-        callId: callState.callId,
-        channel: callState.channel,
-        type: callState.type,
-      });
-      
-      // 重置小窗状态，确保下次通话从大窗开始
-      const globalCallStore = useGlobalCallStore();
-      if (globalCallStore.isMinimized) {
-        globalCallStore.isMinimized = false;
-        logger.info('[CallService] 重置小窗状态为 false');
-      }
-
-      // 使用 resetCallState 方法重置状态
-      callStateStore.resetCallState();
-
-      logger.info(`[CallService] 通话状态重置完成，当前状态: ${callStateStore.getCallStatus}`);
+      logger.info('[CallService] 通话资源清理完成');
     } catch (error) {
-      this.svcLogger.error("Error resetting state:", error);
+      logger.error('[CallService] 清理过程中发生错误:', error);
     }
-  }
-
-  // 便捷方法
-  async hangupCall() {
-    await this.hangup(HANGUP_REASON.HANGUP);
-  }
-  async cancelCall() {
-    await this.hangup(HANGUP_REASON.CANCEL);
-  }
-  async handleRemoteCancel() {
-    await this.hangup(HANGUP_REASON.REMOTE_CANCEL);
-  }
-  async handleRemoteRefuse() {
-    await this.hangup(HANGUP_REASON.REMOTE_REFUSE);
-  }
-  async handleAbnormalEnd() {
-    await this.hangup(HANGUP_REASON.ABNORMAL_END);
   }
 }
 
-// 创建单例实例，但不立即初始化store引用
+// 单例实例
 export const callService = new CallService();

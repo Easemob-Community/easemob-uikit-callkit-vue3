@@ -37,8 +37,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, type CSSProperties } from 'vue'
-import { useCallStateStore } from '../../store/callState'
+import { ref, onMounted, onUnmounted, computed, type CSSProperties, watch } from 'vue'
+import { useCallKitCore } from '../../composables/useCallKitCore'
 import { useGlobalCallStore } from '../../store/globalCall'
 import { CALL_STATUS, CALL_TYPE } from '../../types/callstate.types'
 import { DEFAULT_BACKGROUND_IMAGE, getAssetUrl } from '../../config/assets'
@@ -50,7 +50,7 @@ import EasemobChatMiniWindow from '../EasemobChatMiniWindow.vue'
 
 interface SingleCallProps {
   /**
-   * 目标用户ID（主叫方传入）。组件内部也会自动从 callStateStore 读取
+   * 目标用户ID（主叫方传入）。组件内部也会自动从 coreCallState 读取
    */
   targetUser?: string
   type?: 'audio' | 'video'
@@ -73,27 +73,27 @@ const emit = defineEmits<{
   callCanceled: []
 }>()
 
-// 通话状态管理 - 直接使用store
-const callStateStore = useCallStateStore()
+// 通话状态管理 - 直接读 core 状态
+const { callState: coreCallState } = useCallKitCore()
 const globalCallStore = useGlobalCallStore()
 const isCallActive = ref(false)
 
 // 计算属性 - 获取当前通话状态
-const callStatus = computed(() => callStateStore.status)
+const callStatus = computed(() => coreCallState.status)
 
 // 判断当前是否为群通话类型（单人通话组件在群通话场景下完全不显示）
 const isGroupCall = computed(() =>
-  callStateStore.type === CALL_TYPE.VIDEO_MULTI ||
-  callStateStore.type === CALL_TYPE.AUDIO_MULTI
+  coreCallState.type === CALL_TYPE.VIDEO_MULTI ||
+  coreCallState.type === CALL_TYPE.AUDIO_MULTI
 )
 
 // 判断是否处于通话中状态（IN_CALL 及接听中的中间态都算，避免黑屏）
 // 群通话场景下始终为 false，避免与 EasemobChatMultiCall / GroupCallShell 竞争
 const isInCall = computed(() =>
   !isGroupCall.value && (
-    callStateStore.status === CALL_STATUS.IN_CALL ||
-    callStateStore.status === CALL_STATUS.ANSWER_CALL ||
-    callStateStore.status === CALL_STATUS.CONFIRM_CALLEE
+    coreCallState.status === CALL_STATUS.IN_CALL ||
+    coreCallState.status === CALL_STATUS.ANSWER_CALL ||
+    coreCallState.status === CALL_STATUS.CONFIRM_CALLEE
   )
 )
 
@@ -104,25 +104,25 @@ const isInCall = computed(() =>
 // - 群通话（VIDEO_MULTI / AUDIO_MULTI）：完全由 EasemobChatMultiCall 接管，此处不显示
 const isCallVisible = computed(() =>
   !isGroupCall.value && (
-    callStateStore.status === CALL_STATUS.INVITING || isInCall.value
+    coreCallState.status === CALL_STATUS.INVITING || isInCall.value
   )
 )
 
-// 通话类型：优先从 store 读取（call/groupCall 时已写入），fallback 到 props
+// 通话类型：优先从 core 状态读取，fallback 到 props
 const callType = computed<'audio' | 'video'>(() => {
-  const storeType = callStateStore.type
-  if (storeType === CALL_TYPE.AUDIO_1V1 || storeType === CALL_TYPE.AUDIO_MULTI) {
+  const coreType = coreCallState.type
+  if (coreType === CALL_TYPE.AUDIO_1V1 || coreType === CALL_TYPE.AUDIO_MULTI) {
     return 'audio'
   }
-  if (storeType === CALL_TYPE.VIDEO_1V1 || storeType === CALL_TYPE.VIDEO_MULTI) {
+  if (coreType === CALL_TYPE.VIDEO_1V1 || coreType === CALL_TYPE.VIDEO_MULTI) {
     return 'video'
   }
   return props.type || 'video'
 })
 
-// 目标用户：优先使用 props，否则从 store 自动推断
+// 目标用户：优先使用 props，否则从 core 状态自动推断
 const displayTargetUser = computed(() => {
-  return props.targetUser || callStateStore.calleeUserId || callStateStore.callerUserId || ''
+  return props.targetUser || coreCallState.calleeUserId || coreCallState.callerUserId || ''
 })
 
 // 小窗口模式状态
@@ -203,30 +203,28 @@ const backgroundStyle = computed<CSSProperties>(() => {
   }
 })
 
-// 监听通话状态变化 - 使用store.$subscribe
-let stopStateWatch: Function | null = null
-
 onMounted(() => {
   // 只有当前处于非 IDLE 状态时才认为通话已激活
   // 避免组件挂载时无条件自动"启动通话"
-  if (callStateStore.status !== CALL_STATUS.IDLE) {
+  if (coreCallState.status !== CALL_STATUS.IDLE) {
     startCall()
   }
-
-  // 设置状态监听器
-  stopStateWatch = callStateStore.$subscribe((_mutation, state) => {
-    logger.debug('Call state changed:', state.status)
-    // 当状态变为IDLE时，触发callEnded事件关闭弹窗
-    if (state.status === CALL_STATUS.IDLE && isCallActive.value) {
-      handleEndCall()
-    }
-  })
 })
 
-onUnmounted(() => {
-  if (stopStateWatch) {
-    stopStateWatch()
+// 使用 watch 监听 core 状态变化
+const stopStateWatch = watch(
+  () => coreCallState.status,
+  (newStatus) => {
+    logger.debug('Call state changed:', newStatus)
+    // 当状态变为IDLE时，触发callEnded事件关闭弹窗
+    if (newStatus === CALL_STATUS.IDLE && isCallActive.value) {
+      handleEndCall()
+    }
   }
+)
+
+onUnmounted(() => {
+  stopStateWatch()
   handleEndCall()
 })
 </script>

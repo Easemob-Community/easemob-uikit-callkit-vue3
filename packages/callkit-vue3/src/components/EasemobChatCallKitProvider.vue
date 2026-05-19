@@ -7,9 +7,8 @@
 <script setup lang="ts">
 import { watchEffect, computed, onUnmounted, ref, onMounted } from 'vue'
 import type { ProviderConfig } from '../types'
-import { useListenerManager } from '../composables/useListenerManager';
+import { useCallKitCore } from '../composables/useCallKitCore';
 import { useChatClientStore } from '../store/chatClient';
-import { useCallStateStore } from '../store/callState';
 import { useRtcChannelStore } from '../store/rtcChannel';
 import { logger, LogLevel, Logger } from '../utils/logger';
 import { RingtoneService } from '../utils/ringtone';
@@ -62,14 +61,11 @@ const globalConfig = computed(() => ({
 // 创建全局 store 实例
 const rtcChannelStore = useRtcChannelStore();
 
-// 在 setup 顶层创建 listenerManager（与 callkit-core 共存，确保 lib 层状态同步）
-const { mountTextMessageListener, mountSignalListener, unmountListeners } = useListenerManager();
+// 使用 callkit-core 的 useCallKitCore 作为统一事件消费层
+const { init: initCallKitCore, destroy: destroyCallKitCore } = useCallKitCore();
 
 // 先设置日志级别（必须在RTC初始化之前）
 watchEffect(() => {
-  const callStateStore = useCallStateStore();
-  callStateStore.inviteTimeout = effectiveInitConfig.inviteTimeout;
-
   // 设置日志级别（logLevel 优先级高于 debug）
   if (effectiveInitConfig.logLevel !== undefined) {
     logger.setLevel(effectiveInitConfig.logLevel);
@@ -128,12 +124,21 @@ watchEffect(async () => {
     }
   }
 });
-// IM 消息监听：lib 层与 callkit-core 共存，确保 lib 层 callStateStore 状态同步
-watchEffect(() => {
+// 初始化 callkit-core（统一信令层）
+watchEffect(async () => {
   if (chatClientStore.getChatClient) {
-    logger.info('CallKit Provider 已就绪，挂载 lib 层 IM 监听器');
-    mountTextMessageListener();
-    mountSignalListener();
+    logger.info('CallKit Provider 已就绪，初始化 callkit-core');
+    try {
+      await initCallKitCore({
+        imClient: chatClientStore.getChatClient,
+        userProfile: {
+          userId: chatClientStore.getChatClient.user || '',
+        },
+        inviteTimeout: effectiveInitConfig.inviteTimeout,
+      });
+    } catch (err) {
+      logger.error('CallKit Provider 初始化 callkit-core 失败:', err);
+    }
   } else {
     logger.verbose('CallKit Provider 未就绪：缺少环信客户端实例');
   }
@@ -198,7 +203,7 @@ onMounted(() => {
 
 // 组件卸载时清理RTC服务和Provider
 onUnmounted(async () => {
-  unmountListeners();
+  await destroyCallKitCore();
   await rtcChannelStore.destroyRtcService();
   clearProfileProviders();
 });

@@ -8,16 +8,14 @@ import EasemobChatGroupMemberList from "./components/multiCall/EasemobChatGroupM
 import InvitationNotification from "./components/InvitationNotification.vue";
 import EasemobChatMiniWindow from "./components/EasemobChatMiniWindow.vue";
 import { GroupCallShell } from "./modules/groupCall";
-import { useCallStateStore } from "./store/callState";
 import { useRtcChannelStore } from "./store/rtcChannel";
-import { useSingleCallRtcStore } from "./store/singleCallRtc";
+
 import { useCallTimerStore } from "./store/callTimer";
 import { useGlobalCallStore } from "./store/globalCall";
 import { useCallKit } from "./composables/useCallKit";
 import { useCallKitEvents } from "./composables/useCallKitEvents";
 import { useCallKitCore } from "./composables/useCallKitCore";
 import { useRtcService } from "./composables/useRtcService";
-import { useJoinChannel } from "./composables/useJoinChannel";
 import { useParticipants } from "./composables/useParticipants";
 import { useDraggable, useCenteredDraggable, useCornerDraggable } from "./composables/useDraggable";
 import { RtcService } from "./services/RtcService";
@@ -33,9 +31,9 @@ export {
 };
 
 // 导出store
-export { useCallStateStore, useRtcChannelStore, useGlobalCallStore, useSingleCallRtcStore, useCallTimerStore };
+export { useRtcChannelStore, useGlobalCallStore, useCallTimerStore };
 // 导出部分hook
-export { useCallKit, useCallKitEvents, useCallKitCore, useRtcService, useJoinChannel, useParticipants };
+export { useCallKit, useCallKitEvents, useCallKitCore, useRtcService, useParticipants };
 // 导出拖拽hook
 export { useDraggable, useCenteredDraggable, useCornerDraggable };
 // 导出RTC服务

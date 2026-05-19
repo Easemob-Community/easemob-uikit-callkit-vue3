@@ -13,7 +13,10 @@ export type CallKitEventType =
   | "callTimeout" // 通话邀请超时
   | "callBusy" // 对方忙线
   | "participantJoined" // 群通话成员加入
-  | "participantLeft"; // 群通话成员离开
+  | "participantLeft" // 群通话成员离开
+  | "groupCallInit" // 群通话初始化
+  | "participantStateChanged" // 群通话参与者状态变化
+  | "rtcReport"; // RTC 上报事件
 
 /**
  * 当前用户在通话中的角色
@@ -137,6 +140,59 @@ export interface ParticipantLeftEvent {
 }
 
 /**
+ * 群通话初始化事件
+ */
+export interface GroupCallInitEvent {
+  callId: string;
+  channel: string;
+  groupId: string;
+  groupName?: string;
+  groupAvatar?: string;
+  callType: CALL_TYPE;
+  callerUserId: string;
+  invitedMembers: string[];
+  /** 会话 ID，群聊=groupId */
+  conversationId: string;
+  /** 是否由本端行为触发 */
+  isLocal: boolean;
+  /** 当前用户角色 */
+  localUserRole: CallUserRole;
+}
+
+/**
+ * 群通话参与者状态变化事件
+ */
+export interface ParticipantStateChangedEvent {
+  userId: string;
+  callId: string;
+  channel: string;
+  groupId?: string;
+  state: string;
+  /** 会话 ID，群聊=groupId */
+  conversationId: string;
+  /** 是否由本端行为触发 */
+  isLocal: boolean;
+  /** 当前用户角色 */
+  localUserRole: CallUserRole;
+}
+
+/**
+ * RTC 上报事件
+ */
+export interface RtcReportEvent {
+  callId: string;
+  channel: string;
+  type: string;
+  data: any;
+  /** 会话 ID */
+  conversationId: string;
+  /** 是否由本端行为触发 */
+  isLocal: boolean;
+  /** 当前用户角色 */
+  localUserRole: CallUserRole;
+}
+
+/**
  * 通话记录对象（供 getCallRecord API 使用）
  */
 export interface CallRecord {
@@ -172,6 +228,9 @@ export interface CallKitEventPayloads {
   callBusy: CallBusyEvent;
   participantJoined: ParticipantJoinedEvent;
   participantLeft: ParticipantLeftEvent;
+  groupCallInit: GroupCallInitEvent;
+  participantStateChanged: ParticipantStateChangedEvent;
+  rtcReport: RtcReportEvent;
 }
 
 /**

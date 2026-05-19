@@ -1,26 +1,40 @@
 import { callService } from "../services/CallService";
+import { useCallKitCore } from "./useCallKitCore";
 import { HANGUP_REASON, CALL_STATUS } from "../types/callstate.types";
-import { useCallStateStore } from "../store/callState";
 import { logger } from "../utils/logger";
 
 /**
  * 通话结束相关功能的组合式函数
- * 提供各种通话结束场景的便捷方法
+ * 信令由 callkit-core 处理，资源清理由 CallService 处理
  */
 export function useEndCall() {
-  const callStateStore = useCallStateStore();
+  const { callState: coreCallState, hangup: coreHangup } = useCallKitCore();
 
   /**
    * 挂断当前通话
-   * @param reason 挂断原因，默认为普通挂断
-   * @returns Promise<void>
+   * 优先通过 core 发送信令，然后清理资源
    */
   async function hangup(
     reason: HANGUP_REASON = HANGUP_REASON.HANGUP
   ): Promise<void> {
     try {
       logger.info("useEndCall: Hanging up call", { reason });
-      await callService.hangup(reason);
+      const reasonMap: Record<string, 'normal' | 'cancel'> = {
+        [HANGUP_REASON.HANGUP]: 'normal',
+        [HANGUP_REASON.CANCEL]: 'cancel',
+        [HANGUP_REASON.REMOTE_CANCEL]: 'normal',
+        [HANGUP_REASON.REMOTE_REFUSE]: 'normal',
+        [HANGUP_REASON.BUSY]: 'normal',
+        [HANGUP_REASON.NO_RESPONSE]: 'normal',
+      };
+      const coreReason = reasonMap[reason] || 'normal';
+      try {
+        await coreHangup({ reason: coreReason });
+      } catch (coreErr) {
+        logger.warn('useEndCall: core hangup 失败', coreErr);
+      }
+      // 无论 core 是否成功，都执行资源清理
+      await callService.cleanup();
     } catch (error) {
       logger.error("useEndCall: Failed to hang up call", error);
       throw error;
@@ -29,26 +43,23 @@ export function useEndCall() {
 
   /**
    * 普通挂断通话
-   * @returns Promise<void>
    */
   async function hangupCall(): Promise<void> {
-    try {
-      logger.info("useEndCall: Hanging up active call");
-      await callService.hangupCall();
-    } catch (error) {
-      logger.error("useEndCall: Failed to hang up active call", error);
-      throw error;
-    }
+    await hangup(HANGUP_REASON.HANGUP);
   }
 
   /**
    * 取消通话邀请
-   * @returns Promise<void>
    */
   async function cancelCall(): Promise<void> {
     try {
       logger.info("useEndCall: Cancelling call invitation");
-      await callService.cancelCall();
+      try {
+        await coreHangup({ reason: 'cancel' });
+      } catch (coreErr) {
+        logger.warn('useEndCall: core cancel 失败', coreErr);
+      }
+      await callService.cleanup();
     } catch (error) {
       logger.error("useEndCall: Failed to cancel call invitation", error);
       throw error;
@@ -57,73 +68,46 @@ export function useEndCall() {
 
   /**
    * 处理远程取消通话
-   * @returns Promise<void>
    */
   async function handleRemoteCancel(): Promise<void> {
-    try {
-      logger.info("useEndCall: Handling remote cancel");
-      await callService.handleRemoteCancel();
-    } catch (error) {
-      logger.error("useEndCall: Failed to handle remote cancel", error);
-      throw error;
-    }
+    await hangup(HANGUP_REASON.REMOTE_CANCEL);
   }
 
   /**
    * 处理远程拒绝通话
-   * @returns Promise<void>
    */
   async function handleRemoteRefuse(): Promise<void> {
-    try {
-      logger.info("useEndCall: Handling remote refuse");
-      await callService.handleRemoteRefuse();
-    } catch (error) {
-      logger.error("useEndCall: Failed to handle remote refuse", error);
-      throw error;
-    }
+    await hangup(HANGUP_REASON.REMOTE_REFUSE);
   }
 
   /**
    * 处理异常结束
-   * @returns Promise<void>
    */
   async function handleAbnormalEnd(): Promise<void> {
-    try {
-      logger.info("useEndCall: Handling abnormal end");
-      await callService.handleAbnormalEnd();
-    } catch (error) {
-      logger.error("useEndCall: Failed to handle abnormal end", error);
-      throw error;
-    }
+    await hangup(HANGUP_REASON.ABNORMAL_END);
   }
 
   /**
-   * 检查当前是否可以挣断
-   * @returns boolean 是否可以执行挣断操作
+   * 检查当前是否可以挂断
    */
   function canHangup(): boolean {
-    return callStateStore.status !== CALL_STATUS.IDLE && callStateStore.isInCall;
+    return coreCallState.status !== CALL_STATUS.IDLE;
   }
 
   /**
    * 检查当前是否可以取消通话
-   * @returns boolean 是否可以执行取消操作
    */
   function canCancel(): boolean {
-    // 只有在邀请状态才能取消
-    return callStateStore.status === CALL_STATUS.INVITING;
+    return coreCallState.status === CALL_STATUS.INVITING;
   }
-  
+
   return {
-    // 核心挂断方法
     hangup,
     hangupCall,
     cancelCall,
     handleRemoteCancel,
     handleRemoteRefuse,
     handleAbnormalEnd,
-
-    // 状态检查方法
     canHangup,
     canCancel,
   };

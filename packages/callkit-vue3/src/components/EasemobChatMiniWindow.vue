@@ -36,10 +36,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, type CSSProperties } from 'vue'
-import { useCallStateStore } from '../store/callState'
 import { useRtcChannelStore } from '../store/rtcChannel'
 import { useCallTimerStore } from '../store/callTimer'
 import { useGlobalCallStore } from '../store/globalCall'
+import { useCallKitCore } from '../composables/useCallKitCore'
 import { useCornerDraggable } from '../composables/useDraggable'
 import { CALL_TYPE } from '../types/callstate.types'
 import { logger } from '../utils/logger'
@@ -49,7 +49,7 @@ const emit = defineEmits<{
   close: []
 }>()
 
-const callStateStore = useCallStateStore()
+const { callState: coreCallState } = useCallKitCore()
 const rtcChannelStore = useRtcChannelStore()
 const callTimerStore = useCallTimerStore()
 const globalCallStore = useGlobalCallStore()
@@ -67,7 +67,7 @@ const VIDEO_HEIGHT = 240
 const isVisible = computed(() => globalCallStore.isMinimized)
 
 // 通话类型
-const callType = computed(() => callStateStore.type)
+const callType = computed(() => coreCallState.type)
 
 // 判断是否只显示时长（音频模式或群组通话）
 const shouldShowDurationOnly = computed(() => {

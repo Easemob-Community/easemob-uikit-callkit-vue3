@@ -8,7 +8,7 @@ import type {
   SignalingMessageOptions,
   CALLKIT_SIGNALING_CMD_ACTION,
 } from "../types/signal.types";
-import { useCallStateStore } from "../store/callState";
+import { useCallKitCore } from "../composables/useCallKitCore";
 import { useGlobalCallStore } from "../store/globalCall";
 import {
   CALL_TYPE,
@@ -20,42 +20,41 @@ import { getUserInfoProvider, getGroupInfoProvider } from "./UserProfileService"
 export class ChatService {
   private chatClient: Chat.Connection | null = null;
   private isMiniCore = false;
-  private callStateStore = useCallStateStore();
   constructor(chatClient: Chat.Connection, isMiniCore?: boolean) {
     this.chatClient = chatClient;
     this.isMiniCore = !!isMiniCore;
   }
   //构建邀请信息的ext
   private async buildInviteMessageExt(groupId?: string, userInfo?: { nickname?: string; avatarURL?: string }) {
-    const callState = this.callStateStore.getCallState;
+    const { callState: coreCallState } = useCallKitCore();
     const ext: InviteSignalingExt = {
       action: "invite",
-      callId: callState.callId || "",
-      callerIMName: callState.callerUserId || "",
-      calleeIMName: callState.calleeUserId || "暂未取到calleeUserId",
+      callId: coreCallState.callId || "",
+      callerIMName: coreCallState.callerUserId || "",
+      calleeIMName: coreCallState.calleeUserId || "暂未取到calleeUserId",
       callerDevId:
         this.chatClient?.context.jid.clientResource || "暂未取到callerDevId",
-      channelName: callState.channel || "",
-      chatType: callState.type || CALL_TYPE.AUDIO_1V1,
-      type: callState.type || CALL_TYPE.AUDIO_1V1,
+      channelName: coreCallState.channel || "",
+      chatType: coreCallState.type || CALL_TYPE.AUDIO_1V1,
+      type: coreCallState.type || CALL_TYPE.AUDIO_1V1,
       ts: Date.now(),
       msgType: "rtcCallWithAgora",
       // 群组通话时携带被邀请成员列表，方便被叫方维护邀请列表
-      invitedMembers: (callState.invitedMembers?.length ?? 0) > 0 ? callState.invitedMembers : undefined,
+      invitedMembers: undefined,
       em_push_ext: {
         type: "call",
         custom: {
           action: "invite",
-          channelName: callState.channel || "",
-          type: callState.type || CALL_TYPE.AUDIO_1V1,
+          channelName: coreCallState.channel || "",
+          type: coreCallState.type || CALL_TYPE.AUDIO_1V1,
           callerDevId: this.chatClient?.context.jid.clientResource || "",
-          callId: callState.callId || "",
+          callId: coreCallState.callId || "",
           ts: Date.now(),
           msgType: "rtcCallWithAgora",
-          callerIMName: callState.callerUserId || "",
-          calleeIMName: callState.calleeUserId || "暂未取到calleeUserId",
-          callerNickname: callState.callerNickname || "",
-          chatType: callState.type || CALL_TYPE.AUDIO_1V1,
+          callerIMName: coreCallState.callerUserId || "",
+          calleeIMName: coreCallState.calleeUserId || "暂未取到calleeUserId",
+          callerNickname: coreCallState.callerUserId || "",
+          chatType: coreCallState.type || CALL_TYPE.AUDIO_1V1,
         },
       },
       em_apns_ext: {
@@ -113,8 +112,8 @@ export class ChatService {
     }
 
     // 群通话：补充群信息
-    if (groupId || callState.type === CALL_TYPE.VIDEO_MULTI || callState.type === CALL_TYPE.AUDIO_MULTI) {
-      const gid = groupId || callState.groupId || '';
+    if (groupId || coreCallState.type === CALL_TYPE.VIDEO_MULTI || coreCallState.type === CALL_TYPE.AUDIO_MULTI) {
+      const gid = groupId || '';
       if (gid) {
         const groupInfoProvider = getGroupInfoProvider();
         let groupName: string | undefined;
@@ -151,8 +150,8 @@ export class ChatService {
     /** 通话结果 */
     result?: CALLKIT_CMD_MSG_RESULT_TYPE
   ): SignalingExt {
-    //传入的ext优先级高于store中的callState
-    const callState = this.callStateStore.getCallState;
+    //传入的ext优先级高于core中的callState
+    const { callState: coreCallState } = useCallKitCore();
     switch (action) {
       case "alert": {
         return {
@@ -162,8 +161,8 @@ export class ChatService {
           calleeDevId:
             this.chatClient?.context.jid.clientResource ||
             "未成功获取当前用户calleeDevId",
-          callerDevId: ext?.callerDevId || callState.callerDevId || "",
-          callId: ext?.callId || callState.callId || "",
+          callerDevId: ext?.callerDevId || coreCallState.callerDevId || "",
+          callId: ext?.callId || coreCallState.callId || "",
         };
       }
       case "confirmRing": {
@@ -178,7 +177,7 @@ export class ChatService {
         };
       }
       case "answerCall": {
-        logger.warn(">>>>>answerCall", callState);
+        logger.warn(">>>>>answerCall", coreCallState);
         return {
           action: "answerCall",
           ts: Date.now(),
@@ -192,8 +191,8 @@ export class ChatService {
       case "cancelCall": {
         return {
           action: "cancelCall",
-          callerDevId: callState.callerDevId || "未从callState取到callerDevId",
-          callId: callState.callId || "未从callState取到callId",
+          callerDevId: coreCallState.callerDevId || "未从coreCallState取到callerDevId",
+          callId: coreCallState.callId || "未从coreCallState取到callId",
           ts: Date.now(),
           msgType: "rtcCallWithAgora",
         };
@@ -205,14 +204,14 @@ export class ChatService {
           msgType: "rtcCallWithAgora",
           callerDevId: this.chatClient?.context.jid.clientResource || "",  // 主叫方的设备ID
           calleeDevId: ext?.calleeDevId || "",  // 被叫方的设备ID（从answerCall信令中获取）
-          callId: ext?.callId || callState.callId || "",
+          callId: ext?.callId || coreCallState.callId || "",
           result: result || (ext as { result?: string })?.result || CALLKIT_CMD_MSG_RESULT_TYPE.ACCEPT,
         };
       }
       case "leaveCall": {
         return {
           action: "leaveCall",
-          callId: callState.callId || "未从callState取到callId",
+          callId: coreCallState.callId || "未从coreCallState取到callId",
           ts: Date.now(),
           msgType: "rtcCallWithAgora",
         };

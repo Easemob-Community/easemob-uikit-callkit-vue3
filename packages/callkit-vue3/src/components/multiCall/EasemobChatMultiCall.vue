@@ -17,10 +17,10 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { useCallStateStore } from '../../store/callState'
 import { useRtcChannelStore } from '../../store/rtcChannel'
 import { useChatClientStore } from '../../store/chatClient'
 import { useGlobalCallStore } from '../../store/globalCall'
+import { useCallKitCore } from '../../composables/useCallKitCore'
 import { CALL_STATUS, CALL_TYPE } from '../../types/callstate.types'
 import { GroupCallShell, useGroupCallStore } from '../../modules/groupCall'
 import { logger } from '../../utils/logger'
@@ -50,7 +50,7 @@ const emit = defineEmits<{
   error: [error: Error]
 }>()
 
-const callStateStore = useCallStateStore()
+const { callState: coreCallState } = useCallKitCore()
 const rtcChannelStore = useRtcChannelStore()
 const chatClientStore = useChatClientStore()
 const globalCallStore = useGlobalCallStore()
@@ -61,7 +61,7 @@ const groupCallShellRef = ref<InstanceType<typeof GroupCallShell> | null>(null)
 // groupId/groupName/groupAvatar 优先使用外部 prop，无则从 store 兜底
 // 被叫方场景：calleeUserId / groupCallStore.session.groupId 就是 groupId
 const effectiveGroupId = computed(() =>
-  props.groupId || callStateStore.calleeUserId || groupCallStore.session?.groupId || ''
+  props.groupId || coreCallState.calleeUserId || groupCallStore.session?.groupId || ''
 )
 const effectiveGroupName = computed(() => {
   if (props.groupName) return props.groupName
@@ -71,9 +71,9 @@ const effectiveGroupAvatar = computed(() => props.groupAvatar || '')
 
 const isVisible = computed(() => {
   if (props.autoShow === false) return true
-  const status = callStateStore.getCallStatus
-  const callType = callStateStore.getCallState.type
-  const callId = callStateStore.getCallState.callId
+  const status = coreCallState.status
+  const callType = coreCallState.type
+  const callId = coreCallState.callId
   const isGroupCall = callType === CALL_TYPE.VIDEO_MULTI || callType === CALL_TYPE.AUDIO_MULTI
   const isInCall = status === CALL_STATUS.IN_CALL || status === CALL_STATUS.INVITING
   const hasValidCall = !!callId && callId.length > 0
@@ -104,8 +104,8 @@ watch(
   groupCallShellRef,
   (shell, prevShell) => {
     if (shell && !prevShell) {
-      const status = callStateStore.getCallStatus
-      const type = callStateStore.getCallState.type
+      const status = coreCallState.status
+      const type = coreCallState.type
       // 只有真正处于群通话状态中才补调 startSession，避免 autoShow=false 时误触发
       const isGroupCall = type === CALL_TYPE.VIDEO_MULTI || type === CALL_TYPE.AUDIO_MULTI
       const isInCall = status === CALL_STATUS.IN_CALL || status === CALL_STATUS.INVITING
@@ -115,7 +115,7 @@ watch(
       }
       const callType = type === CALL_TYPE.AUDIO_MULTI ? 'audio' : 'video'
       shell.startSession({
-        sessionId: callStateStore.getCallState.channel || '',
+        sessionId: coreCallState.channel || '',
         callType,
       })
       emit('callStarted')

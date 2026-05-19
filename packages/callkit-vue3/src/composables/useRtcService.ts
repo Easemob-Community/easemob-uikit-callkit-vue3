@@ -54,11 +54,9 @@ export function useRtcService() {
 
   // 从 store 获取响应式状态
   const localStream = computed(() => rtcChannelStore.localStream)
-  const remoteStreams = computed(() => rtcChannelStore.remoteStreams)
   const isVideoEnabled = computed(() => rtcChannelStore.videoEnabled)
   const isAudioEnabled = computed(() => rtcChannelStore.audioEnabled)
   const isConnected = computed(() => rtcChannelStore.isConnected)
-  const activeChannel = computed(() => rtcChannelStore.activeChannel)
 
   /**
    * 获取 RtcService 实例
@@ -157,27 +155,6 @@ export function useRtcService() {
   }
 
   /**
-   * 获取远程视频流
-   */
-  const getRemoteStream = (userId: string): MediaStream | undefined => {
-    return remoteStreams.value[userId]
-  }
-
-  /**
-   * 添加远程流
-   */
-  const addRemoteStream = (userId: string, stream: MediaStream): void => {
-    rtcChannelStore.addRemoteStream(userId, stream)
-  }
-
-  /**
-   * 移除远程流
-   */
-  const removeRemoteStream = (userId: string): void => {
-    rtcChannelStore.removeRemoteStream(userId)
-  }
-
-  /**
    * 设置本地流
    */
   const setLocalStream = (stream: MediaStream | null): void => {
@@ -194,25 +171,20 @@ export function useRtcService() {
   return {
     // 响应式状态
     localStream,
-    remoteStreams,
     isVideoEnabled,
     isAudioEnabled,
     isConnected,
-    activeChannel,
-    
+
     // 控制方法
     toggleVideo,
     toggleAudio,
     switchCamera,
     switchMicrophone,
-    
+
     // 流管理方法
     getLocalStream,
-    getRemoteStream,
-    addRemoteStream,
-    removeRemoteStream,
     setLocalStream,
-    
+
     // 其他方法
     reset
   }
