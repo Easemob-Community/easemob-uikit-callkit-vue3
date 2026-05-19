@@ -261,7 +261,10 @@ export function useListenerManager(): ListenerManagerReturn {
         onTextMessage: (message) => {
           logger.info(`收到文本消息，发送方: ${message.from || '未知'}`)
           logger.verbose(`文本消息详情:`, message)
-          if (message.ext && message.ext.action === 'invite') {
+          // 兼容 ext 在 message.ext 或 message.body?.ext 中的情况（与 callkit-core 对齐）
+          const msgAny = message as any
+          const ext = msgAny.ext || msgAny.body?.ext
+          if (ext && ext.action === 'invite') {
             handleInvitationMessage(message)
             handleUserAttributes(message)
           }

@@ -66,15 +66,13 @@ export class SingleCallSignalHandler implements SignalHandler {
     if (!ext) return []
 
     const currentState = this.stateMachine.getState()
-    if (currentState.type === CALL_TYPE.VIDEO_MULTI || currentState.type === CALL_TYPE.AUDIO_MULTI) {
-      this.logger.debug('[SingleCallSignalHandler] alert 为群聊类型，由 GroupCallSignalHandler 处理')
-      return []
-    }
+    const isGroupCall = currentState.type === CALL_TYPE.VIDEO_MULTI || currentState.type === CALL_TYPE.AUDIO_MULTI
 
     this.logger.signal?.('recv', 'alert', {
       from: message.from,
       callId: ext?.callId,
       callerDevId: ext?.callerDevId,
+      isGroupCall,
     })
 
     // 多端校验：callerDevId 必须匹配当前设备
@@ -85,7 +83,7 @@ export class SingleCallSignalHandler implements SignalHandler {
       return []
     }
 
-    // 状态机流转
+    // 状态机流转（群聊也需要 alert → confirmRing 的流转）
     const stateResult = this.stateMachine.receiveAlert(ext.calleeDevId as string)
     if (!stateResult.ok) {
       return []
@@ -156,10 +154,7 @@ export class SingleCallSignalHandler implements SignalHandler {
     if (!ext) return []
 
     const currentState = this.stateMachine.getState()
-    if (currentState.type === CALL_TYPE.VIDEO_MULTI || currentState.type === CALL_TYPE.AUDIO_MULTI) {
-      this.logger.debug('[SingleCallSignalHandler] confirmRing 为群聊类型，由 GroupCallSignalHandler 处理')
-      return []
-    }
+    const isGroupCall = currentState.type === CALL_TYPE.VIDEO_MULTI || currentState.type === CALL_TYPE.AUDIO_MULTI
 
     // 多端校验：callerDevId 必须匹配当前设备（confirmRing 是发给主叫的，但被叫也会收到... 等等）
     // 实际上 confirmRing 是主叫发给被叫的。被叫收到时，callerDevId 是主叫的设备ID。

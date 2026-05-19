@@ -62,8 +62,8 @@ const globalConfig = computed(() => ({
 // 创建全局 store 实例
 const rtcChannelStore = useRtcChannelStore();
 
-// 在 setup 顶层创建 listenerManager（旧链路监听器已废弃，仅保留卸载能力用于清理）
-const { unmountListeners } = useListenerManager();
+// 在 setup 顶层创建 listenerManager（与 callkit-core 共存，确保 lib 层状态同步）
+const { mountTextMessageListener, mountSignalListener, unmountListeners } = useListenerManager();
 
 // 先设置日志级别（必须在RTC初始化之前）
 watchEffect(() => {
@@ -128,11 +128,12 @@ watchEffect(async () => {
     }
   }
 });
-// 注：IM 消息监听已由 CallKitCore 的 IMListener 接管，Provider 不再挂载旧链路监听器
-// 保留 watchEffect 结构用于未来扩展（如 Provider 级别的健康检查）
+// IM 消息监听：lib 层与 callkit-core 共存，确保 lib 层 callStateStore 状态同步
 watchEffect(() => {
   if (chatClientStore.getChatClient) {
-    logger.info('CallKit Provider 已就绪（IM 监听由 CallKitCore 管理）');
+    logger.info('CallKit Provider 已就绪，挂载 lib 层 IM 监听器');
+    mountTextMessageListener();
+    mountSignalListener();
   } else {
     logger.verbose('CallKit Provider 未就绪：缺少环信客户端实例');
   }

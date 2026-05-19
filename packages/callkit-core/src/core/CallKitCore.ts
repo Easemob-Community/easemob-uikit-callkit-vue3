@@ -247,14 +247,25 @@ export class CallKitCore {
         // 群聊：发送到群 groupId，携带 receiverList 定向给被邀请成员（与旧版 CallService 对齐）
         const groupSnapshot = this.groupCallSession.getSnapshot()
         const groupId = groupSnapshot?.groupId || state.calleeUserId
-        const receiverList = this.groupCallSession
-          .getAllParticipants()
+        const allParticipants = this.groupCallSession.getAllParticipants()
+        const receiverList = allParticipants
           .filter((p) => p.userId !== this.userId && p.state === 'invited')
           .map((p) => p.userId)
+        this.logger.warn(
+          '[CallKitCore] 群聊取消: participants=',
+          allParticipants.map((p) => ({ userId: p.userId, state: p.state })),
+          '| receiverList=',
+          receiverList
+        )
         if (groupId && receiverList.length > 0) {
+          this.logger.warn('[CallKitCore] 群聊取消: 发送 cancelCall 到', groupId, 'receiverList:', receiverList)
           await this.signalSender
             .sendCmdMessage(groupId, 'groupChat', ext as any, { receiverList })
-            .catch(() => {})
+            .catch((err) => {
+              this.logger.error('[CallKitCore] 群聊取消: 发送 cancelCall 失败', err)
+            })
+        } else {
+          this.logger.warn('[CallKitCore] 群聊取消: 无接收者，跳过发送 cancelCall')
         }
       } else {
         // 单聊
@@ -330,6 +341,32 @@ export class CallKitCore {
       groupName: params.groupId,
       callType: callTypeStr,
       callerUserId: this.userId,
+    })
+
+    // 添加主叫方自己
+    this.groupCallSession.addParticipant({
+      userId: this.userId,
+      nickname: this.userId,
+      avatarUrl: '',
+      state: 'joinedRtc',
+      isLocal: true,
+      isMuted: false,
+      isCameraOn: callTypeStr === 'video',
+      isSpeaking: false,
+    })
+
+    // 添加被邀请成员
+    params.participantIds.forEach((userId: string) => {
+      this.groupCallSession.addParticipant({
+        userId,
+        nickname: userId,
+        avatarUrl: '',
+        state: 'invited',
+        isLocal: false,
+        isMuted: false,
+        isCameraOn: false,
+        isSpeaking: false,
+      })
     })
 
     // 初始化单聊状态机（群聊也用它存储 callId/channel/token）
@@ -552,6 +589,7 @@ export class CallKitCore {
           calleeDevId: this.deviceId,
           calleeUserId: groupId, // 群聊时 calleeUserId 使用 groupId，与旧版对齐
         })
+        this.logger.warn('[CallKitCore] initIncoming 返回事件数:', stateResult.events.length)
         // 处理状态机返回的 STATUS_CHANGED 事件，确保 callStateStore 同步到 ALERTING
         this.processEvents(stateResult.events, this.singleCallState.getState())
         // 启动超时定时器
@@ -566,6 +604,26 @@ export class CallKitCore {
       const events = this.groupCallHandler.handleInviteTextMessage(msg)
       this.logger.warn('[CallKitCore] 群聊 invite 处理后事件:', events.map((e: any) => e.type))
       this.processEvents(events, this.singleCallState.getState())
+
+      // 发出 incomingCall 事件（与单聊行为保持一致，确保 UI 层能弹出待接听状态栏）
+      const incomingEvent: CallKitEvent = {
+        type: 'incomingCall',
+        payload: {
+          callId,
+          callType,
+          callerUserId,
+          callerDevId,
+          channel,
+          calleeUserId: ext?.callkitGroupInfo?.groupId || ext?.groupId || '',
+          token: '',
+          callerInfo: ext.ease_chat_uikit_user_info,
+          groupId: ext?.callkitGroupInfo?.groupId || ext?.groupId,
+          groupName: ext?.callkitGroupInfo?.groupName,
+        },
+      }
+      this.logger.warn('[CallKitCore] 即将发出 incomingCall 事件:', { callId, callerUserId, callType })
+      this.emitEvent(incomingEvent)
+      this.logger.warn('[CallKitCore] incomingCall 事件已发出')
 
       // 被叫方收到 invite 后回发 alert CMD（与旧版 useListenerManager 对齐）
       this.sendAlertSignal(msg.from as string, ext.callId as string, ext.callerDevId as string)
@@ -892,7 +950,7 @@ export class CallKitCore {
           },
         }
       }
-
+ 
       case 'LOCAL_AUDIO_CHANGED': {
         return {
           type: 'localAudioChanged',
@@ -913,10 +971,12 @@ export class CallKitCore {
   }
 
   private emitEvent(event: CallKitEvent): void {
+    this.logger.warn('[CallKitCore] emitEvent:', event.type, '| onEvent存在=', !!this.config.onEvent, '| onUIEvent存在=', !!this.config.onUIEvent)
     // 1. 兼容旧接口：onEvent 接收所有事件
     if (this.config.onEvent) {
       try {
         this.config.onEvent(event)
+        this.logger.warn('[CallKitCore] onEvent 回调执行成功:', event.type)
       } catch (err) {
         this.logger.error('[CallKitCore] onEvent 回调执行失败:', err)
       }
@@ -926,6 +986,7 @@ export class CallKitCore {
     if (isUIEvent(event) && this.config.onUIEvent) {
       try {
         this.config.onUIEvent(event)
+        this.logger.warn('[CallKitCore] onUIEvent 回调执行成功:', event.type)
       } catch (err) {
         this.logger.error('[CallKitCore] onUIEvent 回调执行失败:', err)
       }

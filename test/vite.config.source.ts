@@ -6,6 +6,14 @@ import { resolve } from 'path'
 export default defineConfig({
   plugins: [vue()],
   root: '.',
+  build: {
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        core: resolve(__dirname, 'core-test.html'),
+      },
+    },
+  },
   define: {
     '__CALLKIT_TEST_MODE__': JSON.stringify('source')
   },
