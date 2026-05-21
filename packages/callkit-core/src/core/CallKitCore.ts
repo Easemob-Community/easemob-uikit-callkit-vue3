@@ -444,6 +444,23 @@ export class CallKitCore {
       })
     })
 
+    // 发出 GROUP_CALL_INIT 事件（主叫方也需要此事件来驱动 UI 显示）
+    this.processEvents(
+      [
+        {
+          type: 'GROUP_CALL_INIT',
+          callId,
+          groupId: params.groupId,
+          groupName: params.groupId,
+          channel,
+          callType: callTypeStr,
+          callerUserId: this.userId,
+          invitedMembers: params.participantIds,
+        },
+      ],
+      this.singleCallState.getState()
+    )
+
     // 初始化单聊状态机（群聊也用它存储 callId/channel/token）
     // 群聊时 calleeUserId 使用 groupId，与旧版 lib/ 保持一致
     const stateResult = this.singleCallState.initInvite({
@@ -480,6 +497,13 @@ export class CallKitCore {
     )
 
     this.processEvents(stateResult.events, this.singleCallState.getState())
+
+    // 群聊主叫方：发送 invite 后立即进入 IN_CALL 并加入 RTC（与旧版行为对齐）
+    this.logger.info('[CallKitCore] 群聊主叫方：进入 IN_CALL 并触发 RTC 加入')
+    const answerResult = this.singleCallState.receiveAnswer('accept', true)
+    if (answerResult.ok) {
+      this.processEvents(answerResult.events, this.singleCallState.getState())
+    }
   }
 
   // ───────────────────────────────────────────────
@@ -612,11 +636,45 @@ export class CallKitCore {
   }
 
   /**
+   * 当前是否处于可被接听的状态（被叫端弹窗显示区间）
+   */
+  isWaitingCalleeAction(): boolean {
+    return this.singleCallState.isWaitingCalleeAction()
+  }
+
+  /**
+   * 当前是否处于活跃通话中（已进入 RTC 或即将进入）
+   */
+  isInActiveCall(): boolean {
+    return this.singleCallState.isInActiveCall()
+  }
+
+  /**
+   * 当前是否可以接听（被叫端按钮可点击）
+   */
+  canAccept(): boolean {
+    return this.singleCallState.canAccept()
+  }
+
+  /**
+   * 当前是否可以拒绝（被叫端按钮可点击）
+   */
+  canReject(): boolean {
+    return this.singleCallState.canReject()
+  }
+
+  /**
+   * 当前是否可以挂断（主叫/被叫端的挂断按钮可点击）
+   */
+  canHangup(): boolean {
+    return this.singleCallState.canHangup()
+  }
+
+  /**
    * 当前是否在呼叫/响铃中（INVITING 或 ALERTING 状态）
    */
   isCalling(): boolean {
-    const status = this.singleCallState.getState().status
-    return status === CALL_STATUS.INVITING || status === CALL_STATUS.ALERTING
+    return this.singleCallState.isCalling()
   }
 
   /**
@@ -772,68 +830,76 @@ export class CallKitCore {
     )
 
     if (isGroupCall) {
-      // 群聊 invite：同时初始化 singleCallState（被叫方需要它来处理 confirmCallee / cancelCall / leaveCall）
-      const callId = ext.callId as string
-      const channel = ext.channelName as string
-      const callType = ext.type as CALL_TYPE
-      const callerDevId = ext.callerDevId as string
-      const callerUserId = (ext.callerIMName as string) || (msg.from as string) || ''
-
-      if (this.singleCallState.getState().status === CALL_STATUS.IDLE) {
-        this.logger.warn('🔄 [CallKitCore] 群聊被叫方：singleCallState 从 IDLE → ALERTING')
-        const groupId = ext?.callkitGroupInfo?.groupId || ext?.groupId || ''
-        const stateResult = this.singleCallState.initIncoming({
-          callId,
-          channel,
-          token: '',
-          callType,
-          callerDevId,
-          callerUserId,
-          calleeDevId: this.deviceId,
-          calleeUserId: groupId, // 群聊时 calleeUserId 使用 groupId，与旧版对齐
-        })
-        this.logger.warn('[CallKitCore] initIncoming 返回事件数:', stateResult.events.length)
-        // 处理状态机返回的 STATUS_CHANGED 事件，确保 callStateStore 同步到 ALERTING
-        this.processEvents(stateResult.events, this.singleCallState.getState())
-        // 启动超时定时器
-        this.startInviteTimeout()
-      } else {
-        this.logger.warn(
-          '[CallKitCore] ⚠️ 群聊被叫方：singleCallState 不是 IDLE，跳过 initIncoming | 当前状态=',
-          this.singleCallState.getState().status
-        )
-      }
-
-      const events = this.groupCallHandler.handleInviteTextMessage(msg)
-      this.logger.warn('[CallKitCore] 群聊 invite 处理后事件:', events.map((e: any) => e.type))
-      this.processEvents(events, this.singleCallState.getState())
-
-      // 发出 incomingCall 事件（与单聊行为保持一致，确保 UI 层能弹出待接听状态栏）
-      const incomingEvent: CallKitEvent = {
-        type: 'incomingCall',
-        payload: {
-          callId,
-          callType,
-          callerUserId,
-          callerDevId,
-          channel,
-          calleeUserId: ext?.callkitGroupInfo?.groupId || ext?.groupId || '',
-          token: '',
-          callerInfo: ext.ease_chat_uikit_user_info,
-          groupId: ext?.callkitGroupInfo?.groupId || ext?.groupId,
-          groupName: ext?.callkitGroupInfo?.groupName,
-        },
-      }
-      this.logger.warn('[CallKitCore] 即将发出 incomingCall 事件:', { callId, callerUserId, callType })
-      this.emitEvent(incomingEvent)
-      this.logger.warn('[CallKitCore] incomingCall 事件已发出')
-
-      // 被叫方收到 invite 后回发 alert CMD（与旧版 useListenerManager 对齐）
-      this.sendAlertSignal(msg.from as string, ext.callId as string, ext.callerDevId as string)
+      // 群聊 invite：异步获取 token 并初始化
+      this.handleGroupCallInvite(msg, ext).catch(() => {})
     } else {
       // 单聊 invite
       this.handleSingleCallInvite(msg, ext)
     }
+  }
+
+  private async handleGroupCallInvite(msg: any, ext: any): Promise<void> {
+    // 群聊 invite：同时初始化 singleCallState（被叫方需要它来处理 confirmCallee / cancelCall / leaveCall）
+    const callId = ext.callId as string
+    const channel = ext.channelName as string
+    const callType = ext.type as CALL_TYPE
+    const callerDevId = ext.callerDevId as string
+    const callerUserId = (ext.callerIMName as string) || (msg.from as string) || ''
+
+    // 获取 RTC token（群聊被叫方同样需要 token 加入 Agora 频道）
+    const token = await this.fetchRtcToken(channel)
+
+    if (this.singleCallState.getState().status === CALL_STATUS.IDLE) {
+      this.logger.warn('🔄 [CallKitCore] 群聊被叫方：singleCallState 从 IDLE → ALERTING')
+      const groupId = ext?.callkitGroupInfo?.groupId || ext?.groupId || ''
+      const stateResult = this.singleCallState.initIncoming({
+        callId,
+        channel,
+        token,
+        callType,
+        callerDevId,
+        callerUserId,
+        calleeDevId: this.deviceId,
+        calleeUserId: groupId, // 群聊时 calleeUserId 使用 groupId，与旧版对齐
+      })
+      this.logger.warn('[CallKitCore] initIncoming 返回事件数:', stateResult.events.length)
+      // 处理状态机返回的 STATUS_CHANGED 事件，确保 callStateStore 同步到 ALERTING
+      this.processEvents(stateResult.events, this.singleCallState.getState())
+      // 启动超时定时器
+      this.startInviteTimeout()
+    } else {
+      this.logger.warn(
+        '[CallKitCore] ⚠️ 群聊被叫方：singleCallState 不是 IDLE，跳过 initIncoming | 当前状态=',
+        this.singleCallState.getState().status
+      )
+    }
+
+    const events = this.groupCallHandler.handleInviteTextMessage(msg)
+    this.logger.warn('[CallKitCore] 群聊 invite 处理后事件:', events.map((e: any) => e.type))
+    this.processEvents(events, this.singleCallState.getState())
+
+    // 发出 incomingCall 事件（与单聊行为保持一致，确保 UI 层能弹出待接听状态栏）
+    const incomingEvent: CallKitEvent = {
+      type: 'incomingCall',
+      payload: {
+        callId,
+        callType,
+        callerUserId,
+        callerDevId,
+        channel,
+        calleeUserId: ext?.callkitGroupInfo?.groupId || ext?.groupId || '',
+        token: '',
+        callerInfo: ext.ease_chat_uikit_user_info,
+        groupId: ext?.callkitGroupInfo?.groupId || ext?.groupId,
+        groupName: ext?.callkitGroupInfo?.groupName,
+      },
+    }
+    this.logger.warn('[CallKitCore] 即将发出 incomingCall 事件:', { callId, callerUserId, callType })
+    this.emitEvent(incomingEvent)
+    this.logger.warn('[CallKitCore] incomingCall 事件已发出')
+
+    // 被叫方收到 invite 后回发 alert CMD（与旧版 useListenerManager 对齐）
+    this.sendAlertSignal(msg.from as string, ext.callId as string, ext.callerDevId as string)
   }
 
   private async handleSingleCallInvite(msg: any, ext: any): Promise<void> {
@@ -1039,6 +1105,23 @@ export class CallKitCore {
             isCaller: event.isCaller,
             startTime: Date.now(),
           },
+        }
+      }
+
+      case 'CALL_ACCEPTED': {
+        return {
+          type: 'callAccepted',
+          payload: {
+            ...base,
+            isCaller: event.isCaller,
+          },
+        }
+      }
+
+      case 'CALL_CONNECTED': {
+        return {
+          type: 'callConnected',
+          payload: base,
         }
       }
 

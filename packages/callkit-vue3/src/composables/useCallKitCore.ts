@@ -13,10 +13,7 @@ import {
   CALL_STATUS,
   CALL_TYPE,
   HANGUP_REASON as CORE_HANGUP_REASON,
-  type CallKitCoreConfig,
   type CallKitEvent,
-  type UIEvent,
-  type RtcEvent,
   type InviteCallParams,
   type AnswerCallParams,
   type HangupParams,
@@ -86,6 +83,9 @@ const _lastEvent = shallowRef<CallKitEvent | null>(null)
 const _eventLog = ref<CallEventLog[]>([])
 const _error = ref<string | null>(null)
 const _isInitialized = ref(false)
+
+// ─── 外部事件订阅者（供 onCallEvent 使用）───
+const _eventHandlers = ref<Set<(event: CallKitEvent) => void>>(new Set())
 
 // ─── 共享的 core 实例 ───
 let _coreInstance: CallKitCore | null = null
@@ -231,10 +231,19 @@ function resetCallState(reason: HANGUP_REASON) {
 function handleCoreEvent(event: CallKitEvent) {
   logEvent(event)
 
+  // 透传给外部订阅者（事件驱动模式）
+  _eventHandlers.value.forEach((handler) => {
+    try {
+      handler(event)
+    } catch (err) {
+      logger.error('[useCallKitCore] 事件 handler 执行失败:', err)
+    }
+  })
+
   const stores = getStores()
   const { rtcChannelStore, callTimerStore, groupCallStore, chatClientStore } = stores
 
-  // 同步单聊状态到响应式对象
+  // 同步单聊状态到响应式对象（持续态保持响应式）
   if (_coreInstance) {
     syncState(_coreInstance.getSingleCallState())
   }
@@ -249,6 +258,12 @@ function handleCoreEvent(event: CallKitEvent) {
 
     case 'incomingCall': {
       callKitEventBus.emit('incomingCall', buildLegacyPayload(event))
+      break
+    }
+
+    case 'callConnected': {
+      // 被叫方收到 confirmCallee 后进入 IN_CALL，同步状态
+      callKitEventBus.emit('callConnected', buildLegacyPayload(event))
       break
     }
 
@@ -334,14 +349,54 @@ function handleCoreEvent(event: CallKitEvent) {
       })
       const currentUserId = chatClientStore.getChatClient?.user || ''
       const globalCallStore = stores.globalCallStore
+
+      // 添加本地用户（被叫方）
+      if (currentUserId) {
+        const localInfo = globalCallStore.getUserInfo(currentUserId)
+        groupCallStore.addParticipant({
+          userId: currentUserId,
+          nickname: localInfo.nickname || currentUserId,
+          avatarUrl: localInfo.avatarURL,
+          state: 'invited',
+          isLocal: true,
+          videoTrack: null,
+          audioTrack: null,
+          localStream: null,
+          isMuted: false,
+          isCameraOn: p.callType === 'video',
+          isSpeaking: false,
+        })
+      }
+
+      // 添加主叫方（caller）
+      const callerUserId = p.callerUserId as string
+      if (callerUserId && callerUserId !== currentUserId) {
+        const callerInfo = globalCallStore.getUserInfo(callerUserId)
+        groupCallStore.addParticipant({
+          userId: callerUserId,
+          nickname: callerInfo.nickname || callerUserId,
+          avatarUrl: callerInfo.avatarURL,
+          state: 'joinedRtc',
+          isLocal: false,
+          videoTrack: null,
+          audioTrack: null,
+          localStream: null,
+          isMuted: false,
+          isCameraOn: false,
+          isSpeaking: false,
+        })
+      }
+
+      // 添加其他被邀请成员
       ;(p.invitedMembers || []).forEach((userId: string) => {
+        if (userId === currentUserId || userId === callerUserId) return
         const info = globalCallStore.getUserInfo(userId)
         groupCallStore.addParticipant({
           userId,
           nickname: info.nickname || userId,
           avatarUrl: info.avatarURL,
           state: 'invited',
-          isLocal: userId === currentUserId,
+          isLocal: false,
           videoTrack: null,
           audioTrack: null,
           localStream: null,
@@ -664,6 +719,14 @@ export function useCallKitCore() {
     }
   }
 
+  // ─── 事件订阅 ───
+  function onCallEvent(handler: (event: CallKitEvent) => void): () => void {
+    _eventHandlers.value.add(handler)
+    return () => {
+      _eventHandlers.value.delete(handler)
+    }
+  }
+
   return {
     // 响应式状态（只读）
     callState: readonly(_callState) as DeepReadonly<ReactiveCallState>,
@@ -684,6 +747,19 @@ export function useCallKitCore() {
     toggleVideo,
     reportRtcEvent,
     destroy,
+
+    // 事件订阅（事件驱动模式）
+    onCallEvent,
+
+    // 谓词方法（直接代理到 core，UI 不再直接读 status）
+    canAccept: () => _coreInstance?.canAccept() ?? false,
+    canReject: () => _coreInstance?.canReject() ?? false,
+    canHangup: () => _coreInstance?.canHangup() ?? false,
+    isWaitingCalleeAction: () => _coreInstance?.isWaitingCalleeAction() ?? false,
+    isInActiveCall: () => _coreInstance?.isInActiveCall() ?? false,
+    isInCall: () => _coreInstance?.isInCall() ?? false,
+    isCalling: () => _coreInstance?.isCalling() ?? false,
+    isIdle: () => _coreInstance?.isIdle() ?? true,
 
     // 常量
     CALL_STATUS,

@@ -16,7 +16,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRtcChannelStore } from '../../store/rtcChannel'
 import { useChatClientStore } from '../../store/chatClient'
 import { useGlobalCallStore } from '../../store/globalCall'
@@ -50,13 +50,14 @@ const emit = defineEmits<{
   error: [error: Error]
 }>()
 
-const { callState: coreCallState } = useCallKitCore()
+const { callState: coreCallState, onCallEvent } = useCallKitCore()
 const rtcChannelStore = useRtcChannelStore()
 const chatClientStore = useChatClientStore()
 const globalCallStore = useGlobalCallStore()
 const groupCallStore = useGroupCallStore()
 
 const groupCallShellRef = ref<InstanceType<typeof GroupCallShell> | null>(null)
+let unsubscribeEvent: (() => void) | null = null
 
 // groupId/groupName/groupAvatar 优先使用外部 prop，无则从 store 兜底
 // 被叫方场景：calleeUserId / groupCallStore.session.groupId 就是 groupId
@@ -69,26 +70,27 @@ const effectiveGroupName = computed(() => {
 })
 const effectiveGroupAvatar = computed(() => props.groupAvatar || '')
 
-const isVisible = computed(() => {
-  if (props.autoShow === false) return true
-  const status = coreCallState.status
-  const callType = coreCallState.type
-  const callId = coreCallState.callId
-  const isGroupCall = callType === CALL_TYPE.VIDEO_MULTI || callType === CALL_TYPE.AUDIO_MULTI
-  const isInCall = status === CALL_STATUS.IN_CALL || status === CALL_STATUS.INVITING
-  const hasValidCall = !!callId && callId.length > 0
-  const result = isGroupCall && isInCall && hasValidCall
-  logger.debug('[EasemobChatMultiCall] isVisible check:', {
-    status,
-    callType,
-    callId,
-    isGroupCall,
-    isInCall,
-    hasValidCall,
-    result,
-  })
-  return result
-})
+// 群聊通话页面可见性（事件驱动）
+// - incomingCall: 不显示（由 InvitationNotification 处理响铃）
+// - callAccepted / callConnected / callStarted: 显示（被叫接受或通话连接）
+// - callEnded / callCanceled / callRefused / callTimeout / callBusy: 隐藏
+const isVisible = ref(props.autoShow === false)
+
+function showCallWindow() {
+  if (props.autoShow === false) return // autoShow=false 时外部控制，不响应事件
+  if (!isVisible.value) {
+    isVisible.value = true
+    logger.info('[EasemobChatMultiCall] 显示群聊通话页面')
+  }
+}
+
+function hideCallWindow() {
+  if (props.autoShow === false) return // autoShow=false 时外部控制，不响应事件
+  if (isVisible.value) {
+    isVisible.value = false
+    logger.info('[EasemobChatMultiCall] 隐藏群聊通话页面')
+  }
+}
 
 const handleHangup = () => {
   emit('callEnded')
@@ -104,12 +106,9 @@ watch(
   groupCallShellRef,
   (shell, prevShell) => {
     if (shell && !prevShell) {
-      const status = coreCallState.status
       const type = coreCallState.type
-      // 只有真正处于群通话状态中才补调 startSession，避免 autoShow=false 时误触发
       const isGroupCall = type === CALL_TYPE.VIDEO_MULTI || type === CALL_TYPE.AUDIO_MULTI
-      const isInCall = status === CALL_STATUS.IN_CALL || status === CALL_STATUS.INVITING
-      if (!isGroupCall || !isInCall) {
+      if (!isGroupCall) {
         logger.info('[EasemobChatMultiCall] shell 渲染但不在群通话状态，跳过 startSession')
         return
       }
@@ -123,6 +122,50 @@ watch(
   },
   { immediate: false }
 )
+
+// 事件驱动：订阅通话事件控制显示/隐藏
+function setupEventListeners() {
+  unsubscribeEvent = onCallEvent((event) => {
+    switch (event.type) {
+      case 'callAccepted':
+      case 'callConnected':
+      case 'callStarted':
+        // 被叫接受 / 通话连接 / 通话开始 → 显示通话页面
+        showCallWindow()
+        break
+      case 'callEnded':
+      case 'callCanceled':
+      case 'callRefused':
+      case 'callTimeout':
+      case 'callBusy':
+        // 通话结束 → 隐藏通话页面
+        hideCallWindow()
+        emit('callEnded')
+        break
+    }
+  })
+}
+
+onMounted(() => {
+  setupEventListeners()
+
+  // 兜底：组件挂载时如果已在活跃通话中，立即显示
+  // 这处理页面刷新/路由切换后重新挂载的场景
+  const status = coreCallState.status
+  const isGroupCall = coreCallState.type === CALL_TYPE.VIDEO_MULTI || coreCallState.type === CALL_TYPE.AUDIO_MULTI
+  const isActiveStatus = status === CALL_STATUS.ANSWER_CALL || status === CALL_STATUS.CONFIRM_CALLEE || status === CALL_STATUS.IN_CALL
+  if (props.autoShow !== false && isGroupCall && isActiveStatus) {
+    logger.info('[EasemobChatMultiCall] 组件挂载时发现活跃群聊通话，立即显示')
+    isVisible.value = true
+  }
+})
+
+onUnmounted(() => {
+  if (unsubscribeEvent) {
+    unsubscribeEvent()
+    unsubscribeEvent = null
+  }
+})
 </script>
 
 <style scoped>

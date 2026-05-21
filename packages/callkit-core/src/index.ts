@@ -1,5 +1,5 @@
 // ─── 版本号 ───
-export const VERSION = '1.0.0'
+export const VERSION = '1.1.0'
 
 /**
  * @easemob/callkit-core
@@ -50,6 +50,8 @@ export type {
   RtcEvent,
   IncomingCallEvent,
   CallStartedEvent,
+  CallAcceptedEvent,
+  CallConnectedEvent,
   CallEndedEvent,
   CallTimeoutEvent,
   StatusChangedEvent,

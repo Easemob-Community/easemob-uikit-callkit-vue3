@@ -37,7 +37,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, type CSSProperties, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, type CSSProperties } from 'vue'
 import { useCallKitCore } from '../../composables/useCallKitCore'
 import { useGlobalCallStore } from '../../store/globalCall'
 import { CALL_STATUS, CALL_TYPE } from '../../types/callstate.types'
@@ -73,13 +73,11 @@ const emit = defineEmits<{
   callCanceled: []
 }>()
 
-// 通话状态管理 - 直接读 core 状态
-const { callState: coreCallState } = useCallKitCore()
+// 通话状态管理 - 事件驱动 + 谓词
+const { callState: coreCallState, onCallEvent, isIdle } = useCallKitCore()
 const globalCallStore = useGlobalCallStore()
 const isCallActive = ref(false)
-
-// 计算属性 - 获取当前通话状态
-const callStatus = computed(() => coreCallState.status)
+let unsubscribeEvent: (() => void) | null = null
 
 // 判断当前是否为群通话类型（单人通话组件在群通话场景下完全不显示）
 const isGroupCall = computed(() =>
@@ -87,24 +85,32 @@ const isGroupCall = computed(() =>
   coreCallState.type === CALL_TYPE.AUDIO_MULTI
 )
 
-// 判断是否处于通话中状态（IN_CALL 及接听中的中间态都算，避免黑屏）
+// 判断是否处于通话中状态（直接读响应式 status，确保 Vue 追踪依赖）
 // 群通话场景下始终为 false，避免与 EasemobChatMultiCall / GroupCallShell 竞争
 const isInCall = computed(() =>
   !isGroupCall.value && (
-    coreCallState.status === CALL_STATUS.IN_CALL ||
     coreCallState.status === CALL_STATUS.ANSWER_CALL ||
-    coreCallState.status === CALL_STATUS.CONFIRM_CALLEE
+    coreCallState.status === CALL_STATUS.CONFIRM_CALLEE ||
+    coreCallState.status === CALL_STATUS.IN_CALL
+  )
+)
+
+// 判断是否处于呼叫中状态（主叫方等待接听）
+const isCalling = computed(() =>
+  !isGroupCall.value && (
+    coreCallState.status === CALL_STATUS.INVITING ||
+    coreCallState.status === CALL_STATUS.CONFIRM_RING
   )
 )
 
 // 组件是否可见：
-// - INVITING：主叫方等待接听（显示 CallWaiting）
-// - IN_CALL / ANSWER_CALL / CONFIRM_CALLEE：通话中（显示 CallStream）
+// - INVITING / CONFIRM_RING：主叫方等待接听（显示 CallWaiting）
+// - ANSWER_CALL / CONFIRM_CALLEE / IN_CALL：通话中（显示 CallStream）
 // - ALERTING：被叫响铃中，完全由 InvitationNotification 接管，此处不显示
 // - 群通话（VIDEO_MULTI / AUDIO_MULTI）：完全由 EasemobChatMultiCall 接管，此处不显示
 const isCallVisible = computed(() =>
   !isGroupCall.value && (
-    coreCallState.status === CALL_STATUS.INVITING || isInCall.value
+    isCalling.value || isInCall.value
   )
 )
 
@@ -203,28 +209,51 @@ const backgroundStyle = computed<CSSProperties>(() => {
   }
 })
 
+// 事件驱动：订阅 core 事件
+function setupEventListeners() {
+  unsubscribeEvent = onCallEvent((event) => {
+    switch (event.type) {
+      case 'callAccepted':
+      case 'callConnected':
+        // 被叫接受/连接后显示通话窗口
+        if (!isCallActive.value) {
+          startCall()
+        }
+        break
+      case 'callStarted':
+        // 通话开始
+        if (!isCallActive.value) {
+          startCall()
+        }
+        break
+      case 'callEnded':
+      case 'callCanceled':
+      case 'callRefused':
+      case 'callTimeout':
+      case 'callBusy':
+        // 通话结束，关闭窗口
+        if (isCallActive.value) {
+          handleEndCall()
+        }
+        break
+    }
+  })
+}
+
 onMounted(() => {
-  // 只有当前处于非 IDLE 状态时才认为通话已激活
-  // 避免组件挂载时无条件自动"启动通话"
-  if (coreCallState.status !== CALL_STATUS.IDLE) {
+  setupEventListeners()
+
+  // 兜底：组件挂载时如果已在活跃通话中，立即显示
+  if (!isIdle()) {
     startCall()
   }
 })
 
-// 使用 watch 监听 core 状态变化
-const stopStateWatch = watch(
-  () => coreCallState.status,
-  (newStatus) => {
-    logger.debug('Call state changed:', newStatus)
-    // 当状态变为IDLE时，触发callEnded事件关闭弹窗
-    if (newStatus === CALL_STATUS.IDLE && isCallActive.value) {
-      handleEndCall()
-    }
-  }
-)
-
 onUnmounted(() => {
-  stopStateWatch()
+  if (unsubscribeEvent) {
+    unsubscribeEvent()
+    unsubscribeEvent = null
+  }
   handleEndCall()
 })
 </script>

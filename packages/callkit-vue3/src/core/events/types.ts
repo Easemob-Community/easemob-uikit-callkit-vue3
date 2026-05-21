@@ -6,6 +6,7 @@ import type { CALL_TYPE, HANGUP_REASON } from "../../types/callstate.types";
 export type CallKitEventType =
   | "statusChanged" // 通话状态变化
   | "incomingCall" // 收到来电邀请
+  | "callConnected" // 通话已连接（被叫收到 confirmCallee，即将进入 RTC）
   | "callStarted" // 通话开始（双方/多方接通）
   | "callEnded" // 通话结束
   | "callCanceled" // 通话被取消
@@ -63,6 +64,8 @@ export interface IncomingCallEvent extends BaseCallEvent {
 /**
  * 通话开始事件
  */
+export interface CallConnectedEvent extends BaseCallEvent {}
+
 export interface CallStartedEvent extends BaseCallEvent {
   /** 当前用户是否是主叫方 */
   isCaller: boolean;
@@ -220,6 +223,7 @@ export interface CallRecord {
 export interface CallKitEventPayloads {
   statusChanged: StatusChangedEvent;
   incomingCall: IncomingCallEvent;
+  callConnected: CallConnectedEvent;
   callStarted: CallStartedEvent;
   callEnded: CallEndedEvent;
   callCanceled: CallCanceledEvent;

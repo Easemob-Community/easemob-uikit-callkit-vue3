@@ -27,6 +27,8 @@ export type DomainEvent =
   // ─── 单聊状态事件 ───
   | { type: 'STATUS_CHANGED'; from: CALL_STATUS; to: CALL_STATUS; callId: string }
   | { type: 'CALL_STARTED'; callId: string; isCaller: boolean; channel: string; callType: CALL_TYPE }
+  | { type: 'CALL_ACCEPTED'; callId: string; isCaller: boolean; channel: string; callType: CALL_TYPE }
+  | { type: 'CALL_CONNECTED'; callId: string; channel: string; callType: CALL_TYPE }
   | { type: 'CALL_ENDED'; callId: string; reason: string; duration: number }
   | { type: 'CALL_TIMEOUT'; callId: string }
   | { type: 'CALL_REFUSED'; callId: string; isRemote: boolean }
@@ -140,6 +142,65 @@ export class SingleCallStateMachine {
 
   isInCall(): boolean {
     return this.state.status === CALL_STATUS.IN_CALL
+  }
+
+  /**
+   * 当前是否处于可被接听的状态（被叫端弹窗显示区间）
+   */
+  isWaitingCalleeAction(): boolean {
+    return (
+      this.state.status === CALL_STATUS.ALERTING ||
+      this.state.status === CALL_STATUS.CONFIRM_RING ||
+      this.state.status === CALL_STATUS.RECEIVED_CONFIRM_RING
+    )
+  }
+
+  /**
+   * 当前是否处于活跃通话中（已进入 RTC 或即将进入）
+   */
+  isInActiveCall(): boolean {
+    return (
+      this.state.status === CALL_STATUS.ANSWER_CALL ||
+      this.state.status === CALL_STATUS.CONFIRM_CALLEE ||
+      this.state.status === CALL_STATUS.IN_CALL
+    )
+  }
+
+  /**
+   * 当前是否可以接听（被叫端按钮可点击）
+   */
+  canAccept(): boolean {
+    return (
+      this.state.status === CALL_STATUS.ALERTING ||
+      this.state.status === CALL_STATUS.RECEIVED_CONFIRM_RING
+    )
+  }
+
+  /**
+   * 当前是否可以拒绝（被叫端按钮可点击）
+   */
+  canReject(): boolean {
+    return (
+      this.state.status === CALL_STATUS.ALERTING ||
+      this.state.status === CALL_STATUS.RECEIVED_CONFIRM_RING
+    )
+  }
+
+  /**
+   * 当前是否可以挂断（主叫/被叫端的挂断按钮可点击）
+   */
+  canHangup(): boolean {
+    return this.state.status !== CALL_STATUS.IDLE
+  }
+
+  /**
+   * 当前是否处于呼叫/响铃中（主叫等待对方接听）
+   */
+  isCalling(): boolean {
+    return (
+      this.state.status === CALL_STATUS.INVITING ||
+      this.state.status === CALL_STATUS.CONFIRM_RING
+    )
   }
 
   isCallIdMatch(incomingCallId: string): boolean {
@@ -324,6 +385,7 @@ export class SingleCallStateMachine {
       this.state.startTime = Date.now()
       this.logger.stateChange?.(oldStatus, CALL_STATUS.IN_CALL, { callId: this.state.callId })
 
+      const isCaller = !fromCaller // 如果是主叫收到 accept，则 isCaller=true
       const events: DomainEvent[] = [
         {
           type: 'STATUS_CHANGED',
@@ -332,9 +394,16 @@ export class SingleCallStateMachine {
           callId: this.state.callId,
         },
         {
+          type: 'CALL_ACCEPTED',
+          callId: this.state.callId,
+          isCaller,
+          channel: this.state.channel,
+          callType: this.state.type,
+        },
+        {
           type: 'CALL_STARTED',
           callId: this.state.callId,
-          isCaller: !fromCaller, // 如果是主叫收到 accept，则 isCaller=true
+          isCaller,
           channel: this.state.channel,
           callType: this.state.type,
         },
@@ -460,6 +529,12 @@ export class SingleCallStateMachine {
         from: oldStatus,
         to: CALL_STATUS.IN_CALL,
         callId: this.state.callId,
+      },
+      {
+        type: 'CALL_CONNECTED',
+        callId: this.state.callId,
+        channel: this.state.channel,
+        callType: this.state.type,
       },
       {
         type: 'CALL_STARTED',

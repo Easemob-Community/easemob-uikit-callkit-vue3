@@ -46,16 +46,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useCallKitCore } from '../composables/useCallKitCore'
 import { useChatClientStore } from '../store/chatClient'
 import { useCallKit } from '../composables/useCallKit'
-import { CALL_STATUS, CALL_TYPE } from '../types/callstate.types'
+import { CALL_TYPE } from '../types/callstate.types'
 import { logger } from '../utils/logger'
 import { useGroupCallStore } from '../modules/groupCall'
 import { useGlobalCallStore } from '../store/globalCall'
+import type { CallKitEvent } from '@easemob/callkit-core'
 
-const { callState: coreCallState } = useCallKitCore()
+const { callState: coreCallState, onCallEvent, isWaitingCalleeAction } = useCallKitCore()
 const chatClientStore = useChatClientStore()
 const groupCallStore = useGroupCallStore()
 const globalCallStore = useGlobalCallStore()
@@ -63,6 +64,7 @@ const { accept, reject } = useCallKit()
 
 const visible = ref(false)
 const processing = ref(false)
+let unsubscribeEvent: (() => void) | null = null
 
 // 计算属性
 const callerName = computed(() => {
@@ -111,42 +113,45 @@ const isChatClientReady = computed(() => {
   return client && chatClientStore.getClientDeviceId
 })
 
-// 被叫等待用户操作的状态区间：ALERTING(2) ~ RECEIVED_CONFIRM_RING(4)
-// 此区间内弹窗必须保持显示（含被叫与主叫握手中间态 CONFIRM_RING/RECEIVED_CONFIRM_RING）
-const WAITING_STATES: number[] = [
-  CALL_STATUS.ALERTING,
-  CALL_STATUS.CONFIRM_RING,
-  CALL_STATUS.RECEIVED_CONFIRM_RING,
-]
-
-// 监听通话状态
-watch(
-  () => coreCallState.status,
-  (newStatus, oldStatus) => {
-    logger.warn(
-      `🔔 [InvitationNotification] watch 触发 | oldStatus=${oldStatus} → newStatus=${newStatus} | isChatClientReady=${isChatClientReady.value}`
-    )
-    // 进入被叫等待区间 → 显示弹窗
-    if (WAITING_STATES.includes(newStatus as number) && isChatClientReady.value) {
-      if (!visible.value) {
-        visible.value = true
-        logger.warn(`🔔 [InvitationNotification] ✅ 显示通话邀请弹窗 (status=${newStatus})`)
-      }
-      return
-    }
-    // ChatClient 未就绪
-    if (WAITING_STATES.includes(newStatus as number) && !isChatClientReady.value) {
-      logger.warn('🔔 [InvitationNotification] ❌ ChatClient 未就绪，无法显示弹窗')
-      visible.value = false
-      return
-    }
-    // 离开等待区间 → 隐藏弹窗（IDLE / ANSWER_CALL / IN_CALL 等）
-    if (visible.value) {
-      visible.value = false
-      logger.warn(`🔔 [InvitationNotification] ❌ 离开等待区间，隐藏弹窗 (status=${newStatus})`)
-    }
+// 显示弹窗（事件驱动：incomingCall）
+function showNotification(event?: CallKitEvent) {
+  if (!isChatClientReady.value) {
+    logger.warn('🔔 [InvitationNotification] ❌ ChatClient 未就绪，无法显示弹窗')
+    visible.value = false
+    return
   }
-)
+  if (!visible.value) {
+    visible.value = true
+    logger.warn('🔔 [InvitationNotification] ✅ 显示通话邀请弹窗 (事件驱动)')
+  }
+}
+
+// 隐藏弹窗（事件驱动：callAccepted / callRejected / callCanceled / callEnded）
+function hideNotification(eventType: string) {
+  if (visible.value) {
+    visible.value = false
+    logger.warn(`🔔 [InvitationNotification] ❌ 隐藏弹窗 (事件: ${eventType})`)
+  }
+}
+
+// 事件驱动：订阅 core 事件
+function setupEventListeners() {
+  unsubscribeEvent = onCallEvent((event) => {
+    switch (event.type) {
+      case 'incomingCall':
+        showNotification(event)
+        break
+      case 'callAccepted':
+      case 'callRefused':
+      case 'callCanceled':
+      case 'callEnded':
+      case 'callTimeout':
+      case 'callBusy':
+        hideNotification(event.type)
+        break
+    }
+  })
+}
 
 // 接听
 const handleAccept = async () => {
@@ -206,18 +211,28 @@ const handleReject = async () => {
 
 // 初始化检查
 onMounted(() => {
-  const curStatus = coreCallState.status
-  const inWaiting = WAITING_STATES.includes(curStatus as number)
+  // 设置事件监听（事件驱动模式）
+  setupEventListeners()
+
+  // 兜底：页面刷新/路由切换场景，通过谓词检查当前状态
+  const waiting = isWaitingCalleeAction()
   logger.warn(
-    `🔔 [InvitationNotification] onMounted | 当前 status=${curStatus} | inWaiting=${inWaiting} | isChatClientReady=${isChatClientReady.value}`
+    `🔔 [InvitationNotification] onMounted | isWaitingCalleeAction=${waiting} | isChatClientReady=${isChatClientReady.value}`
   )
-  if (inWaiting && isChatClientReady.value) {
+  if (waiting && isChatClientReady.value) {
     visible.value = true
     logger.warn('🔔 [InvitationNotification] ✅ 组件挂载时发现待处理的通话邀请，立即显示弹窗')
-  } else if (inWaiting && !isChatClientReady.value) {
+  } else if (waiting && !isChatClientReady.value) {
     logger.warn('🔔 [InvitationNotification] ❌ 组件挂载时有通话邀请，但用户未登录')
   } else {
-    logger.warn(`🔔 [InvitationNotification] ℹ️ 组件挂载时无待处理邀请 (status=${curStatus})`)
+    logger.warn('🔔 [InvitationNotification] ℹ️ 组件挂载时无待处理邀请')
+  }
+})
+
+onUnmounted(() => {
+  if (unsubscribeEvent) {
+    unsubscribeEvent()
+    unsubscribeEvent = null
   }
 })
 </script>

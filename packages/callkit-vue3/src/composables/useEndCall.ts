@@ -1,6 +1,6 @@
 import { callService } from "../services/CallService";
 import { useCallKitCore } from "./useCallKitCore";
-import { HANGUP_REASON, CALL_STATUS } from "../types/callstate.types";
+import { HANGUP_REASON } from "../types/callstate.types";
 import { logger } from "../utils/logger";
 
 /**
@@ -8,7 +8,7 @@ import { logger } from "../utils/logger";
  * 信令由 callkit-core 处理，资源清理由 CallService 处理
  */
 export function useEndCall() {
-  const { callState: coreCallState, hangup: coreHangup } = useCallKitCore();
+  const { callState: coreCallState, hangup: coreHangup, canHangup: coreCanHangup, isCalling: coreIsCalling } = useCallKitCore();
 
   /**
    * 挂断当前通话
@@ -91,14 +91,14 @@ export function useEndCall() {
    * 检查当前是否可以挂断
    */
   function canHangup(): boolean {
-    return coreCallState.status !== CALL_STATUS.IDLE;
+    return coreCanHangup();
   }
 
   /**
    * 检查当前是否可以取消通话
    */
   function canCancel(): boolean {
-    return coreCallState.status === CALL_STATUS.INVITING;
+    return coreIsCalling();
   }
 
   return {

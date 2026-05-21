@@ -1,6 +1,5 @@
 import { useCallKitCore } from "./useCallKitCore";
 import { logger } from "../utils/logger";
-import { CALL_STATUS } from "../types/callstate.types";
 export interface UseAnswerCallReturn {
   // 接受通话
   acceptCall: () => Promise<void>;
@@ -15,7 +14,7 @@ export interface UseAnswerCallReturn {
  * 提供接受、拒绝通话的方法（状态由 callkit-core 维护）
  */
 export function useAnswerCall(): UseAnswerCallReturn {
-  const { callState: coreCallState, answerCall: coreAnswerCall } = useCallKitCore();
+  const { callState: coreCallState, answerCall: coreAnswerCall, canAccept } = useCallKitCore();
 
   /**
    * 接受通话
@@ -29,12 +28,10 @@ export function useAnswerCall(): UseAnswerCallReturn {
         throw new Error("无法获取主叫方用户ID");
       }
 
-      // 被叫可接听区间：ALERTING(2) 与握手中间态 RECEIVED_CONFIRM_RING(4)
-      // 严格只允许 ALERTING 会导致握手后点接听被静默丢弃
-      const acceptableStatuses: number[] = [CALL_STATUS.ALERTING, CALL_STATUS.RECEIVED_CONFIRM_RING];
-      if (!acceptableStatuses.includes(coreCallState.status as number)) {
+      // 使用 core 谓词判断是否可以接听（替代直接读 status）
+      if (!canAccept()) {
         logger.warn(
-          `useAnswerCall: 当前状态不在可接听区间，无法接受通话，当前状态: ${coreCallState.status}`
+          `useAnswerCall: 当前状态不可接听，无法接受通话`
         );
         return;
       }

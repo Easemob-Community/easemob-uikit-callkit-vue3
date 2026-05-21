@@ -42,6 +42,18 @@ export interface CallStartedEvent {
   }
 }
 
+export interface CallAcceptedEvent {
+  type: 'callAccepted'
+  payload: BaseEvent & {
+    isCaller: boolean
+  }
+}
+
+export interface CallConnectedEvent {
+  type: 'callConnected'
+  payload: BaseEvent
+}
+
 export interface CallEndedEvent {
   type: 'callEnded'
   payload: BaseEvent & {
@@ -188,6 +200,8 @@ export interface RtcReportEvent {
 export type UIEvent =
   | IncomingCallEvent
   | CallStartedEvent
+  | CallAcceptedEvent
+  | CallConnectedEvent
   | CallEndedEvent
   | CallTimeoutEvent
   | StatusChangedEvent
@@ -224,6 +238,8 @@ const rtcEventTypes: Set<CallKitEvent['type']> = new Set([
 const uiEventTypes: Set<CallKitEvent['type']> = new Set([
   'incomingCall',
   'callStarted',
+  'callAccepted',
+  'callConnected',
   'callEnded',
   'callTimeout',
   'statusChanged',
