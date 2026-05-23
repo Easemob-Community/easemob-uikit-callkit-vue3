@@ -96,6 +96,8 @@ export const useGroupCallStore = defineStore('groupCall', () => {
     const p = participants.value.get(userId)
     if (p && p.state === 'invited') {
       p.state = 'accepted'
+      // Vue3 ref(Map) 对内部对象属性修改是浅响应的，需重新赋值触发更新
+      participants.value = new Map(participants.value)
     }
     logger.info('[GroupCallStore] 标记已接受', userId)
   }

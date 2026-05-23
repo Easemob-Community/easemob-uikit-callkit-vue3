@@ -1,4 +1,4 @@
-import { ref, computed, watch, type ComputedRef, type Ref } from 'vue'
+import { ref, computed, watch, onUnmounted, type ComputedRef, type Ref } from 'vue'
 import { useGroupCallStore } from './GroupCallStore'
 import { useRtcChannelStore } from '../../../store/rtcChannel'
 import { useGlobalCallStore } from '../../../store/globalCall'
@@ -133,6 +133,12 @@ export function useGroupCallViewModel(): UseGroupCallViewModelReturn {
   function selectParticipant(userId: string | null) {
     selectedParticipantId.value = userId
   }
+
+  // 组件卸载时清理 timer，防止内存泄漏
+  onUnmounted(() => {
+    stopDurationTimer()
+    clearAllInvitationTimers()
+  })
 
   function startSession(payload: {
     sessionId: string

@@ -12,8 +12,8 @@ export class GroupCallSignalingAdapter {
   private core = useCallKitCore()
 
   /**
-   * 发送邀请（主叫方添加新成员）
-   * 复用 useCallKitCore.inviteGroupCall
+   * 发送邀请（通话中追加新成员）
+   * 复用 useCallKitCore.inviteMoreParticipants（不会创建新通话）
    */
   async sendInvite(
     userIds: string[],
@@ -21,20 +21,22 @@ export class GroupCallSignalingAdapter {
     message: string,
     callType: CALL_TYPE = CALL_TYPE.VIDEO_MULTI
   ): Promise<void> {
-    await this.core.inviteGroupCall({
-      groupId,
-      participantIds: userIds,
-      callType,
-      ext: { message },
-    })
-    logger.info('[GroupCallSignalingAdapter] 发送邀请', { userIds, groupId, callType })
+    // 从当前 session 读取真实 callType，避免音频群聊追加成员时错误使用视频类型
+    const groupCallStore = useGroupCallStore()
+    const actualCallType = groupCallStore.session?.callType === 'audio'
+      ? CALL_TYPE.AUDIO_MULTI
+      : callType
+    await this.core.inviteMoreParticipants(userIds)
+    logger.info('[GroupCallSignalingAdapter] 发送邀请', { userIds, groupId, callType: actualCallType })
   }
 
   /**
    * 接受邀请（被叫方）
-   * 实际接听动作在 viewModel 中 orchestrate
+   * 通过 core.answerCall 发送接听信令
    */
   async sendAnswer(userId: string, groupId: string): Promise<void> {
+    const callState = this.core.callState
+    await this.core.answerCall({ callId: callState.callId || '', result: 'accept' })
     logger.info('[GroupCallSignalingAdapter] 发送接听信令', { userId, groupId })
   }
 
@@ -58,15 +60,13 @@ export class GroupCallSignalingAdapter {
 
   /**
    * 取消邀请（邀请超时或主动取消）
+   * 仅从本地会话移除该参与者，不发送全局 hangup
    */
   async cancelInvitation(userId: string, groupId?: string): Promise<void> {
     try {
       const groupCallStore = useGroupCallStore()
-      const gid = groupId || groupCallStore.session?.groupId || ''
-      await this.core.hangup({
-        reason: 'cancel',
-      })
-      logger.info('[GroupCallSignalingAdapter] 取消邀请信令已发送', userId)
+      groupCallStore.removeParticipant(userId)
+      logger.info('[GroupCallSignalingAdapter] 取消邀请（本地移除参与者）', { userId, groupId })
     } catch (error) {
       logger.error('[GroupCallSignalingAdapter] 取消邀请失败', error)
     }

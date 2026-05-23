@@ -629,6 +629,13 @@ export class CallKitCore {
   }
 
   /**
+   * 获取群聊通话的所有参与者（包含状态信息）
+   */
+  getGroupCallParticipants() {
+    return this.groupCallSession.getAllParticipants()
+  }
+
+  /**
    * 当前是否在通话中（IN_CALL 状态）
    */
   isInCall(): boolean {
@@ -831,7 +838,9 @@ export class CallKitCore {
 
     if (isGroupCall) {
       // 群聊 invite：异步获取 token 并初始化
-      this.handleGroupCallInvite(msg, ext).catch(() => {})
+      this.handleGroupCallInvite(msg, ext).catch((err) => {
+        this.logger.error('[CallKitCore] 群聊 invite 处理失败', err)
+      })
     } else {
       // 单聊 invite
       this.handleSingleCallInvite(msg, ext)

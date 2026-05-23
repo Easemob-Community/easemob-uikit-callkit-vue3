@@ -106,7 +106,13 @@ function mapCoreReasonToHangupReason(reason: string): HANGUP_REASON {
 }
 
 // ─── 判断事件是否由本端触发 ───
+// 优先使用 core 事件中的 isRemote 字段（core 知道事件触发源），
+// 仅在没有 isRemote 时回退到事件类型推断
 function isLocalEvent(event: CallKitEvent): boolean {
+  const payload = event.payload as any
+  if (typeof payload.isRemote === 'boolean') {
+    return !payload.isRemote
+  }
   const remoteTypes = new Set(['callRefused', 'callBusy', 'callCanceled', 'callTimeout'])
   return !remoteTypes.has(event.type)
 }
@@ -142,6 +148,7 @@ function syncState(state: SingleCallState) {
 function syncGroupSession() {
   if (!_coreInstance) return
   _groupSession.value = _coreInstance.getGroupCallSession()
+  _groupParticipants.value = _coreInstance.getGroupCallParticipants()
 }
 
 function logEvent(event: CallKitEvent) {
@@ -228,7 +235,7 @@ function resetCallState(reason: HANGUP_REASON) {
 }
 
 // ─── 核心事件处理 ───
-function handleCoreEvent(event: CallKitEvent) {
+async function handleCoreEvent(event: CallKitEvent) {
   logEvent(event)
 
   // 透传给外部订阅者（事件驱动模式）
@@ -276,15 +283,40 @@ function handleCoreEvent(event: CallKitEvent) {
     case 'callEnded': {
       const p = event.payload as any
       const reason = mapCoreReasonToHangupReason(p.reason)
-      // 清理资源（不重复发送信令，core 已处理）
-      cleanupResources().catch((err) => {
+      const isRemoteCancel = reason === HANGUP_REASON.REMOTE_CANCEL
+      const isRemoteRefuse = reason === HANGUP_REASON.REMOTE_REFUSE
+      const currentUserId = chatClientStore.getChatClient?.user || ''
+      // 计算 endedBy：远端取消/拒绝时由对方结束，否则由本地用户结束
+      const endedBy = (isRemoteCancel || isRemoteRefuse)
+        ? (_callState.callerUserId === currentUserId ? _callState.calleeUserId : _callState.callerUserId)
+        : currentUserId
+      // 先清理 RTC 资源（await），再重置状态
+      try {
+        await cleanupResources()
+      } catch (err) {
         logger.error('[useCallKitCore] 资源清理失败:', err)
-      })
+      }
       const duration = resetCallState(reason)
+      // 重置 _callState 为 IDLE 默认值，避免跨通话污染
+      syncState({
+        status: CALL_STATUS.IDLE,
+        callId: '',
+        channel: '',
+        token: '',
+        type: CALL_TYPE.AUDIO_1V1,
+        callerDevId: '',
+        calleeDevId: '',
+        callerUserId: '',
+        calleeUserId: '',
+        audioEnabled: true,
+        videoEnabled: true,
+        startTime: null,
+      } as SingleCallState)
       callKitEventBus.emit('callEnded', {
         ...buildLegacyPayload(event),
         reason,
         duration: p.duration || duration || 0,
+        endedBy,
       })
       break
     }
@@ -421,6 +453,7 @@ function handleCoreEvent(event: CallKitEvent) {
       const globalCallStore = stores.globalCallStore
       const info = globalCallStore.getUserInfo(p.userId)
       if (!groupCallStore.participants.has(p.userId)) {
+        // 全新参与者（如追加邀请的成员）：初始状态为 joinedRtc
         groupCallStore.addParticipant({
           userId: p.userId,
           nickname: info.nickname || p.userId,
@@ -435,7 +468,13 @@ function handleCoreEvent(event: CallKitEvent) {
           isSpeaking: false,
         })
       } else {
-        groupCallStore.setParticipantState(p.userId, 'joinedRtc')
+        // 已有参与者（如刚接受邀请的成员）：保持当前状态，不覆盖为 joinedRtc
+        // RtcMediaBridge 会在用户实际加入 Agora 频道后更新状态
+        const existing = groupCallStore.participants.get(p.userId)
+        if (existing && existing.state !== 'joinedRtc' && existing.state !== 'publishing') {
+          // 保持 accepted 状态，不提前设为 joinedRtc
+          groupCallStore.markAccepted(p.userId)
+        }
       }
       callKitEventBus.emit('participantJoined', buildLegacyPayload(event))
       break
@@ -675,6 +714,17 @@ export function useCallKitCore() {
     }
   }
 
+  async function inviteMoreParticipants(participantIds: string[]) {
+    if (!_coreInstance) throw new Error('CallKitCore 未初始化')
+    try {
+      await _coreInstance.inviteMoreParticipants(participantIds)
+      syncGroupSession()
+    } catch (err: any) {
+      _error.value = err.message
+      throw err
+    }
+  }
+
   function toggleAudio() {
     if (!_coreInstance) return
     _coreInstance.toggleAudio()
@@ -743,6 +793,7 @@ export function useCallKitCore() {
     answerCall,
     hangup,
     inviteGroupCall,
+    inviteMoreParticipants,
     toggleAudio,
     toggleVideo,
     reportRtcEvent,
